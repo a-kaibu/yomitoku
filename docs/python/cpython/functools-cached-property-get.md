@@ -11,8 +11,10 @@ file: Lib/functools.py
 lines: [1145, 1170]
 function: cached_property.__get__
 difficulty: 3
+format: 2
 tags: [キャッシュ, メタプログラミング, 遅延評価, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `@cached_property` を付けたメソッドは、**最初にアクセスしたときだけ計算され、2 回目からは保存した値が返る** 属性になります。
@@ -20,7 +22,38 @@ tags: [キャッシュ, メタプログラミング, 遅延評価, 標準ライ�
 
 ## コード
 
-```python:line-numbers=1145
+::: code-group
+
+```python:line-numbers=1145 [日本語訳]
+    def __get__(self, instance, owner=None):
+        if instance is None:
+            return self
+        if self.attrname is None:
+            raise TypeError(
+                "Cannot use cached_property instance without calling __set_name__ on it.")
+        try:
+            cache = instance.__dict__
+        except AttributeError:  # 一部のオブジェクトは __dict__ を持たない（例: __slots__ を定義したクラス）
+            msg = (
+                f"No '__dict__' attribute on {type(instance).__name__!r} "
+                f"instance to cache {self.attrname!r} property."
+            )
+            raise TypeError(msg) from None
+        val = cache.get(self.attrname, _NOT_FOUND)
+        if val is _NOT_FOUND:
+            val = self.func(instance)
+            try:
+                cache[self.attrname] = val
+            except TypeError:
+                msg = (
+                    f"The '__dict__' attribute on {type(instance).__name__!r} instance "
+                    f"does not support item assignment for caching {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+        return val
+```
+
+```python:line-numbers=1145 [原文]
     def __get__(self, instance, owner=None):
         if instance is None:
             return self
@@ -49,7 +82,9 @@ tags: [キャッシュ, メタプログラミング, 遅延評価, 標準ライ�
         return val
 ```
 
-`_NOT_FOUND` は同じファイルで `_NOT_FOUND = object()` として作られている目印です。`self.attrname` には、`__set_name__`（1136 行目）によって「この属性の名前」が入っています。
+:::
+
+`_NOT_FOUND` は同じファイルで `_NOT_FOUND = object()` として作られている目印です。`self.attrname` には、`__set_name__` によって「この属性の名前」が入っています。
 
 ## 前提知識
 
@@ -69,19 +104,56 @@ class Data:
         return sum(range(10**6))
 ```
 
-### 1. クラスから読まれたら自分を返す（1146〜1147 行目）
+### 1. クラスから読まれたら自分を返す
+
+```python:line-numbers=1146
+        if instance is None:
+            return self
+```
 
 `Data.total` のようにクラスから読んだ場合は、デスクリプタ自身を返します。
 
-### 2. 名前が決まっているか確認（1148〜1150 行目）
+### 2. 名前が決まっているか確認
+
+```python:line-numbers=1148
+        if self.attrname is None:
+            raise TypeError(
+                "Cannot use cached_property instance without calling __set_name__ on it.")
+```
 
 `__set_name__` が呼ばれていない（クラスの外で作られた）場合はエラーです。
 
-### 3. インスタンスの辞書を取得（1151〜1158 行目）
+### 3. インスタンスの辞書を取得
+
+```python:line-numbers=1151
+        try:
+            cache = instance.__dict__
+        except AttributeError:  # 一部のオブジェクトは __dict__ を持たない（例: __slots__ を定義したクラス）
+            msg = (
+                f"No '__dict__' attribute on {type(instance).__name__!r} "
+                f"instance to cache {self.attrname!r} property."
+            )
+            raise TypeError(msg) from None
+```
 
 `d = Data()` に対し `d.total` と読むと、`d.__dict__` を取り出します。`__slots__` を使ったクラスなど、`__dict__` がないオブジェクトでは使えないので、原因がわかるメッセージでエラーにします。
 
-### 4. なければ計算して書き込む（1159〜1170 行目）
+### 4. なければ計算して書き込む
+
+```python:line-numbers=1159
+        val = cache.get(self.attrname, _NOT_FOUND)
+        if val is _NOT_FOUND:
+            val = self.func(instance)
+            try:
+                cache[self.attrname] = val
+            except TypeError:
+                msg = (
+                    f"The '__dict__' attribute on {type(instance).__name__!r} instance "
+                    f"does not support item assignment for caching {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+        return val
+```
 
 `d.__dict__` に `"total"` がなければ、元のメソッドを呼んで（ここで「計算中」と表示）、結果を `d.__dict__["total"]` に保存して返します。
 
