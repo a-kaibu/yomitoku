@@ -8,10 +8,11 @@ license: Apache-2.0
 copyright: "Copyright 2016-2025 JetBrains s.r.o and contributors"
 commit: "7e0d1b3e9ca83652427ae00dda7d1673f058a743"
 file: kotlinx-coroutines-core/common/src/flow/operators/Delay.kt
-lines: [268, 298]
+lines: [269, 298]
 function: "Flow.sample"
 difficulty: 3
 tags: [非同期, 並行処理, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -23,8 +24,43 @@ tags: [非同期, 並行処理, 標準ライブラリ]
 
 ## コード
 
-```kotlin:line-numbers=268
-@FlowPreview
+
+::: code-group
+
+```kotlin:line-numbers=269 [日本語訳]
+public fun <T> Flow<T>.sample(periodMillis: Long): Flow<T> {
+    require(periodMillis > 0) { "Sample period should be positive" }
+    return scopedFlow { downstream ->
+        val values = produce(capacity = Channel.CONFLATED) {
+            collect { value -> send(value ?: NULL) }
+        }
+        var lastValue: Any? = null
+        val ticker = fixedPeriodTicker(periodMillis)
+        while (lastValue !== DONE) {
+            select<Unit> {
+                values.onReceiveCatching { result ->
+                    result
+                        .onSuccess { lastValue = it }
+                        .onFailure {
+                            it?.let { throw it }
+                            ticker.cancel(ChildCancelledException())
+                            lastValue = DONE
+                        }
+                }
+
+                // TODO: 値が届いたときにだけサンプリングを始めるべきか、このように常に始めるべきか？
+                ticker.onReceive {
+                    val value = lastValue ?: return@onReceive
+                    lastValue = null // 値を消費する
+                    downstream.emit(NULL.unbox(value))
+                }
+            }
+        }
+    }
+}
+```
+
+```kotlin:line-numbers=269 [原文]
 public fun <T> Flow<T>.sample(periodMillis: Long): Flow<T> {
     require(periodMillis > 0) { "Sample period should be positive" }
     return scopedFlow { downstream ->
@@ -57,7 +93,9 @@ public fun <T> Flow<T>.sample(periodMillis: Long): Flow<T> {
 }
 ```
 
-`fixedPeriodTicker` は同じファイルの 303〜313 行目にあり、`delay(delayMillis)` してから `Unit` を送る、を無限に繰り返すチャネルです。
+:::
+
+`fixedPeriodTicker` は同じファイルの別の場所にあり、`delay(delayMillis)` してから `Unit` を送る、を無限に繰り返すチャネルです。
 
 ## 前提知識
 
@@ -70,25 +108,56 @@ public fun <T> Flow<T>.sample(periodMillis: Long): Flow<T> {
 
 ## 何をしているか
 
-### 1. 上流を上書き型チャネルへ（272〜274 行目）
+### 1. 上流を上書き型チャネルへ
+
+```kotlin:line-numbers=272
+        val values = produce(capacity = Channel.CONFLATED) {
+            collect { value -> send(value ?: NULL) }
+        }
+```
 
 上流の値をどんどん送ります。CONFLATED なので、こちらが受け取る前に次の値が来れば古いものは捨てられます。
 
-### 2. ティッカーを用意する（275〜276 行目）
+### 2. 保留中の値とティッカーを用意する
+
+```kotlin:line-numbers=275
+        var lastValue: Any? = null
+        val ticker = fixedPeriodTicker(periodMillis)
+```
 
 `lastValue` は「まだ流していない最新値」です。ティッカーは周期ごとに合図を送ります。
 
-### 3. 値か合図か、来たほうを処理する（277〜296 行目）
+### 3. 値か合図か、来たほうを処理する
+
+```kotlin:line-numbers=279
+                values.onReceiveCatching { result ->
+                    result
+                        .onSuccess { lastValue = it }
+```
+
+```kotlin:line-numbers=290
+                ticker.onReceive {
+                    val value = lastValue ?: return@onReceive
+                    lastValue = null // 値を消費する
+                    downstream.emit(NULL.unbox(value))
+                }
+```
 
 周期 100ms で、10ms ごとに `1, 2, 3, ...` が来る場合:
 
-- 値を受信するたびに `lastValue` を更新（281 行目）
-- 100ms の合図で、`lastValue`（たとえば `9`）を流して `null` に戻す（290〜294 行目）
+- 値を受信するたびに `lastValue` を更新する
+- 100ms の合図で、`lastValue`（たとえば `9`）を流して `null` に戻す
 - 次の 100ms までに来た最新（たとえば `19`）が次に流れる
 
-合図が来たときに `lastValue` が `null`（前回から新しい値がない）なら、何も流しません（291 行目）。
+合図が来たときに `lastValue` が `null`（前回から新しい値がない）なら、`return@onReceive` で何も流しません。
 
-### 4. 上流が終わったら止める（282〜286 行目）
+### 4. 上流が終わったら止める
+
+```kotlin:line-numbers=283
+                            it?.let { throw it }
+                            ticker.cancel(ChildCancelledException())
+                            lastValue = DONE
+```
 
 上流がエラーなら投げ直し、正常終了ならティッカーを止めて `DONE` にし、ループを抜けます。
 
@@ -96,8 +165,8 @@ public fun <T> Flow<T>.sample(periodMillis: Long): Flow<T> {
 
 - **2 段階で間引く**: チャネルが CONFLATED なので、受け取る前の古い値はチャネルの中で捨てられます。さらに `lastValue` が上書きされるので、周期の間に何個来ても最後の 1 個だけが残ります。上流が速くても溜まり続けることがありません。
 - **同じ値を 2 回流さない**: 流したら `lastValue = null` にして「消費済み」にします。上流が止まっている間は、合図が来ても何も流れません。
-- **後始末を忘れない**: 上流が終わったらティッカーを `cancel` します（284 行目）。そうしないとティッカーのコルーチンが動き続けてしまいます。
-- **疑問をコメントに残している**: 289 行目には「最初の値が来てから始めるべきか、常に始めるべきか」という設計上の疑問が `todo` として書かれています。完成したコードにも迷いの記録が残っているのは、読み手にとって有益な情報です。
+- **後始末を忘れない**: 上流が終わったらティッカーを `cancel` します。そうしないとティッカーのコルーチンが動き続けてしまいます。
+- **迷いをコードに残している**: TODO のコメントには「最初の値が来てから始めるべきか、常に始めるべきか」という設計上の疑問が書かれています。完成したコードにも迷いの記録が残っているのは、読み手にとって有益な情報です。
 
 ## まとめ
 

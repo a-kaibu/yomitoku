@@ -12,6 +12,7 @@ lines: [34, 42]
 function: "Flow.any"
 difficulty: 1
 tags: [非同期, 標準ライブラリ, 最適化]
+format: 2
 ---
 
 ## ひとことで
@@ -46,11 +47,23 @@ public suspend fun <T> Flow<T>.any(predicate: suspend (T) -> Boolean): Boolean {
 
 ## 何をしているか
 
-### 1. 見つかったかを覚える変数（35 行目）
+### 1. 見つかったかを覚える変数
+
+```kotlin:line-numbers=35
+    var found = false
+```
 
 `found` を `false` で始めます。
 
-### 2. 値ごとに条件を調べる（36〜40 行目）
+### 2. 値ごとに条件を調べる
+
+```kotlin:line-numbers=36
+    collectWhile {
+        val satisfies = predicate(it)
+        if (satisfies) found = true
+        !satisfies
+    }
+```
 
 `satisfies` に条件の結果を入れ、真なら `found = true` にします。
 ブロックの戻り値は `!satisfies`、つまり **「まだ見つかっていなければ続ける」** です。
@@ -64,7 +77,11 @@ public suspend fun <T> Flow<T>.any(predicate: suspend (T) -> Boolean): Boolean {
 | 4 | true | true | いいえ（打ち切り） |
 | 5 | （作られない） | | |
 
-### 3. 結果を返す（41 行目）
+### 3. 結果を返す
+
+```kotlin:line-numbers=41
+    return found
+```
 
 最後まで見つからなければ `found` は `false` のままです。
 
@@ -72,7 +89,7 @@ public suspend fun <T> Flow<T>.any(predicate: suspend (T) -> Boolean): Boolean {
 
 - **「続けるか」を条件の否定で表す**: `collectWhile` は「続けるなら `true`」という約束なので、「見つかったら止める」は `!satisfies` の 1 語で書けます。分岐を書かずに済み、意図も明確です。
 - **上流の仕事を止める**: Flow は受け取る側が要求したときに値を作る仕組みなので、打ち切れば上流はそれ以上値を作りません。上流が重い計算やネットワーク通信なら、そのぶん丸ごと節約になります。
-- **対になる `all` と `none`**: 同じファイルでは、`all` が「反例が見つかったら止める」（71〜79 行目）、`none` が `!any(predicate)`（107 行目）と書かれています。`none` を新しく実装せず `any` の否定にしているので、打ち切りの仕組みもそのまま受け継がれます。
+- **対になる `all` と `none`**: 同じファイルでは、`all` が「反例が見つかったら止める」、`none` が `!any(predicate)` と書かれています。`none` を新しく実装せず `any` の否定にしているので、打ち切りの仕組みもそのまま受け継がれます。
 - **打ち切りの複雑さを部品に閉じ込める**: 打ち切りは内部で例外を使った少し複雑な仕組みですが、`collectWhile` にまとめてあるので、`any` 自体は普通のループのように読めます。
 
 ## まとめ
