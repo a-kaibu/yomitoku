@@ -1,6 +1,6 @@
 ---
 title: シングルクォートの中にシングルクォートを入れる、シェルの抜け道
-description: "shlex.quote は、文字列をシェルのコマンドに安全に埋め込める形に変換する。' を '\"'\"' に置き換えるという、シェルの規則を突いた書き方がおもしろい。"
+description: shlex.quote は、文字列をシェルのコマンドに安全に埋め込める形に変換する。' を '"'"' に置き換えるという、シェルの規則を突いた書き方がおもしろい。
 language: python
 project: CPython
 repo: https://github.com/python/cpython
@@ -11,8 +11,10 @@ file: Lib/shlex.py
 lines: [320, 344]
 function: quote
 difficulty: 2
+format: 2
 tags: [文字列処理, セキュリティ, ハック, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `shlex.quote(s)` は、文字列 `s` を **シェル（コマンドを解釈するプログラム）に安全に渡せる形** に変換する関数です。
@@ -21,7 +23,37 @@ tags: [文字列処理, セキュリティ, ハック, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=320
+::: code-group
+
+```python:line-numbers=320 [日本語訳]
+def quote(s, *, force=False):
+    """シェルで安全にエスケープした文字列 *s* を返す。
+
+    *force* が *True* のときは、*s* を
+    シェルでそのまま使える安全な文字列であっても無条件にクォートする。
+    """
+    if not s:
+        return "''"
+
+    if not isinstance(s, str):
+        raise TypeError(f"expected string object, got {type(s).__name__!r}")
+
+    # 速度のため bytes.translate() を使う
+    safe_chars = (b'%+,-./0123456789:=@'
+                  b'ABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+                  b'abcdefghijklmnopqrstuvwxyz')
+    # force でないなら、クォートが必要かどうかを確かめる
+    # `s` が ASCII 文字だけで、`safe_chars` の文字だけからなるなら
+    if (not force
+        and s.isascii() and not s.encode().translate(None, delete=safe_chars)):
+        return s
+
+    # シングルクォートで囲み、中の `'` はダブルクォートで囲んで表す
+    # たとえば $'b という文字列は '$'"'"'b' とクォートされる
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+```
+
+```python:line-numbers=320 [原文]
 def quote(s, *, force=False):
     """Return a shell-escaped version of the string *s*.
 
@@ -49,6 +81,8 @@ def quote(s, *, force=False):
     return "'" + s.replace("'", "'\"'\"'") + "'"
 ```
 
+:::
+
 ## 前提知識
 
 - **シェルの特殊文字**: シェルでは空白で引数が区切られ、`;`、`|`、`$`、`*` などが特別な意味を持ちます。`rm $file` の `file` が `a; rm -rf ~` だったら大変です。
@@ -60,15 +94,37 @@ def quote(s, *, force=False):
 
 ## 何をしているか
 
-### 1. 空文字列（326〜327 行目）
+### 1. 空文字列を扱う
+
+```python:line-numbers=326
+    if not s:
+        return "''"
+```
 
 空文字列をそのまま埋め込むと引数ごと消えてしまうので、`''`（空のクォート）を返します。
 
-### 2. クォート不要か確認（333〜340 行目）
+### 2. クォート不要か確認する
+
+```python:line-numbers=333
+    safe_chars = (b'%+,-./0123456789:=@'
+                  b'ABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+                  b'abcdefghijklmnopqrstuvwxyz')
+    # force でないなら、クォートが必要かどうかを確かめる
+    # `s` が ASCII 文字だけで、`safe_chars` の文字だけからなるなら
+    if (not force
+        and s.isascii() and not s.encode().translate(None, delete=safe_chars)):
+        return s
+```
 
 `safe_chars` は、シェルで特別な意味を持たない文字（英数字と `%+,-./:=@_`）です。`s` が ASCII 文字だけで、`safe_chars` を全部削除したら何も残らない、つまり **安全な文字だけでできている** なら、そのまま返します。`quote("file.txt")` は `file.txt` のままです。
 
-### 3. シングルクォートで囲む（344 行目）
+### 3. シングルクォートで囲む
+
+```python:line-numbers=342
+    # シングルクォートで囲み、中の `'` はダブルクォートで囲んで表す
+    # たとえば $'b という文字列は '$'"'"'b' とクォートされる
+    return "'" + s.replace("'", "'\"'\"'") + "'"
+```
 
 それ以外は全体を `'...'` で囲みます。中に `'` がある場合は `'"'"'` に置き換えます。`it's` なら、
 
@@ -87,11 +143,11 @@ def quote(s, *, force=False):
 
 ### `'` だけは「いったん外に出る」
 
-シングルクォートの中に `'` を書く方法はありません。そこで、クォートを閉じ、`"'"` で `'` だけを別に書き、またクォートを開く、という連結のトリックを使っています。343 行目のコメントにある `'$'"'"'b'` の例のように、ほかの記号はすべてシングルクォートの中に入ったままです。
+シングルクォートの中に `'` を書く方法はありません。そこで、クォートを閉じ、`"'"` で `'` だけを別に書き、またクォートを開く、という連結のトリックを使っています。ほかの記号はすべてシングルクォートの中に入ったままです。
 
 ### 速い判定に `bytes.translate` を使う
 
-「安全な文字だけか」は、正規表現や 1 文字ずつのループでも判定できます。332 行目のコメントにある通り、ここでは C で実装された `bytes.translate` で安全な文字を一括削除し、「何か残ったか」で判定しています。`isascii()` で先にふるい落としているので、`encode()` の結果は元の文字列と 1 対 1 に対応します。
+「安全な文字だけか」は、正規表現や 1 文字ずつのループでも判定できます。ここでは C で実装された `bytes.translate` で安全な文字を一括削除し、「何か残ったか」で判定しています。`isascii()` で先にふるい落としているので、`encode()` の結果は元の文字列と 1 対 1 に対応します。
 
 ### 不要なクォートを付けない
 
