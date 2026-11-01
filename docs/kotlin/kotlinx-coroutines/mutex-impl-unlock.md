@@ -12,6 +12,7 @@ lines: [206, 221]
 function: "MutexImpl.unlock"
 difficulty: 3
 tags: [並行処理, ロック不要, 防御的プログラミング]
+format: 2
 ---
 
 ## ひとことで
@@ -26,7 +27,29 @@ kotlinx.coroutines の Mutex は「許可が 1 つだけのセマフォ」とし
 
 ## コード
 
-```kotlin:line-numbers=206
+
+::: code-group
+
+```kotlin:line-numbers=206 [日本語訳]
+    override fun unlock(owner: Any?) {
+        while (true) {
+            // このミューテックスはロックされているか？
+            check(isLocked) { "This mutex is not locked" }
+            // 持ち主の値を読む。まだ設定されていなければ、スピンして設定を待つ
+            val curOwner = this.owner.value
+            if (curOwner === NO_OWNER) continue // <-- 注意: ここはブロックする部分
+            // 持ち主を確認する
+            check(curOwner === owner || owner == null) { "This mutex is locked by $curOwner, but $owner is expected" }
+            // まず持ち主をクリアする。並行する unlock(..) と同期するため、CAS を使う
+            if (!this.owner.compareAndSet(curOwner, NO_OWNER)) continue
+            // 最後にセマフォの許可を返す
+            release()
+            return
+        }
+    }
+```
+
+```kotlin:line-numbers=206 [原文]
     override fun unlock(owner: Any?) {
         while (true) {
             // Is this mutex locked?
@@ -45,6 +68,8 @@ kotlinx.coroutines の Mutex は「許可が 1 つだけのセマフォ」とし
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **セマフォ**: 「同時に入れる数」を許可の数で管理する仕組みです。許可が 1 つなら、同時に 1 人しか入れないロックになります。`release()` で許可を返すと、待っている人がいれば起こされます。
@@ -56,23 +81,44 @@ kotlinx.coroutines の Mutex は「許可が 1 つだけのセマフォ」とし
 
 ## 何をしているか
 
-### 1. ロックされているか確認（209 行目）
+### 1. ロックされているか確認する
+
+```kotlin:line-numbers=209
+            check(isLocked) { "This mutex is not locked" }
+```
 
 ロックされていないのに `unlock` するのは使い方の誤りなので、例外にします。
 
-### 2. 持ち主の記録を読む。まだ書かれていなければ待つ（211〜212 行目）
+### 2. 持ち主の記録を読む。まだ書かれていなければ待つ
 
-ロックを取る側（`tryLockImpl`、183〜204 行目）は、まずセマフォの許可を取り、**そのあとで** 持ち主を書き込みます。その間のごく短い時間は「ロックされているのに持ち主が `NO_OWNER`」の状態になります。そこで、持ち主が書き込まれるまでループして待ちます。212 行目のコメントは「ここはブロックする部分」と注意を促しています。
+```kotlin:line-numbers=211
+            val curOwner = this.owner.value
+            if (curOwner === NO_OWNER) continue // <-- 注意: ここはブロックする部分
+```
 
-### 3. 持ち主が合っているか確認（214 行目）
+ロックを取る側（`tryLockImpl`）は、まずセマフォの許可を取り、**そのあとで** 持ち主を書き込みます。その間のごく短い時間は「ロックされているのに持ち主が `NO_OWNER`」の状態になります。そこで、持ち主が書き込まれるまでループして待ちます。
+
+### 3. 持ち主が合っているか確認する
+
+```kotlin:line-numbers=214
+            check(curOwner === owner || owner == null) { "This mutex is locked by $curOwner, but $owner is expected" }
+```
 
 `mutex.lock(a)` したのに `mutex.unlock(b)` するのは誤りなので例外にします。`owner == null` で呼んだ場合は確認しません。
 
-### 4. 持ち主の記録を CAS で消す（216 行目）
+### 4. 持ち主の記録を CAS で消す
 
-2 つのコルーチンが同時に `unlock` しても、CAS に成功するのは 1 つだけです。失敗した側はループの最初からやり直し、209 行目か 214 行目で誤りが検出されます。
+```kotlin:line-numbers=216
+            if (!this.owner.compareAndSet(curOwner, NO_OWNER)) continue
+```
 
-### 5. 許可を返す（218 行目）
+2 つのコルーチンが同時に `unlock` しても、CAS に成功するのは 1 つだけです。失敗した側はループの最初からやり直し、誤りが検出されます。
+
+### 5. 許可を返す
+
+```kotlin:line-numbers=218
+            release()
+```
 
 待っているコルーチンがいれば、ここで起こされます。
 
