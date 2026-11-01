@@ -12,6 +12,7 @@ lines: [151, 168]
 function: "withTimeoutOrNull"
 difficulty: 3
 tags: [非同期, エラー処理, 防御的プログラミング]
+format: 2
 ---
 
 ## ひとことで
@@ -21,7 +22,31 @@ tags: [非同期, エラー処理, 防御的プログラミング]
 
 ## コード
 
-```kotlin:line-numbers=151
+
+::: code-group
+
+```kotlin:line-numbers=151 [日本語訳]
+public suspend fun <T> withTimeoutOrNull(timeMillis: Long, block: suspend CoroutineScope.() -> T): T? {
+    if (timeMillis <= 0L) return null
+
+    var coroutine: TimeoutCoroutine<T?, T?>? = null
+    try {
+        return suspendCoroutineUninterceptedOrReturn { uCont ->
+            val timeoutCoroutine = TimeoutCoroutine(timeMillis, uCont)
+            coroutine = timeoutCoroutine
+            setupTimeout(timeoutCoroutine, block)
+        }
+    } catch (e: TimeoutCancellationException) {
+        // 自分のタイムアウトの例外なら null を返す。それ以外（入れ子の withTimeout など）は上位へ伝える
+        if (e.coroutine === coroutine) {
+            return null
+        }
+        throw e
+    }
+}
+```
+
+```kotlin:line-numbers=151 [原文]
 public suspend fun <T> withTimeoutOrNull(timeMillis: Long, block: suspend CoroutineScope.() -> T): T? {
     if (timeMillis <= 0L) return null
 
@@ -42,6 +67,8 @@ public suspend fun <T> withTimeoutOrNull(timeMillis: Long, block: suspend Corout
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **タイムアウトと取り消し**: kotlinx.coroutines では、時間切れになるとブロックのコルーチンが取り消され、`TimeoutCancellationException` が投げられます。
@@ -54,15 +81,35 @@ public suspend fun <T> withTimeoutOrNull(timeMillis: Long, block: suspend Corout
 
 ## 何をしているか
 
-### 1. 0 以下なら即 null（152 行目）
+### 1. 0 以下なら即 null
+
+```kotlin:line-numbers=152
+    if (timeMillis <= 0L) return null
+```
 
 待つ時間がないので、ブロックを実行せずに `null` を返します。
 
-### 2. タイムアウト用のコルーチンを作って開始（154〜160 行目）
+### 2. タイムアウト用のコルーチンを作って開始
+
+```kotlin:line-numbers=157
+            val timeoutCoroutine = TimeoutCoroutine(timeMillis, uCont)
+            coroutine = timeoutCoroutine
+            setupTimeout(timeoutCoroutine, block)
+```
 
 作った `TimeoutCoroutine` を `coroutine` 変数に覚えておきます。
 
-### 3. タイムアウト例外を捕まえて仕分け（161〜167 行目）
+### 3. タイムアウト例外を捕まえて仕分ける
+
+```kotlin:line-numbers=161
+    } catch (e: TimeoutCancellationException) {
+        // 自分のタイムアウトの例外なら null を返す。それ以外（入れ子の withTimeout など）は上位へ伝える
+        if (e.coroutine === coroutine) {
+            return null
+        }
+        throw e
+    }
+```
 
 例外が持っている `coroutine` が、さっき覚えたものと **同じオブジェクト** なら、自分のタイムアウトなので `null` を返します。違えば投げ直します。
 
