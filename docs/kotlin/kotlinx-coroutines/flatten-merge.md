@@ -12,6 +12,7 @@ lines: [134, 138]
 function: "Flow.flattenMerge"
 difficulty: 1
 tags: [非同期, 最適化, API設計]
+format: 2
 ---
 
 ## ひとことで
@@ -30,9 +31,9 @@ public fun <T> Flow<Flow<T>>.flattenMerge(concurrency: Int = DEFAULT_CONCURRENCY
 }
 ```
 
-`flattenConcat` は同じファイルの 78〜80 行目にあり、次の 3 行だけです。
+`flattenConcat` は同じファイルにあり、次の 3 行だけです。
 
-```kotlin
+```kotlin:line-numbers=78
 public fun <T> Flow<Flow<T>>.flattenConcat(): Flow<T> = flow {
     collect { value -> emitAll(value) }
 }
@@ -50,11 +51,19 @@ public fun <T> Flow<Flow<T>>.flattenConcat(): Flow<T> = flow {
 
 ## 何をしているか
 
-### 1. 並行数をチェック（136 行目）
+### 1. 並行数をチェックする
+
+```kotlin:line-numbers=136
+    require(concurrency > 0) { "Expected positive concurrency level, but had $concurrency" }
+```
 
 0 以下は意味がないのでエラーにします。
 
-### 2. 1 なら順番に、2 以上なら並行に（137 行目）
+### 2. 1 なら順番に、2 以上なら並行に
+
+```kotlin:line-numbers=137
+    return if (concurrency == 1) flattenConcat() else ChannelFlowMerge(this, concurrency)
+```
 
 | 並行数 | 使う実装 | 動き |
 | --- | --- | --- |
@@ -66,7 +75,7 @@ public fun <T> Flow<Flow<T>>.flattenConcat(): Flow<T> = flow {
 ## ここがすごい
 
 - **意味が同じなら軽い実装へ**: 並行数 1 のマージは、順番に流すのと結果がまったく同じです。それなのにチャネル・セマフォ・中の Flow ごとのコルーチンを用意するのは無駄です。分岐 1 つで、それらのコストをすべて省いています。
-- **`flatMapMerge` にも効く**: 同じファイルの `flatMapMerge`（66〜70 行目）は `map(transform).flattenMerge(concurrency)` と書かれているので、この最適化はそのまま受け継がれます。
+- **`flatMapMerge` にも効く**: `flatMapMerge` は `map(transform).flattenMerge(concurrency)` と書かれているので、この最適化はそのまま受け継がれます。
 - **API を 1 つにまとめたまま**: 利用者は「並行数」という 1 つの引数で振る舞いを選ぶだけで、内部でどちらの実装が使われるかを気にする必要はありません。
 - **短い関数で大きな効果**: たった 2 行の本体ですが、「入力によって最適な実装を選ぶ」という考え方がよく表れています。
 

@@ -12,6 +12,7 @@ lines: [229, 237]
 function: "MutableStateFlow.update"
 difficulty: 2
 tags: [並行処理, ロック不要, 非同期]
+format: 2
 ---
 
 ## ひとことで
@@ -45,11 +46,23 @@ public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
 
 ## 何をしているか
 
-### 1. 今の値を読んで、新しい値を計算（231〜232 行目）
+### 1. 今の値を読んで、新しい値を計算する
+
+```kotlin:line-numbers=230
+    while (true) {
+        val prevValue = value
+        val nextValue = function(prevValue)
+```
 
 たとえば今の値が 5 なら、`prevValue = 5`、`nextValue = 6` です。
 
-### 2. 誰も書き換えていなければ書き込む（233〜235 行目）
+### 2. 誰も書き換えていなければ書き込む
+
+```kotlin:line-numbers=233
+        if (compareAndSet(prevValue, nextValue)) {
+            return
+        }
+```
 
 `compareAndSet(5, 6)` は、「まだ 5 のままなら 6 にする」です。成功すれば終わりです。
 
@@ -68,7 +81,7 @@ public inline fun <T> MutableStateFlow<T>.update(function: (T) -> T) {
 
 - **ロックを使わない**: ロックを取ると、他のスレッドは待たされ、うっかりすると デッドロック（互いに待ち続けて止まること）も起きます。CAS ループなら誰も待たず、失敗したスレッドが計算し直すだけです。
 - **`value = value + 1` の落とし穴を API で防ぐ**: 読みと書きが別の操作だと競合が起きます。`update` という関数を用意しておけば、利用者は CAS を意識せずに正しいコードを書けます。
-- **兄弟関数で戻り値を選べる**: 同じファイルには、更新後の値を返す `updateAndGet`、更新前の値を返す `getAndUpdate`（213〜221 行目）もあり、どれも同じループの形です。
+- **兄弟関数で戻り値を選べる**: 同じファイルには、更新後の値を返す `updateAndGet`、更新前の値を返す `getAndUpdate` もあり、どれも同じループの形です。
 - **注意点も分かる**: 失敗したら `function` がもう一度呼ばれるので、`function` の中でログを出したり外部に書き込んだりすると、それが何度も起きる可能性があります。計算は「副作用のない関数」にするのが前提です。
 
 ## まとめ
