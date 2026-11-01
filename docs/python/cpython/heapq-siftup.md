@@ -11,6 +11,7 @@ file: Lib/heapq.py
 lines: [274, 292]
 function: _siftup
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化, 標準ライブラリ]
 ---
 
@@ -22,7 +23,31 @@ tags: [データ構造, アルゴリズム, 最適化, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=274
+::: code-group
+
+```python:line-numbers=274 [日本語訳]
+def _siftup(heap, pos):
+    endpos = len(heap)
+    startpos = pos
+    newitem = heap[pos]
+    # 葉に到達するまで、小さい方の子を上へ移動させ続ける。
+    childpos = 2*pos + 1    # 左の子の位置
+    while childpos < endpos:
+        # childpos を小さい方の子の位置にする。
+        rightpos = childpos + 1
+        if rightpos < endpos and not heap[childpos] < heap[rightpos]:
+            childpos = rightpos
+        # 小さい方の子を上へ移動する。
+        heap[pos] = heap[childpos]
+        pos = childpos
+        childpos = 2*pos + 1
+    # これで pos の葉は空いた。そこに newitem を置き、
+    # （親を下へずらしながら）最終的な位置まで上へ移動させる。
+    heap[pos] = newitem
+    _siftdown(heap, startpos, pos)
+```
+
+```python:line-numbers=274 [原文]
 def _siftup(heap, pos):
     endpos = len(heap)
     startpos = pos
@@ -44,7 +69,25 @@ def _siftup(heap, pos):
     _siftdown(heap, startpos, pos)
 ```
 
-最後に呼んでいる `_siftdown` は同じファイルの 221 行目にある関数で、値を **親の方向（上）へ** 移動させます。
+:::
+
+最後に呼んでいる `_siftdown` は同じファイルにある次の関数で、値を **親の方向（上）へ** 移動させます（関数の外のコードですが、動きを理解するために引用します）。
+
+```python:line-numbers=221
+def _siftdown(heap, startpos, pos):
+    newitem = heap[pos]
+    # Follow the path to the root, moving parents down until finding a place
+    # newitem fits.
+    while pos > startpos:
+        parentpos = (pos - 1) >> 1
+        parent = heap[parentpos]
+        if newitem < parent:
+            heap[pos] = parent
+            pos = parentpos
+            continue
+        break
+    heap[pos] = newitem
+```
 
 ## 前提知識
 
@@ -59,21 +102,48 @@ def _siftup(heap, pos):
 
 前提として、`pos` の位置の **左右の子から下は、すでにヒープのルールを満たしている** 状態で呼ばれます。崩れているかもしれないのは `pos` に置かれた `newitem` 1 つだけです。
 
-### 1. 下準備（275〜279 行目）
+### 1. 下準備
+
+```python:line-numbers=275
+    endpos = len(heap)
+    startpos = pos
+    newitem = heap[pos]
+    # 葉に到達するまで、小さい方の子を上へ移動させ続ける。
+    childpos = 2*pos + 1    # 左の子の位置
+```
 
 `newitem` を退避しておき、`childpos` に左の子の位置（`2*pos + 1`）を入れます。`startpos` には最初の位置を覚えておきます（あとで使います）。
 
-### 2. 小さい方の子を、葉まで引き上げ続ける（280〜288 行目）
+### 2. 小さい方の子を、葉まで引き上げ続ける
+
+```python:line-numbers=280
+    while childpos < endpos:
+        # childpos を小さい方の子の位置にする。
+        rightpos = childpos + 1
+        if rightpos < endpos and not heap[childpos] < heap[rightpos]:
+            childpos = rightpos
+        # 小さい方の子を上へ移動する。
+        heap[pos] = heap[childpos]
+        pos = childpos
+        childpos = 2*pos + 1
+```
 
 ループの中では次のことだけをします。
 
-1. 左右の子のうち **小さい方** を選ぶ（283 行目、比較 1 回）
-2. その子を 1 つ上（`pos`）に引き上げる（286 行目）
+1. 左右の子のうち **小さい方** を選ぶ（`not heap[childpos] < heap[rightpos]` の比較 1 回）
+2. その子を 1 つ上（`pos`）に引き上げる（`heap[pos] = heap[childpos]`）
 3. 引き上げた子がいた場所へ移動し、また下へ進む
 
 ポイントは、**`newitem` とは一度も比較していない** ことです。「`newitem` がここに収まるか？」を確かめずに、とにかく木のいちばん下（葉）まで穴を下ろしていきます。
 
-### 3. 葉に置いてから、上へ戻す（291〜292 行目）
+### 3. 葉に置いてから、上へ戻す
+
+```python:line-numbers=289
+    # これで pos の葉は空いた。そこに newitem を置き、
+    # （親を下へずらしながら）最終的な位置まで上へ移動させる。
+    heap[pos] = newitem
+    _siftdown(heap, startpos, pos)
+```
 
 葉まで来たら、空いた穴に `newitem` を置きます。このままだとルール違反かもしれないので、`_siftdown(heap, startpos, pos)` で **親より小さい間だけ上へ** 移動させます。`startpos` より上には行かないので、関係ない部分は壊しません。
 
@@ -90,7 +160,7 @@ def _siftup(heap, pos):
 - 下りでは「子どうしの比較」の **1 回だけ** で葉まで一気に進み、
 - 最後に上へ少しだけ戻す（大きな値なので、たいてい 1〜2 段で止まる）
 
-という 2 段構えにしています。235〜273 行目のコメントによると、1000 要素のランダムなリストを全部 `heappop()` したとき、**比較回数が約 15,000 回から約 8,700 回へ** 減ったそうです。この考え方は Knuth の『The Art of Computer Programming』第 3 巻の演習問題でも扱われています。
+という 2 段構えにしています。関数の直前にある長いコメントによると、1000 要素のランダムなリストを全部 `heappop()` したとき、**比較回数が約 15,000 回から約 8,700 回へ** 減ったそうです。この考え方は Knuth の『The Art of Computer Programming』第 3 巻の演習問題でも扱われています。
 
 ### 「比較は高い」という前提で設計している
 
@@ -98,7 +168,14 @@ def _siftup(heap, pos):
 
 ### `<` だけで書かれている
 
-283 行目は `heap[childpos] >= heap[rightpos]` ではなく `not heap[childpos] < heap[rightpos]` と書かれています。こうしておけば、ヒープに入れるオブジェクトは **`__lt__`（`<`）だけを定義すれば動きます**。使う側への要求を最小限にする、ライブラリらしい気配りです。
+小さい方の子を選ぶ行は、`heap[childpos] >= heap[rightpos]` ではなく次のように書かれています。
+
+```python:line-numbers=283
+        if rightpos < endpos and not heap[childpos] < heap[rightpos]:
+            childpos = rightpos
+```
+
+こうしておけば、ヒープに入れるオブジェクトは **`__lt__`（`<`）だけを定義すれば動きます**。使う側への要求を最小限にする、ライブラリらしい気配りです。
 
 なお CPython では、このファイルの最後で C 言語で書かれた高速版（`_heapq` モジュール）を読み込んで置き換えますが、C 版も同じアルゴリズムを使っています。
 

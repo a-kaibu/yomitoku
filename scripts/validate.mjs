@@ -15,6 +15,51 @@ import {
   LANGUAGES, LANGUAGE_IDS, TAGS, checkLicense, DIFFICULTIES, SLUG_RE, SHA_RE,
   REQUIRED_HEADINGS, MAX_EXCERPT_LINES, loadEntries,
 } from '../docs/.vitepress/meta.mjs'
+import { compareExcerpt, hasEnglishComment } from '../docs/.vitepress/code.mjs'
+
+const MAX_EXTRA_LINES = 60
+
+/** 本文のコードブロックを取り出す。excerpt は :line-numbers 付き（＝元ファイルからの引用）のもの */
+function parseBlocks(lines) {
+  const blocks = []
+  let section = null
+  for (let i = 0; i < lines.length; i++) {
+    const h = lines[i].match(/^##\s+(.+?)\s*$/)
+    if (h) { section = h[1]; continue }
+    const open = lines[i].match(/^(\s*)(```+|~~~+)(.*)$/)
+    if (!open) continue
+    const fence = open[2]
+    const info = open[3].trim()
+    let j = i + 1
+    while (j < lines.length && !lines[j].trim().startsWith(fence)) j++
+    const code = lines.slice(i + 1, j)
+    const m = info.match(/^([\w+#-]+):line-numbers=(\d+)(?:\s*\{[^}]*\})?(?:\s*\[([^\]]+)\])?\s*$/)
+    const prev = lines.slice(Math.max(0, i - 3), i).reverse().find((l) => l.trim())
+    const src = prev?.match(/^<!--\s*source:\s*(\S+)\s*-->$/)
+    blocks.push({
+      line: i + 1, info, code, section, closed: j < lines.length,
+      excerpt: m ? { lang: m[1], start: Number(m[2]), title: m[3], source: src?.[1] } : null,
+    })
+    i = j
+  }
+  return blocks
+}
+
+/** 指定した ## セクション内の ### 見出しと範囲（1 始まりの行番号） */
+function sectionH3(lines, h2) {
+  const s = lines.findIndex((l) => new RegExp(`^##\\s+${h2}\\s*$`).test(l))
+  if (s < 0) return []
+  let e = lines.findIndex((l, i) => i > s && /^##\s/.test(l))
+  if (e < 0) e = lines.length
+  const out = []
+  let inFence = false
+  for (let i = s + 1; i < e; i++) {
+    if (/^\s*(```|~~~)/.test(lines[i])) inFence = !inFence
+    const m = !inFence && lines[i].match(/^###\s+(.+?)\s*$/)
+    if (m) { if (out.length) out[out.length - 1].to = i + 1; out.push({ title: m[1], from: i + 1, to: e + 1 }) }
+  }
+  return out
+}
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const docsDir = path.join(root, 'docs')
@@ -128,30 +173,70 @@ for (const e of entries) {
     err(f, `## 見出しは次の 6 つをこの順番で: ${REQUIRED_HEADINGS.join(' / ')}（現在: ${h2.join(' / ') || 'なし'}）`)
   }
 
-  // 「## コード」直後の最初のコードブロックが引用コード
-  const codeIdx = lines.findIndex((l) => /^##\s+コード\s*$/.test(l))
-  if (codeIdx >= 0) {
-    const open = lines.findIndex((l, i) => i > codeIdx && /^```/.test(l))
-    const nextH2 = lines.findIndex((l, i) => i > codeIdx && /^##\s/.test(l))
-    if (open < 0 || (nextH2 >= 0 && open > nextH2)) err(f, '「## コード」にコードブロックがありません')
-    else {
-      const info = lines[open].slice(3).trim()
-      const m = info.match(/^([\w+#-]+):line-numbers=(\d+)$/)
-      const fences = LANGUAGES.find((l) => l.id === e.lang)?.fences ?? []
-      if (!m) err(f, `引用コードのフェンスは \`\`\`${fences[0]}:line-numbers=${start ?? '<開始行>'} の形にしてください（現在: "${info}"）`)
-      else {
-        if (!fences.includes(m[1])) err(f, `コードブロックの言語 "${m[1]}" は ${fences.join(', ')} のどれかにしてください`)
-        if (start && Number(m[2]) !== start) err(f, `line-numbers=${m[2]} が lines の開始行 ${start} と違います`)
-      }
-      const close = lines.findIndex((l, i) => i > open && /^```\s*$/.test(l))
-      if (close < 0) err(f, '引用コードのブロックが閉じていません')
-      else {
-        const code = lines.slice(open + 1, close)
-        if (start && end && code.length !== end - start + 1) err(f, `引用コードは ${code.length} 行ですが lines は ${end - start + 1} 行分です（省略せず該当行をそのまま貼ってください）`)
-        if (verifySource && start && end && SHA_RE.test(fm.commit ?? '')) toVerify.push({ f, fm, code, start, end })
-      }
+  // ---- コードブロック ----
+  // v2（format: 2）の新ルールは必須。旧形式の記事では警告にとどめる。
+  const v2 = fm.format === 2
+  const rule = (msg) => (v2 ? err(f, msg) : warn(f, `[旧形式→format: 2 で必須] ${msg}`))
+  if (fm.format !== undefined && fm.format !== 2) err(f, 'format は 2 にしてください')
+
+  const fences = LANGUAGES.find((l) => l.id === e.lang)?.fences ?? []
+  const blocks = parseBlocks(lines)
+  const excerpts = blocks.filter((b) => b.excerpt)
+  for (const b of excerpts) {
+    if (!fences.includes(b.excerpt.lang)) err(f, `コードブロックの言語 "${b.excerpt.lang}" は ${fences.join(', ')} のどれかにしてください（${b.line} 行目）`)
+  }
+  for (const b of blocks) {
+    if (!b.closed) err(f, `コードブロックが閉じていません（${b.line} 行目）`)
+    if (!b.excerpt && b.section === 'コード' && b.info && fences.includes(b.info.split(/[\s:{[]/)[0])) {
+      rule(`「## コード」のコードブロックには :line-numbers=<元ファイルの開始行> を付けてください（${b.line} 行目）`)
     }
   }
+
+  const codeBlocks = excerpts.filter((b) => b.section === 'コード')
+  const orig = codeBlocks.find((b) => b.excerpt.title === '原文') ?? codeBlocks.find((b) => !b.excerpt.title)
+  const trans = codeBlocks.find((b) => b.excerpt.title === '日本語訳')
+  if (!orig) err(f, '「## コード」に引用コード（```<言語>:line-numbers=<開始行>）がありません。翻訳タブを使う場合は [原文] タブが必要です')
+  else {
+    const ex = orig.excerpt
+    if (start && ex.start !== start) err(f, `引用コードの line-numbers=${ex.start} が lines の開始行 ${start} と違います`)
+    if (start && end && orig.code.length !== end - start + 1) err(f, `引用コードは ${orig.code.length} 行ですが lines は ${end - start + 1} 行分です（省略せず該当行をそのまま貼ってください）`)
+    if (ex.source) err(f, '関数本体の引用（「## コード」の原文）に source 指定は使えません。file を使ってください')
+    if (trans) {
+      if (trans.excerpt.start !== ex.start) err(f, '[日本語訳] と [原文] の line-numbers が違います')
+      const d = compareExcerpt(orig.code, trans.code, e.lang, false)
+      if (d >= 0) err(f, `[日本語訳] のコードが [原文] と違います（${ex.start + d} 行目）。変えてよいのはコメントだけで、行数も同じにします\n    原文: ${orig.code[d] ?? '(なし)'}\n    訳:   ${trans.code[d] ?? '(なし)'}`)
+      if (!/[ぁ-んァ-ヶ一-龠]/.test(trans.code.join('\n'))) rule('[日本語訳] のコメントが日本語になっていません')
+    } else if (hasEnglishComment(orig.code, e.lang)) {
+      rule('引用コードに英語のコメントがあります。::: code-group で [日本語訳] と [原文] の 2 タブにしてください')
+    }
+    // その他の抜粋（解説中の引用・関数外の引用）
+    let extraLines = 0
+    for (const b of excerpts) {
+      if (b === orig || b === trans) continue
+      const s0 = b.excerpt.start
+      const s1 = s0 + b.code.length - 1
+      const inside = !b.excerpt.source && start && end && s0 >= start && s1 <= end
+      if (inside) {
+        const d = compareExcerpt(orig.code.slice(s0 - start, s1 - start + 1), b.code, e.lang, false)
+        if (d >= 0) err(f, `${b.line} 行目のコード引用が元のコードと違います（元ファイル ${s0 + d} 行目）\n    元:   ${orig.code[s0 - start + d] ?? '(なし)'}\n    記事: ${b.code[d] ?? '(なし)'}`)
+      } else {
+        extraLines += b.code.length
+        if (verifySource && SHA_RE.test(fm.commit ?? '')) toVerify.push({ f, fm, file: b.excerpt.source ?? fm.file, code: b.code, start: s0, end: s1, strict: false, where: `${b.line} 行目の引用` })
+      }
+    }
+    if (extraLines > MAX_EXTRA_LINES) err(f, `関数外のコード引用は合計 ${MAX_EXTRA_LINES} 行以内にしてください（現在 ${extraLines} 行）`)
+    if (verifySource && start && end && SHA_RE.test(fm.commit ?? '')) toVerify.push({ f, fm, file: fm.file, code: orig.code, start, end, strict: true, where: '引用コード' })
+  }
+
+  // 「## 何をしているか」では、説明している部分のコードを引用しながら進める
+  const steps = sectionH3(lines, '何をしているか')
+  if (!steps.length) rule('「## 何をしているか」は ### で処理のかたまりごとに区切ってください')
+  const whatSec = blocks.filter((b) => b.excerpt && b.section === '何をしているか')
+  if (!whatSec.length) rule('「## 何をしているか」に、説明しているコードの引用（```<言語>:line-numbers=<行>）がありません。各ステップで該当部分を引用してください')
+  // 「100 行目の〜」のような行番号だけの参照は禁止（コードを引用する）
+  const proseOnly = body.replace(/```[\s\S]*?```/g, '')
+  const lineRef = proseOnly.match(/\d+\s*(?:[〜~-]\s*\d+\s*)?行目/)
+  if (lineRef) rule(`「${lineRef[0]}」のような行番号での参照はやめて、該当コードを引用してください`)
 
   // 解説の分量（コードブロックを除いた文字数）
   const prose = body.replace(/```[\s\S]*?```/g, '').replace(/\s+/g, '')
@@ -162,9 +247,9 @@ for (const e of entries) {
 // ---- 3. 引用コードの照合（--verify-source） --------------------------------
 if (toVerify.length) {
   const cache = new Map()
-  const fetchRaw = (fm) => {
+  const fetchRaw = (fm, file) => {
     const [, owner, repo] = fm.repo.match(/github\.com\/([^/]+)\/([^/]+)/)
-    const url = `https://raw.githubusercontent.com/${owner}/${repo}/${fm.commit}/${fm.file}`
+    const url = `https://raw.githubusercontent.com/${owner}/${repo}/${fm.commit}/${file}`
     if (!cache.has(url)) cache.set(url, fetch(url).then(async (r) => (r.ok ? r.text() : Promise.reject(new Error(`HTTP ${r.status} ${url}`)))))
     return cache.get(url)
   }
@@ -172,10 +257,9 @@ if (toVerify.length) {
   await Promise.all(Array.from({ length: 8 }, async () => {
     for (let job; (job = queue.shift()); ) {
       try {
-        const src = (await fetchRaw(job.fm)).split('\n').slice(job.start - 1, job.end)
-        const norm = (s) => s.replace(/\s+$/, '')
-        const diff = src.findIndex((l, i) => norm(l) !== norm(job.code[i] ?? ''))
-        if (diff >= 0) err(job.f, `引用コードが元ファイルと一致しません（${job.start + diff} 行目）\n    元: ${src[diff]}\n    記事: ${job.code[diff]}`)
+        const src = (await fetchRaw(job.fm, job.file)).split('\n').slice(job.start - 1, job.end)
+        const d = compareExcerpt(src, job.code, job.fm.language, job.strict)
+        if (d >= 0) err(job.f, `${job.where}が元ファイル（${job.file}）と一致しません（${job.start + d} 行目）\n    元:   ${src[d] ?? '(なし)'}\n    記事: ${job.code[d] ?? '(なし)'}`)
       } catch (e) {
         err(job.f, `元ファイルを取得できません: ${e.message}`)
       }

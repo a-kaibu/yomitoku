@@ -223,3 +223,53 @@
 @media (max-width: 640px) {
   .entry-title { font-size: 24px; }
 }
+
+/* ---- コードブロック: 折り返しボタン ---- */
+.vp-doc div[class*='language-'] pre,
+.vp-doc div[class*='language-'] code { tab-size: 4; }
+.vp-doc div[class*='language-'] > span.lang { display: none; }
+.vp-doc div[class*='language-'] pre,
+.vp-doc div[class*='language-'] .line-numbers-wrapper { padding-top: 44px; }
+.vp-doc div[class*='language-'] > button.copy { top: 8px; right: 104px; width: 30px; height: 30px; background-size: 16px; }
+.vp-doc div[class*='language-'] > button.yk-wrap-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 3;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--vp-code-copy-code-border-color);
+  border-radius: 6px;
+  background: var(--vp-code-copy-code-bg);
+  color: var(--vp-c-text-2);
+  font-size: 12px;
+  line-height: 28px;
+  white-space: nowrap;
+}
+.vp-doc div[class*='language-'] > button.yk-wrap-btn:hover { color: var(--vp-c-text-1); border-color: var(--vp-code-copy-code-hover-border-color); }
+.vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '↩ 折り返し: オフ'; }
+html.yk-wrap .vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '↩ 折り返し: オン'; }
+html.yk-wrap .vp-doc div[class*='language-'] > button.yk-wrap-btn { color: var(--vp-c-brand-1); border-color: var(--vp-c-brand-1); }
+
+/* 折り返しオン: 行番号は CSS カウンタで各行の先頭に出し、続きの行はぶら下げインデント */
+html.yk-wrap .vp-doc div[class*='language-'] pre { overflow-x: hidden; }
+html.yk-wrap .vp-doc div[class*='language-'] code { display: block; width: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode { padding-left: 0; }
+html.yk-wrap .vp-doc div[class*='language-'] .line-numbers-wrapper { display: none; }
+html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code { counter-reset: yk-ln var(--yk-start, 0); padding-left: 12px; }
+html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line {
+  display: inline-block;
+  width: 100%;
+  padding-left: 3.4em;
+  text-indent: -3.4em;
+}
+html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::before {
+  counter-increment: yk-ln;
+  content: counter(yk-ln);
+  display: inline-block;
+  width: 2.6em;
+  margin-right: 0.8em;
+  text-indent: 0;
+  text-align: right;
+  color: var(--vp-code-line-number-color);
+}

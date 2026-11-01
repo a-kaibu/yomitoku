@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import { transformerStyleToClass } from '@shikijs/transformers'
 import { LANGUAGES, DIFFICULTIES, loadEntries, sourceUrl } from './meta.mjs'
+import { dedent } from './code.mjs'
 
 const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -107,6 +108,8 @@ export default defineConfig({
   head: [
     ...(styleToClass ? [['link', { rel: 'stylesheet', href: `${process.env.BASE ?? '/yokuyomu/'}${shikiCss}` }] as [string, Record<string, string>]] : []),
     ['meta', { name: 'theme-color', content: '#3c8772' }],
+    // コードの折り返し設定をちらつきなく復元する
+    ['script', {}, "try{localStorage.getItem('yk-wrap')==='1'&&document.documentElement.classList.add('yk-wrap')}catch(e){}"],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:locale', content: 'ja_JP' }],
   ],
@@ -114,6 +117,24 @@ export default defineConfig({
     lineNumbers: false,
     theme: { light: 'github-light', dark: 'github-dark' },
     codeTransformers: styleToClass ? [styleToClass] : [],
+    codeCopyButtonTitle: 'コードをコピー',
+    config(md) {
+      // すべてのコードブロックを自動でデデントし、折り返し切り替えボタンを付ける。
+      // ハイライト自体は VitePress 標準の Shiki のまま（ここではテキストとラッパーだけ触る）。
+      const fence = md.renderer.rules.fence!
+      md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+        const token = tokens[idx]
+        token.content = dedent(token.content.replace(/\n$/, '').split('\n')).join('\n') + '\n'
+        let html = fence(tokens, idx, options, env, self)
+        html = html.replace(
+          '<button title="コードをコピー" class="copy"></button>',
+          '$&<button type="button" class="yk-wrap-btn" title="折り返しを切り替え" aria-label="コードの折り返しを切り替え"></button>',
+        )
+        const start = token.info.match(/:line-numbers=(\d+)/)
+        if (start) html = html.replace(/^<div class="language-/, `<div style="--yk-start:${Number(start[1]) - 1}" class="language-`)
+        return html
+      }
+    },
   },
   buildEnd(siteConfig) {
     if (styleToClass) fs.writeFileSync(path.join(siteConfig.outDir, shikiCss), styleToClass.getCSS())
