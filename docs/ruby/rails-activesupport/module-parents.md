@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/module/introspection.rb
 lines: [62, 73]
 function: "Module#module_parents"
 difficulty: 2
+format: 2
 tags: [メタプログラミング, リフレクション]
 ---
 
@@ -49,20 +50,33 @@ tags: [メタプログラミング, リフレクション]
 
 ## 何をしているか
 
-### 1. 親の名前を部品に分ける（64〜65 行目）
+### 1. 親の名前を部品に分ける
 
+```ruby:line-numbers=64
+    if module_parent_name
+      parts = module_parent_name.split("::")
+```
 `A::B::C` の親の名前は `"A::B"` なので、`parts` は `["A", "B"]` になります。
 
-### 2. 後ろから 1 つずつ削りながら変換（66〜69 行目）
+### 2. 後ろから 1 つずつ削りながら変換
 
+```ruby:line-numbers=66
+      until parts.empty?
+        parents << ActiveSupport::Inflector.constantize(parts * "::")
+        parts.pop
+      end
+```
 1. `parts * "::"` は `"A::B"` → `A::B` を追加 → `pop` して `["A"]`
 2. `"A"` → `A` を追加 → `pop` して `[]`
 3. 空になったので終わり
 
 `parents` は `[A::B, A]` です。
 
-### 3. 最後に Object を足す（71 行目）
+### 3. 最後に Object を足す
 
+```ruby:line-numbers=71
+    parents << Object unless parents.include? Object
+```
 `[A::B, A, Object]` を返します。親のないモジュールでも `[Object]` になります。
 
 ## ここがすごい
@@ -77,7 +91,7 @@ Ruby のモジュールは、自分がどこに入れ子になっているかを
 
 ### Object の重複を防ぐ
 
-71 行目は `unless parents.include? Object` で、すでに `Object` が入っていれば追加しません。通常は入っていませんが、名前の付け方によっては定数の解決結果が `Object` になる場合もありえます。最後の 1 行で、結果に重複がないことを保証しています。
+`parents << Object unless parents.include? Object` は、すでに `Object` が入っていれば追加しません。通常は入っていませんが、名前の付け方によっては定数の解決結果が `Object` になる場合もありえます。最後の 1 行で、結果に重複がないことを保証しています。
 
 ### 配列の掛け算でつなぐ
 

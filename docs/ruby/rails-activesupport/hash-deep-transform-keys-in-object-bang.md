@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/hash/keys.rb
 lines: [143, 156]
 function: "Hash#_deep_transform_keys_in_object!"
 difficulty: 2
+format: 2
 tags: [再帰, ハッシュ, データ構造]
 ---
 
@@ -50,8 +51,16 @@ tags: [再帰, ハッシュ, データ構造]
 
 ## 何をしているか
 
-### 1. ハッシュのとき（145〜150 行目）
+### 1. ハッシュのとき
 
+```ruby:line-numbers=145
+      when Hash
+        object.keys.each do |key|
+          value = object.delete(key)
+          object[yield(key)] = _deep_transform_keys_in_object!(value, &block)
+        end
+        object
+```
 `{ "user" => { "name" => "a" } }` にシンボル化のブロックを渡す場合、
 
 1. `keys` で `["user"]` を取り出す
@@ -61,12 +70,20 @@ tags: [再帰, ハッシュ, データ構造]
 
 最後に書き換えたハッシュを返します。
 
-### 2. 配列のとき（151〜152 行目）
+### 2. 配列のとき
 
+```ruby:line-numbers=151
+      when Array
+        object.map! { |e| _deep_transform_keys_in_object!(e, &block) }
+```
 `{ "items" => [{ "id" => 1 }] }` のように、配列の中にハッシュがある場合も、各要素に再帰することで変換されます。
 
-### 3. それ以外（153〜154 行目）
+### 3. それ以外
 
+```ruby:line-numbers=153
+      else
+        object
+```
 文字列や数値などはキーを持たないので、そのまま返します。
 
 ## ここがすごい

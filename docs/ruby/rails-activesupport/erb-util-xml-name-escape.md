@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/erb/util.rb
 lines: [157, 171]
 function: "ERB::Util#xml_name_escape"
 difficulty: 2
+format: 2
 tags: [セキュリティ, 正規表現, Unicode]
 ---
 
@@ -40,7 +41,19 @@ tags: [セキュリティ, 正規表現, Unicode]
     end
 ```
 
-同じファイルの 47〜54 行目で、XML の仕様（コメントにある W3C の文書）に従って、名前の先頭に使える文字 `TAG_NAME_START_CODEPOINTS` と、2 文字目以降に使える文字 `TAG_NAME_FOLLOWING_CODEPOINTS` が定義されています。先頭には英字・`_`・`:` などが使え、2 文字目以降にはさらに数字・`-`・`.` なども使えます。
+同じファイルの少し上で、XML の仕様（コメントにある W3C の文書）に従って、名前の先頭に使える文字 `TAG_NAME_START_CODEPOINTS` と、2 文字目以降に使える文字 `TAG_NAME_FOLLOWING_CODEPOINTS` が定義されています。先頭には英字・`_`・`:` などが使え、2 文字目以降にはさらに数字・`-`・`.` なども使えます。
+
+```ruby:line-numbers=46
+    # Following XML requirements: https://www.w3.org/TR/REC-xml/#NT-Name
+    TAG_NAME_START_CODEPOINTS = "@:A-Z_a-z\u{C0}-\u{D6}\u{D8}-\u{F6}\u{F8}-\u{2FF}\u{370}-\u{37D}\u{37F}-\u{1FFF}" \
+                                "\u{200C}-\u{200D}\u{2070}-\u{218F}\u{2C00}-\u{2FEF}\u{3001}-\u{D7FF}\u{F900}-\u{FDCF}" \
+                                "\u{FDF0}-\u{FFFD}\u{10000}-\u{EFFFF}"
+    INVALID_TAG_NAME_START_REGEXP = /[^#{TAG_NAME_START_CODEPOINTS}]/
+    TAG_NAME_FOLLOWING_CODEPOINTS = "#{TAG_NAME_START_CODEPOINTS}\\-.0-9\u{B7}\u{0300}-\u{036F}\u{203F}-\u{2040}".freeze
+    INVALID_TAG_NAME_FOLLOWING_REGEXP = /[^#{TAG_NAME_FOLLOWING_CODEPOINTS}]/
+    SAFE_XML_TAG_NAME_REGEXP = /\A[#{TAG_NAME_START_CODEPOINTS}][#{TAG_NAME_FOLLOWING_CODEPOINTS}]*\z/
+    TAG_NAME_REPLACEMENT_CHAR = "_"
+```
 
 ## 前提知識
 
@@ -54,16 +67,33 @@ tags: [セキュリティ, 正規表現, Unicode]
 
 ## 何をしているか
 
-### 1. 早く終われる場合（158〜160 行目）
+### 1. 早く終われる場合
 
+```ruby:line-numbers=158
+      name = name.to_s
+      return "" if name.blank?
+      return name if name.match?(SAFE_XML_TAG_NAME_REGEXP)
+```
 空の名前なら空文字を返します。すでに正しい名前（よくあるケース）なら、そのまま返します。
 
-### 2. 先頭の 1 文字を直す（162〜165 行目）
+### 2. 先頭の 1 文字を直す
 
+```ruby:line-numbers=162
+      starting_char = name[0]
+      starting_char.gsub!(INVALID_TAG_NAME_START_REGEXP, TAG_NAME_REPLACEMENT_CHAR)
+
+      return starting_char if name.size == 1
+```
 先頭の文字が「名前の先頭に使えない文字」なら `_` に置き換えます。1 文字だけの名前なら、これで終わりです。
 
-### 3. 残りを直してつなぐ（167〜170 行目）
+### 3. 残りを直してつなぐ
 
+```ruby:line-numbers=167
+      following_chars = name[1..-1]
+      following_chars.gsub!(INVALID_TAG_NAME_FOLLOWING_REGEXP, TAG_NAME_REPLACEMENT_CHAR)
+
+      starting_char << following_chars
+```
 2 文字目以降は「2 文字目以降に使えない文字」を `_` に置き換え、先頭とつなげて返します。
 
 `"1 < 2 & 3"` で追うと、
@@ -82,7 +112,7 @@ XML の名前の規則では、先頭の文字と 2 文字目以降で使える�
 
 ### よくある正しい名前は一瞬で返す
 
-ほとんどの名前は最初から正しいはずです。160 行目で丸ごとチェックして、正しければ新しい文字列を作らずに返します。
+ほとんどの名前は最初から正しいはずです。`name.match?(SAFE_XML_TAG_NAME_REGEXP)` で丸ごとチェックして、正しければ新しい文字列を作らずに返します。
 
 ### 置き換えは消すのではなく `_` にする
 

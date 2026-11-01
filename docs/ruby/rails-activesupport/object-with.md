@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/object/with.rb
 lines: [31, 44]
 function: "Object#with"
 difficulty: 2
+format: 2
 tags: [エラー処理, メタプログラミング, イディオム]
 ---
 
@@ -49,19 +50,36 @@ tags: [エラー処理, メタプログラミング, イディオム]
 
 ## 何をしているか
 
-### 1. 古い値を覚えてから書き換える（32〜37 行目）
+### 1. 古い値を覚えてから書き換える
 
+```ruby:line-numbers=32
+    old_values = {}
+    begin
+      attributes.each do |key, value|
+        old_values[key] = public_send(key)
+        public_send("#{key}=", value)
+      end
+```
 `client.with(timeout: 5, retries: 0)` の場合、
 
 1. `client.timeout` を読んで `old_values[:timeout]` に保存し、`client.timeout = 5` にする
 2. `client.retries` を読んで保存し、`client.retries = 0` にする
 
-### 2. ブロックを実行する（38 行目）
+### 2. ブロックを実行する
 
+```ruby:line-numbers=38
+      yield self
+```
 書き換えた状態でブロックを実行します。ブロックの結果が `with` の戻り値になります。
 
-### 3. 必ず元に戻す（39〜42 行目）
+### 3. 必ず元に戻す
 
+```ruby:line-numbers=39
+    ensure
+      old_values.each do |key, old_value|
+        public_send("#{key}=", old_value)
+      end
+```
 `ensure` の中で、保存しておいた値を順に書き戻します。ブロックの中で例外が起きても、ここは実行されます。
 
 ## ここがすごい
@@ -77,7 +95,7 @@ tags: [エラー処理, メタプログラミング, イディオム]
 
 ### 何にでも使える汎用性
 
-特定のクラス向けではなく、`Object` に定義されています。条件は「読み書きの public メソッドがあること」だけです（29〜30 行目のコメント）。`public_send` で名前から呼び出すので、どんな属性名でも動きます。
+特定のクラス向けではなく、`Object` に定義されています。条件は「読み書きの public メソッドがあること」だけです（コード中のコメント）。`public_send` で名前から呼び出すので、どんな属性名でも動きます。
 
 ### 「一時的に変える」の定型を 1 つにまとめた
 

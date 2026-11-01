@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/enumerable.rb
 lines: [58, 66]
 function: "Enumerable#index_by"
 difficulty: 1
+format: 2
 tags: [データ構造, ハッシュ, イテレータ]
 ---
 
@@ -45,8 +46,14 @@ tags: [データ構造, ハッシュ, イテレータ]
 
 ## 何をしているか
 
-### 1. ブロックがあればハッシュを作る（59〜62 行目）
+### 1. ブロックがあればハッシュを作る
 
+```ruby:line-numbers=59
+    if block_given?
+      result = {}
+      each { |elem| result[yield(elem)] = elem }
+      result
+```
 `[alice, bob].index_by(&:login)` で追うと、
 
 1. `alice` に対してブロックを実行し `"alice"` を得る → `result["alice"] = alice`
@@ -54,8 +61,13 @@ tags: [データ構造, ハッシュ, イテレータ]
 
 最後に `result` を返します。同じキーの要素が複数あれば、**後から来たものが上書き** します。
 
-### 2. ブロックがなければ Enumerator を返す（63〜65 行目）
+### 2. ブロックがなければ Enumerator を返す
 
+```ruby:line-numbers=63
+    else
+      to_enum(:index_by) { size if respond_to?(:size) }
+    end
+```
 `people.index_by` とだけ書くと Enumerator が返ります。たとえば `people.index_by.with_index { |p, i| i }` のように、別のメソッドと組み合わせられます。
 
 ## ここがすごい
@@ -67,7 +79,7 @@ tags: [データ構造, ハッシュ, イテレータ]
 
 ### 標準メソッドと同じ約束を守る
 
-ブロックなしで Enumerator を返すのは、Ruby の `map` や `group_by` と同じ約束です。しかも `size` が分かるコレクションなら、Enumerator にも要素数を教えています（64 行目）。こうしておくと `enum.size` がループせずに答えられます。
+ブロックなしで Enumerator を返すのは、Ruby の `map` や `group_by` と同じ約束です。しかも `size` が分かるコレクションなら、Enumerator にも要素数を教えています。こうしておくと `enum.size` がループせずに答えられます。
 
 ### group_by との使い分け
 

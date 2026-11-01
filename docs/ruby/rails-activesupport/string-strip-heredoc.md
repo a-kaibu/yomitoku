@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/string/strip.rb
 lines: [32, 60]
 function: "String#strip_heredoc"
 difficulty: 2
+format: 2
 tags: [文字列処理, 標準ライブラリ]
 ---
 
@@ -66,20 +67,50 @@ tags: [文字列処理, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 各行の字下げを測る（33〜45 行目）
+### 1. 各行の字下げを測る
 
+```ruby:line-numbers=33
+    scanner = StringScanner.new("")
+
+    min_indent_len = nil
+    lines = self.lines
+
+    lines.each do |line|
+      scanner.string = line
+      indent_len = scanner.skip(/[ \t]*/)
+
+      next unless scanner.match?(/[^\r\n]/)
+
+      min_indent_len = indent_len if indent_len < (min_indent_len || Float::INFINITY)
+    end
+```
 1 つの `StringScanner` を使い回し、行ごとに `scanner.string = line` で中身を差し替えます。`skip(/[ \t]*/)` で先頭のスペースとタブを読み飛ばし、その文字数を `indent_len` に入れます。
 
-42 行目では、空白のあとに改行以外の文字があるかを確認します。**空行や空白だけの行は、字下げの計算に入れません。** 空行の字下げは 0 とみなされてしまうからです。
+`next unless scanner.match?(/[^\r\n]/)` では、空白のあとに改行以外の文字があるかを確認します。**空行や空白だけの行は、字下げの計算に入れません。** 空行の字下げは 0 とみなされてしまうからです。
 
-44 行目で、これまでの最小値より小さければ更新します。`min_indent_len` は最初 `nil` なので、`|| Float::INFINITY` で「無限大と比べる」ことにしています。
+続く行で、これまでの最小値より小さければ更新します。`min_indent_len` は最初 `nil` なので、`|| Float::INFINITY` で「無限大と比べる」ことにしています。
 
-### 2. 削る必要がなければそのまま返す（48〜50 行目）
+### 2. 削る必要がなければそのまま返す
 
+```ruby:line-numbers=48
+    if min_indent_len.nil? || min_indent_len.zero?
+      return frozen? ? self : dup
+    end
+```
 字下げが 0、または中身のある行が 1 つもない場合は何もしません。凍結されていれば自分自身を、そうでなければコピーを返します。
 
-### 3. 全行から削ってつなぐ（52〜59 行目）
+### 3. 全行から削ってつなぐ
 
+```ruby:line-numbers=52
+    lines.each do |line|
+      line[0, min_indent_len] = "" unless line == "\n"
+    end
+
+    result = lines.join
+
+    result.freeze if frozen?
+    result
+```
 改行だけの行以外から、先頭 `min_indent_len` 文字を削除し、`join` で 1 つの文字列に戻します。元の文字列が凍結されていれば、結果も凍結して性質をそろえます。
 
 ## ここがすごい

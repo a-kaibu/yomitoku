@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/object/to_query.rb
 lines: [67, 78]
 function: "Array#to_query"
 difficulty: 2
+format: 2
 tags: [ネットワーク, 再帰, 文字列処理]
 ---
 
@@ -48,16 +49,29 @@ Rails はこの形式を受け取ると、`params[:hobbies]` を配列として�
 
 ## 何をしているか
 
-### 1. 名前に [] を付ける（68 行目）
+### 1. 名前に [] を付ける
 
+```ruby:line-numbers=68
+    prefix = "#{key}[]"
+```
 `"hobbies"` から `"hobbies[]"` を作ります。
 
-### 2. 空の配列のとき（70〜71 行目）
+### 2. 空の配列のとき
 
+```ruby:line-numbers=70
+    if empty?
+      nil.to_query(prefix)
+```
 `[].to_query("hobbies")` は `nil.to_query("hobbies[]")` になり、`"hobbies%5B%5D="` を返します。「空の配列を送った」という情報が、値のない `hobbies[]=` として伝わります。
 
-### 3. 要素ごとに変換してつなぐ（73〜76 行目）
+### 3. 要素ごとに変換してつなぐ
 
+```ruby:line-numbers=73
+      filter_map { |value|
+        next if (value.is_a?(Hash) || value.is_a?(Array)) && value.empty?
+        value.to_query(prefix)
+      }.join "&"
+```
 各要素に対して `value.to_query("hobbies[]")` を呼びます。`"Rails".to_query("hobbies[]")` は `"hobbies%5B%5D=Rails"` を返します。
 ただし、要素が **空の配列や空のハッシュ** の場合は `next` で `nil` にし、`filter_map` で取り除きます。最後に `&` でつなぎます。
 
@@ -70,7 +84,7 @@ Rails はこの形式を受け取ると、`params[:hobbies]` を配列として�
 
 ### 空の入れ子を捨てる理由
 
-`[[], "x"]` の内側の `[]` をそのまま変換すると `key[][]=` のような、受け取り側で意味のない値が混ざります。74 行目で取り除くことで、受け取ったときに余計な空要素ができないようにしています。
+`[[], "x"]` の内側の `[]` をそのまま変換すると `key[][]=` のような、受け取り側で意味のない値が混ざります。`next if ...` の行で取り除くことで、受け取ったときに余計な空要素ができないようにしています。
 
 ### 配列そのものが空なら情報を残す
 

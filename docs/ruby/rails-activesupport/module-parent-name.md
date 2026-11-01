@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/module/introspection.rb
 lines: [11, 22]
 function: "Module#module_parent_name"
 difficulty: 2
+format: 2
 tags: [正規表現, キャッシュ, メタプログラミング]
 ---
 
@@ -49,21 +50,36 @@ tags: [正規表現, キャッシュ, メタプログラミング]
 
 ## 何をしているか
 
-### 1. 計算済みならそれを返す（12〜13 行目）
+### 1. 計算済みならそれを返す
 
+```ruby:line-numbers=12
+    if defined?(@parent_name)
+      @parent_name
+```
 一度計算した結果は `@parent_name` に保存してあります。`defined?` で確認し、あればそのまま返します。
 
-### 2. 名前を取り出す（15〜16 行目）
+### 2. 名前を取り出す
 
+```ruby:line-numbers=15
+      name = self.name
+      return if name.nil?
+```
 無名のモジュール（`Module.new` で作ったもの）は名前が `nil` なので、親もわかりません。何も返さずに終わります。
 
-### 3. 最後の `::` より前を取り出す（18 行目）
+### 3. 最後の `::` より前を取り出す
 
+```ruby:line-numbers=18
+      parent_name = name =~ /::[^:]+\z/ ? -$` : nil
+```
 `"Foo::Bar::Baz"` に `/::[^:]+\z/` をマッチさせると、マッチするのは `"::Baz"` です。その前の部分 `$`` は `"Foo::Bar"` です。それを `-` で凍結した文字列にします。
 `"String"` のように `::` を含まなければマッチせず、`nil` になります。
 
-### 4. 覚えてから返す（19〜20 行目）
+### 4. 覚えてから返す
 
+```ruby:line-numbers=19
+      @parent_name = parent_name unless frozen?
+      parent_name
+```
 モジュールが凍結されていなければ、結果を `@parent_name` に保存します。
 
 ## ここがすごい
@@ -79,7 +95,7 @@ tags: [正規表現, キャッシュ, メタプログラミング]
 
 ### 凍結されたモジュールで壊れない
 
-凍結されたオブジェクトにインスタンス変数を代入すると `FrozenError` になります。19 行目の `unless frozen?` で、その場合はキャッシュをあきらめて計算結果だけを返します。速さより、まず落ちないことを優先しています。
+凍結されたオブジェクトにインスタンス変数を代入すると `FrozenError` になります。`unless frozen?` で、その場合はキャッシュをあきらめて計算結果だけを返します。速さより、まず落ちないことを優先しています。
 
 ### 結果を凍結して共有する
 

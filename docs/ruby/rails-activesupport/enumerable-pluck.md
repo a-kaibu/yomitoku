@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/enumerable.rb
 lines: [158, 165]
 function: "Enumerable#pluck"
 difficulty: 1
+format: 2
 tags: [API設計, イテレータ]
 ---
 
@@ -43,20 +44,30 @@ tags: [API設計, イテレータ]
 
 ## 何をしているか
 
-### 1. キーが複数のとき（159〜160 行目）
+### 1. キーが複数のとき
 
+```ruby:line-numbers=159
+    if keys.many?
+      map { |element| keys.map { |key| element[key] } }
+```
 `pluck(:id, :name)` なら、各要素について `keys.map { |key| element[key] }` を計算します。
 `{ id: 1, name: "David" }` からは `[1, "David"]` ができ、それを全要素ぶん集めて配列の配列にします。
 
-### 2. キーが 1 つのとき（161〜164 行目）
+### 2. キーが 1 つのとき
 
+```ruby:line-numbers=161
+    else
+      key = keys.first
+      map { |element| element[key] }
+    end
+```
 キーを 1 つ取り出しておき、各要素から `element[key]` を取るだけです。結果は `["David", "Rafael"]` のような平らな配列になります。
 
 ## ここがすごい
 
 ### 使う人の期待に合わせて形を変える
 
-もしキーの数に関係なく 2 行目の書き方をすると、`pluck(:name)` の結果は `[["David"], ["Rafael"]]` になってしまいます。1 つのキーを抜き出したいとき、二重の配列が欲しい人はほとんどいません。
+もしキーの数に関係なく `keys.map { |key| element[key] }` の書き方をすると、`pluck(:name)` の結果は `[["David"], ["Rafael"]]` になってしまいます。1 つのキーを抜き出したいとき、二重の配列が欲しい人はほとんどいません。
 キーの数で分岐することで、**よく使う 1 キーの場合はいちばん自然な形** で返しています。これは Active Record の `pluck`（データベースから列の値を取り出すメソッド）と同じ振る舞いで、Rails 全体で使い心地をそろえています。
 
 ### 内側のループも省ける

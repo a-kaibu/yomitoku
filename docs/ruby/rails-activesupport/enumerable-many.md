@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/enumerable.rb
 lines: [99, 109]
 function: "Enumerable#many?"
 difficulty: 2
+format: 2
 tags: [最適化, イテレータ, クロージャ]
 ---
 
@@ -46,12 +47,22 @@ tags: [最適化, イテレータ, クロージャ]
 
 ## 何をしているか
 
-### 1. カウンタを用意する（100 行目）
+### 1. カウンタを用意する
 
+```ruby:line-numbers=100
+    cnt = 0
+```
 見つけた要素の数を数える `cnt` を 0 にします。
 
-### 2. ブロックがあるとき（101〜105 行目）
+### 2. ブロックがあるとき
 
+```ruby:line-numbers=101
+    if block_given?
+      any? do |*args|
+        cnt += 1 if yield(*args)
+        cnt > 1
+      end
+```
 `any?` に「条件に合えば数を増やし、2 以上になったら真を返す」ブロックを渡します。
 `[30, 20, 40, 50].many? { |age| age > 26 }` で追うと、
 
@@ -61,8 +72,11 @@ tags: [最適化, イテレータ, クロージャ]
 
 4 つ目の 50 は調べられません。
 
-### 3. ブロックがないとき（107 行目）
+### 3. ブロックがないとき
 
+```ruby:line-numbers=107
+      any? { (cnt += 1) > 1 }
+```
 要素の中身は気にせず、取り出すたびに数えるだけです。2 つ目の要素で `true` になって終わります。要素が 0 個か 1 個なら最後まで真にならず、`false` になります。
 
 ## ここがすごい
