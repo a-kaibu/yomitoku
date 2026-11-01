@@ -11,6 +11,7 @@ file: "src/unicode/utf8/utf8.go"
 lines: [347, 363]
 function: "RuneLen"
 difficulty: 1
+format: 2
 tags: [Unicode, 文字列処理, 標準ライブラリ, 可読性]
 ---
 
@@ -54,20 +55,44 @@ func RuneLen(r rune) int {
 
 ## 何をしているか
 
-### 1. 負の数は不正（349〜350 行目）
+### 1. 負の数は不正
 
-### 2. 小さい順に上限と比べる（351〜354 行目）
+```go:line-numbers=349
+	case r < 0:
+		return -1
+```
+
+### 2. 小さい順に上限と比べる
+
+```go:line-numbers=351
+	case r <= rune1Max:
+		return 1
+	case r <= rune2Max:
+		return 2
+```
 
 `'A'`（65）は `rune1Max`（127）以下なので 1。`'é'`（233）は 127 より大きく 2047 以下なので 2 です。
 上から順に調べるので、2 つ目の `case` に来た時点で「127 より大きい」ことはわかっています。だから **上限だけを比べれば** 範囲の判定になります。
 
-### 3. サロゲートをはさむ（355〜356 行目）
+### 3. サロゲートをはさむ
+
+```go:line-numbers=355
+	case surrogateMin <= r && r <= surrogateMax:
+		return -1
+```
 
 3 バイトの範囲（2048〜65535）の途中に、UTF-8 で書いてはいけないサロゲートの範囲があります。そこで 3 バイトの判定の **直前** に、サロゲートなら `-1` を返す `case` を置いています。
 
 `'あ'`（0x3042）はサロゲートの範囲より小さいので、この `case` には当てはまらず、次の `r <= rune3Max` で 3 になります。
 
-### 4. 4 バイトと範囲外（359〜362 行目）
+### 4. 4 バイトと範囲外
+
+```go:line-numbers=359
+	case r <= MaxRune:
+		return 4
+	}
+	return -1
+```
 
 0x10FFFF 以下なら 4、それより大きいと Unicode の範囲外なので `-1` です。
 

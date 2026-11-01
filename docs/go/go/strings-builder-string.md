@@ -11,6 +11,7 @@ file: "src/strings/builder.go"
 lines: [46, 48]
 function: "(*Builder).String"
 difficulty: 3
+format: 2
 tags: [メモリ管理, 最適化, 低レイヤ, 標準ライブラリ]
 ---
 
@@ -38,6 +39,10 @@ func (b *Builder) String() string {
 - **メソッド**: `func (b *Builder) String()` は `Builder` 型に付いた関数で、`b.String()` のように呼びます。`b` は呼び出し元の Builder を指すポインタです。
 
 ## 何をしているか
+
+```go:line-numbers=47
+	return unsafe.String(unsafe.SliceData(b.buf), len(b.buf))
+```
 
 ### 1. バイト列の場所を取る
 

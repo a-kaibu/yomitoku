@@ -11,6 +11,7 @@ file: "src/strings/strings.go"
 lines: [365, 412]
 function: "Fields"
 difficulty: 2
+format: 2
 tags: [文字列処理, 最適化, メモリ管理, 標準ライブラリ]
 ---
 
@@ -23,7 +24,60 @@ tags: [文字列処理, 最適化, メモリ管理, 標準ライブラリ]
 
 ## コード
 
-```go:line-numbers=365
+::: code-group
+
+```go:line-numbers=365 [日本語訳]
+func Fields(s string) []string {
+	// まず単語の数を数える。
+	// s が ASCII ならこれは正確な数で、そうでなければ近似値である。
+	n := 0
+	wasSpace := 1
+	// setBits は、s のバイトのうちどのビットが立ったかを記録する。
+	setBits := uint8(0)
+	for i := 0; i < len(s); i++ {
+		r := s[i]
+		setBits |= r
+		isSpace := int(asciiSpace[r])
+		n += wasSpace & ^isSpace
+		wasSpace = isSpace
+	}
+
+	if setBits >= utf8.RuneSelf {
+		// 入力文字列に ASCII でないルーンが含まれている。
+		return FieldsFunc(s, unicode.IsSpace)
+	}
+	// ASCII 用の高速パス
+	a := make([]string, n)
+	na := 0
+	fieldStart := 0
+	i := 0
+	// 入力の先頭にある空白を読み飛ばす。
+	for i < len(s) && asciiSpace[s[i]] != 0 {
+		i++
+	}
+	fieldStart = i
+	for i < len(s) {
+		if asciiSpace[s[i]] == 0 {
+			i++
+			continue
+		}
+		a[na] = s[fieldStart:i]
+		na++
+		i++
+		// 単語と単語の間の空白を読み飛ばす。
+		for i < len(s) && asciiSpace[s[i]] != 0 {
+			i++
+		}
+		fieldStart = i
+	}
+	if fieldStart < len(s) { // 最後の単語は EOF で終わっているかもしれない。
+		a[na] = s[fieldStart:]
+	}
+	return a
+}
+```
+
+```go:line-numbers=365 [原文]
 func Fields(s string) []string {
 	// First count the fields.
 	// This is an exact count if s is ASCII, otherwise it is an approximation.
@@ -74,7 +128,9 @@ func Fields(s string) []string {
 }
 ```
 
-`asciiSpace` は 358 行目で `var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}` と定義されています。空白文字の位置だけ 1、ほかは 0 の表です。
+:::
+
+`asciiSpace` は `var asciiSpace = [256]uint8{'\t': 1, '\n': 1, '\v': 1, '\f': 1, '\r': 1, ' ': 1}` と定義されています。空白文字の位置だけ 1、ほかは 0 の表です。
 
 ## 前提知識
 
@@ -86,23 +142,78 @@ func Fields(s string) []string {
 
 ## 何をしているか
 
-### 1. 単語の数を数える（368〜378 行目）
+### 1. 単語の数を数える
+
+```go:line-numbers=368
+	n := 0
+	wasSpace := 1
+	// setBits は、s のバイトのうちどのビットが立ったかを記録する。
+	setBits := uint8(0)
+	for i := 0; i < len(s); i++ {
+		r := s[i]
+		setBits |= r
+		isSpace := int(asciiSpace[r])
+		n += wasSpace & ^isSpace
+		wasSpace = isSpace
+	}
+```
 
 `wasSpace` は「直前の文字が空白だったか」で、最初は 1（空白の後と同じ扱い）です。
-376 行目の `n += wasSpace & ^isSpace` は、**「直前が空白」かつ「今が空白でない」** ときだけ 1 を足します。これは単語の始まりの数、つまり単語数です。
+ `n += wasSpace & ^isSpace` は、**「直前が空白」かつ「今が空白でない」** ときだけ 1 を足します。これは単語の始まりの数、つまり単語数です。
 
 `"a bc"` なら、`a`（直前は空白扱い、今は非空白 → +1）、スペース、`b`（+1）、`c`（直前が非空白なので +0）で、`n = 2` です。
 
 `if` を使わずにビット演算で書いているので、ループの中に分岐がありません。
 
-### 2. ASCII だけかを同時に調べる（374, 380〜383 行目）
+### 2. ASCII だけかを同時に調べる
+
+```go:line-numbers=374
+		setBits |= r
+```
+
+```go:line-numbers=380
+	if setBits >= utf8.RuneSelf {
+		// 入力文字列に ASCII でないルーンが含まれている。
+		return FieldsFunc(s, unicode.IsSpace)
+	}
+```
 
 `setBits |= r` で、全バイトの OR を取っています。どれか 1 つでも 128 以上のバイトがあれば、`setBits` の最上位ビットが立ち、`setBits >= 128` になります。
 その場合は、全角スペースなど Unicode の空白も扱える汎用版 `FieldsFunc` に任せます。
 
-### 3. ASCII 専用の速い切り出し（385〜411 行目）
+### 3. ASCII 専用の速い切り出し
 
-先頭の空白を飛ばし（390 行目）、空白でない間は進み、空白に当たったら `s[fieldStart:i]` を結果に入れます。最後の単語が文字列の終わりで終わる場合は 408 行目で拾います。
+```go:line-numbers=385
+	a := make([]string, n)
+	na := 0
+	fieldStart := 0
+	i := 0
+	// 入力の先頭にある空白を読み飛ばす。
+	for i < len(s) && asciiSpace[s[i]] != 0 {
+		i++
+	}
+	fieldStart = i
+	for i < len(s) {
+		if asciiSpace[s[i]] == 0 {
+			i++
+			continue
+		}
+		a[na] = s[fieldStart:i]
+		na++
+		i++
+		// 単語と単語の間の空白を読み飛ばす。
+		for i < len(s) && asciiSpace[s[i]] != 0 {
+			i++
+		}
+		fieldStart = i
+	}
+	if fieldStart < len(s) { // 最後の単語は EOF で終わっているかもしれない。
+		a[na] = s[fieldStart:]
+	}
+	return a
+```
+
+先頭の空白を飛ばし、空白でない間は進み、空白に当たったら `s[fieldStart:i]` を結果に入れます。最後の単語が文字列の終わりで終わる場合は拾います。
 
 ## ここがすごい
 

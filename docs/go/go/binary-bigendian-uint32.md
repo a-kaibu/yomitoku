@@ -11,6 +11,7 @@ file: "src/encoding/binary/binary.go"
 lines: [176, 179]
 function: "(bigEndian).Uint32"
 difficulty: 2
+format: 2
 tags: [最適化, 低レイヤ, 入出力, 標準ライブラリ, ハック]
 ---
 
@@ -19,16 +20,27 @@ tags: [最適化, 低レイヤ, 入出力, 標準ライブラリ, ハック]
 `binary.BigEndian.Uint32(b)` は、バイト列 `b` の先頭 4 バイトを **ビッグエンディアン**（上位バイトが先）の 32 ビット整数として読みます。
 `[]byte{0x12, 0x34, 0x56, 0x78}` なら `0x12345678` です。ネットワークのデータや多くのファイル形式を読むときに使われます。
 
-注目は 177 行目の `_ = b[3]` です。値を捨てているだけの、一見無意味な 1 行ですが、これで関数が速くなります。
+注目は `_ = b[3]` です。値を捨てているだけの、一見無意味な 1 行ですが、これで関数が速くなります。
 
 ## コード
 
-```go:line-numbers=176
+::: code-group
+
+```go:line-numbers=176 [日本語訳]
+func (bigEndian) Uint32(b []byte) uint32 {
+	_ = b[3] // コンパイラへの境界チェックのヒント。golang.org/issue/14808 を参照
+	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+}
+```
+
+```go:line-numbers=176 [原文]
 func (bigEndian) Uint32(b []byte) uint32 {
 	_ = b[3] // bounds check hint to compiler; see golang.org/issue/14808
 	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
 }
 ```
+
+:::
 
 ## 前提知識
 
@@ -40,12 +52,20 @@ func (bigEndian) Uint32(b []byte) uint32 {
 
 ## 何をしているか
 
-### 1. 境界チェックをまとめる（177 行目）
+### 1. 境界チェックをまとめる
+
+```go:line-numbers=177
+	_ = b[3] // コンパイラへの境界チェックのヒント。golang.org/issue/14808 を参照
+```
 
 `b[3]` を読みます。`b` の長さが 4 未満ならここで `panic` します。
 ここを通過したということは「`b` の長さは 4 以上」です。コンパイラはこの事実を覚えているので、次の行の `b[0]`〜`b[3]` では **境界チェックを省きます**。
 
-### 2. 4 バイトを組み立てる（178 行目）
+### 2. 4 バイトを組み立てる
+
+```go:line-numbers=178
+	return uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+```
 
 `b = [0x12, 0x34, 0x56, 0x78]` なら、
 

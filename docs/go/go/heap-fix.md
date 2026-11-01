@@ -11,6 +11,7 @@ file: "src/container/heap/heap.go"
 lines: [83, 87]
 function: "Fix"
 difficulty: 1
+format: 2
 tags: [データ構造, アルゴリズム, API設計, 標準ライブラリ]
 ---
 
@@ -40,6 +41,10 @@ func Fix(h Interface, i int) {
 - **`h.Len()`**: ヒープの要素数です。利用者が定義したメソッドを呼んでいます。
 
 ## 何をしているか
+
+```go:line-numbers=84
+	if !down(h, i, h.Len()) {
+```
 
 ヒープ `[1, 3, 2, 7, 5]` で考えます。
 

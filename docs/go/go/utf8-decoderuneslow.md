@@ -11,6 +11,7 @@ file: "src/unicode/utf8/utf8.go"
 lines: [171, 209]
 function: "decodeRuneSlow"
 difficulty: 3
+format: 2
 tags: [Unicode, パース, ビット演算, 最適化, 標準ライブラリ]
 ---
 
@@ -23,7 +24,51 @@ tags: [Unicode, パース, ビット演算, 最適化, 標準ライブラリ]
 
 ## コード
 
-```go:line-numbers=171
+::: code-group
+
+```go:line-numbers=171 [日本語訳]
+func decodeRuneSlow(p []byte) (r rune, size int) {
+	n := len(p)
+	if n < 1 {
+		return RuneError, 0
+	}
+	p0 := p[0]
+	x := first[p0]
+	if x >= as {
+		// 以下のコードは、x == xx かどうかの追加チェックを
+		// 模擬して、ASCII と不正な場合を処理している。
+		// このマスクと OR の方法は、分岐が増えるのを防ぐ。
+		mask := rune(x) << 31 >> 31 // 0x0000 か 0xFFFF を作る。
+		return rune(p[0])&^mask | RuneError&mask, 1
+	}
+	sz := int(x & 7)
+	accept := acceptRanges[x>>4]
+	if n < sz {
+		return RuneError, 1
+	}
+	b1 := p[1]
+	if b1 < accept.lo || accept.hi < b1 {
+		return RuneError, 1
+	}
+	if sz <= 2 { // <= にしている（== ではなく）のは、コンパイラが一部の境界チェックを消しやすくするため
+		return rune(p0&mask2)<<6 | rune(b1&maskx), 2
+	}
+	b2 := p[2]
+	if b2 < locb || hicb < b2 {
+		return RuneError, 1
+	}
+	if sz <= 3 {
+		return rune(p0&mask3)<<12 | rune(b1&maskx)<<6 | rune(b2&maskx), 3
+	}
+	b3 := p[3]
+	if b3 < locb || hicb < b3 {
+		return RuneError, 1
+	}
+	return rune(p0&mask4)<<18 | rune(b1&maskx)<<12 | rune(b2&maskx)<<6 | rune(b3&maskx), 4
+}
+```
+
+```go:line-numbers=171 [原文]
 func decodeRuneSlow(p []byte) (r rune, size int) {
 	n := len(p)
 	if n < 1 {
@@ -65,7 +110,9 @@ func decodeRuneSlow(p []byte) (r rune, size int) {
 }
 ```
 
-表の値は 53〜61 行目の定数で、たとえば `s2 = 0x13` は「上位 4 ビット = 許容範囲の番号 1、下位 4 ビット = 長さ 3」を意味します。許容範囲は 100〜106 行目の `acceptRanges` に入っています。
+:::
+
+表の値は定数で、たとえば `s2 = 0x13` は「上位 4 ビット = 許容範囲の番号 1、下位 4 ビット = 長さ 3」を意味します。許容範囲は `acceptRanges` に入っています。
 
 ## 前提知識
 
@@ -79,15 +126,39 @@ func decodeRuneSlow(p []byte) (r rune, size int) {
 
 「あ」（U+3042、UTF-8 では `E3 81 82`）で追います。
 
-### 1. 表を引く（176〜177 行目）
+### 1. 表を引く
 
-`first[0xE3]` は `s3 = 0x03` です。長さは `0x03 & 7 = 3`、許容範囲は `acceptRanges[0]` = `{0x80, 0xBF}` です（185〜186 行目）。
+```go:line-numbers=176
+	p0 := p[0]
+	x := first[p0]
+```
 
-### 2. 長さと 2 バイト目を確認（187〜193 行目）
+`first[0xE3]` は `s3 = 0x03` です。長さは `0x03 & 7 = 3`、許容範囲は `acceptRanges[0]` = `{0x80, 0xBF}` です。
+
+### 2. 長さと 2 バイト目を確認
+
+```go:line-numbers=187
+	if n < sz {
+		return RuneError, 1
+	}
+	b1 := p[1]
+	if b1 < accept.lo || accept.hi < b1 {
+		return RuneError, 1
+	}
+```
 
 3 バイトあるので OK。2 バイト目 `0x81` は 0x80〜0xBF の範囲内なので OK。
 
-### 3. 3 バイト目を確認して組み立て（197〜202 行目）
+### 3. 3 バイト目を確認して組み立て
+
+```go:line-numbers=197
+	b2 := p[2]
+	if b2 < locb || hicb < b2 {
+		return RuneError, 1
+	}
+	if sz <= 3 {
+		return rune(p0&mask3)<<12 | rune(b1&maskx)<<6 | rune(b2&maskx), 3
+```
 
 3 バイト目 `0x82` も範囲内。各バイトから印（`1110` や `10`）を除いた中身をつなげます。
 
@@ -98,15 +169,25 @@ func decodeRuneSlow(p []byte) (r rune, size int) {
 
 `('あ', 3)` が返ります。
 
-### ASCII と不正な先頭バイト（178〜184 行目）
+### ASCII と不正な先頭バイト
+
+```go:line-numbers=178
+	if x >= as {
+		// 以下のコードは、x == xx かどうかの追加チェックを
+		// 模擬して、ASCII と不正な場合を処理している。
+		// このマスクと OR の方法は、分岐が増えるのを防ぐ。
+		mask := rune(x) << 31 >> 31 // 0x0000 か 0xFFFF を作る。
+		return rune(p[0])&^mask | RuneError&mask, 1
+	}
+```
 
 表の値が `as`（0xF0、ASCII）か `xx`（0xF1、不正）なら 1 バイトの処理です。ここでは `if` を使わず、`x` の最下位ビット（`as` は 0、`xx` は 1）から **全部 0 か全部 1 のマスク** を作ります。ASCII ならバイトそのもの、不正なら `RuneError` が、マスクとの演算だけで選ばれます。
 
 ## ここがすごい
 
 - **1 回の表引きで 2 つの情報**: 1 バイトの表の値に「長さ」と「許容範囲の番号」を詰め込んでいます。たとえば `E0` で始まる 3 バイト文字は 2 バイト目が `A0` 以上でないと冗長表現になり、`ED` で始まるとサロゲートを避けるため `9F` 以下でなければなりません。こうした例外を、すべて「2 バイト目の範囲」という 1 つの仕組みで処理しています。
-- **分岐をマスクで置き換え**: 182〜183 行目は、ASCII か不正かで分岐する代わりに、ビット演算で答えを選んでいます。分岐予測の外れを減らす小技です。
-- **境界チェックを減らす工夫**: 194 行目のコメントにある通り、`sz == 2` ではなく `sz <= 2` と書くことで、コンパイラが後の `p[2]` などの範囲チェックを省きやすくしています。
+- **分岐をマスクで置き換え**:、ASCII か不正かで分岐する代わりに、ビット演算で答えを選んでいます。分岐予測の外れを減らす小技です。
+- **境界チェックを減らす工夫**:コメントにある通り、`sz == 2` ではなく `sz <= 2` と書くことで、コンパイラが後の `p[2]` などの範囲チェックを省きやすくしています。
 
 ## まとめ
 
