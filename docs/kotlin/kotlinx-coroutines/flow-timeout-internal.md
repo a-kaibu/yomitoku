@@ -12,6 +12,7 @@ lines: [387, 406]
 function: "Flow.timeoutInternal"
 difficulty: 3
 tags: [非同期, エラー処理, 並行処理]
+format: 2
 ---
 
 ## ひとことで
@@ -58,23 +59,45 @@ private fun <T> Flow<T>.timeoutInternal(
 
 ## 何をしているか
 
-### 1. 0 秒以下なら即座に失敗（390 行目）
+### 1. 0 秒以下なら即座に失敗
+
+```kotlin:line-numbers=390
+    if (timeout <= Duration.ZERO) throw TimeoutCancellationException("Timed out immediately")
+```
 
 制限が 0 秒以下なら、待つまでもなく時間切れです。
 
-### 2. 上流をチャネルに流す（391 行目）
+### 2. 上流をチャネルに流す
+
+```kotlin:line-numbers=391
+    val values = buffer(Channel.RENDEZVOUS).produceIn(this)
+```
 
 上流は別コルーチンで動き、値をチャネルへ送ります。こちらはチャネルから受け取るだけです。
 
-### 3. 受信か時間切れか（392〜405 行目）
+### 3. 受信か時間切れか
+
+```kotlin:line-numbers=392
+    whileSelect {
+        values.onReceiveCatching { value ->
+            value.onSuccess {
+                downStream.emit(it)
+            }.onClosed {
+```
 
 制限 2 秒で、値が 0 秒・1 秒・4 秒に来る場合:
 
 - 0 秒: 値を受信 → 下流へ流す → `true` で次のループ（ここで待ち時間がリセット）
 - 1 秒: 値を受信 → 流す → 次のループ
-- 3 秒: 前の値から 2 秒経過、受信より先に `onTimeout` が起きる → 例外
+- 3 秒: 前の値から 2 秒経過、受信より先に時間切れが起きる → 例外
 
-上流が正常に終われば `onClosed` で `false` を返してループを抜けます。上流がエラーで終われば、そのエラーを投げ直します（397 行目）。
+上流が正常に終われば `onClosed` で `false` を返してループを抜けます。上流がエラーで終われば、そのエラーを投げ直します。
+
+```kotlin:line-numbers=402
+        onTimeout(timeout) {
+            throw TimeoutCancellationException("Timed out waiting for $timeout")
+        }
+```
 
 ## ここがすごい
 
