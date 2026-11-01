@@ -1,6 +1,6 @@
 ---
 title: 後ろから 1 つずつ確定させる、偏りのないシャッフル
-description: random.shuffle の中身は、Fisher-Yates（フィッシャー–イェーツ）法と呼ばれる古典的なアルゴリズム。わずか 4 行で、すべての並び方が同じ確率で出る。
+description: random.shuffle の中身は、Fisher-Yates（フィッシャー–イェーツ）法と呼ばれる古典的なアルゴリズム。わずか数行で、すべての並び方が同じ確率で出る。
 language: python
 project: CPython
 repo: https://github.com/python/cpython
@@ -11,8 +11,10 @@ file: Lib/random.py
 lines: [356, 363]
 function: Random.shuffle
 difficulty: 1
+format: 2
 tags: [乱数, アルゴリズム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `shuffle(x)` は、リスト `x` の要素をランダムに並べ替える（シャッフルする）メソッドです。新しいリストは作らず、`x` そのものを書き換えます。
@@ -20,7 +22,20 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=356
+::: code-group
+
+```python:line-numbers=356 [日本語訳]
+    def shuffle(self, x):
+        """リスト x をその場でシャッフルする。戻り値は None。"""
+
+        randbelow = self._randbelow
+        for i in reversed(range(1, len(x))):
+            # x[:i+1] の中から、x[i] と交換する要素を選ぶ
+            j = randbelow(i + 1)
+            x[i], x[j] = x[j], x[i]
+```
+
+```python:line-numbers=356 [原文]
     def shuffle(self, x):
         """Shuffle list x in place, and return None."""
 
@@ -31,6 +46,8 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
             x[i], x[j] = x[j], x[i]
 ```
 
+:::
+
 `self._randbelow(n)` は、0 以上 n 未満の整数をランダムに 1 つ返すメソッドです。
 
 ## 前提知識
@@ -38,18 +55,31 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
 - **メソッドと `self`**: `def shuffle(self, x)` の `self` は、このメソッドを呼んだ乱数生成器そのものです。`random.shuffle(x)` と書くと、内部で用意されている生成器の `shuffle` が呼ばれます。
 - **`range(1, n)`**: 1, 2, ..., n-1 の整数の並びです。
 - **`reversed(...)`**: 並びを逆順にします。`reversed(range(1, 5))` は 4, 3, 2, 1 です。
-- **スワップ**: `x[i], x[j] = x[j], x[i]` で、2 つの要素を入れ替えます。
+- **スワップ**: `x[i], x[j] = x[j], x[i]` で、2 つの要素を入れ替えられます。
 - **その場で書き換える（in place）**: 戻り値は `None` で、渡したリスト自体が変わります。
 
 ## 何をしているか
 
 `x = ["A", "B", "C", "D"]` で追います。
 
-### 1. 生成器のメソッドをローカル変数に入れる（359 行目）
+### 1. 生成器のメソッドをローカル変数に入れる
+
+```python:line-numbers=359
+        randbelow = self._randbelow
+```
 
 ループの中で何度も使うので、`self._randbelow` を `randbelow` に取り出しておきます。
 
-### 2. 後ろから順に、入れ替え相手を選ぶ（360〜363 行目）
+### 2. 後ろから順に、入れ替え相手を選ぶ
+
+```python:line-numbers=360
+        for i in reversed(range(1, len(x))):
+```
+
+```python:line-numbers=362
+            j = randbelow(i + 1)
+            x[i], x[j] = x[j], x[i]
+```
 
 | i | 選ぶ範囲 | j（例） | 入れ替え後 |
 | --- | --- | --- | --- |
@@ -75,7 +105,7 @@ for i in range(len(x)):
     x[i], x[j] = x[j], x[i]
 ```
 
-選び方が n^n 通りになります。4 個なら 256 通りで、24 で割り切れないので、**並び方によって出やすさに偏りが出てしまいます**。362 行目で範囲を `i + 1` に絞っているのが、正しさのかなめです。
+選び方が n^n 通りになります。4 個なら 256 通りで、24 で割り切れないので、**並び方によって出やすさに偏りが出てしまいます**。`randbelow(i + 1)` と範囲を `i + 1` に絞っているのが、正しさのかなめです。
 
 ### 余分なメモリを使わない
 

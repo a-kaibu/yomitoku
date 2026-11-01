@@ -1,6 +1,6 @@
 ---
-title: "「& を最初に置き換える」順番がすべての HTML エスケープ"
-description: "html.escape は、文字列を HTML に安全に埋め込めるよう、< や & を &lt; や &amp; に置き換える。わずか数行だが、置き換える順番に大事な意味がある。"
+title: 「& を最初に置き換える」順番がすべての HTML エスケープ
+description: html.escape は、文字列を HTML に安全に埋め込めるよう、< や & を &lt; や &amp; に置き換える。わずか数行だが、置き換える順番に大事な意味がある。
 language: python
 project: CPython
 repo: https://github.com/python/cpython
@@ -11,8 +11,10 @@ file: Lib/html/__init__.py
 lines: [12, 25]
 function: escape
 difficulty: 1
+format: 2
 tags: [文字列処理, セキュリティ, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `html.escape(s)` は、文字列を **HTML の中に安全に埋め込めるように変換する** 関数です。
@@ -21,7 +23,26 @@ tags: [文字列処理, セキュリティ, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=12
+::: code-group
+
+```python:line-numbers=12 [日本語訳]
+def escape(s, quote=True):
+    """
+    Replace special characters "&", "<" and ">" to HTML-safe sequences.
+    If the optional flag quote is true (the default), the quotation mark
+    characters, both double quote (") and single quote (') characters are also
+    translated.
+    """
+    s = s.replace("&", "&amp;") # 必ず最初に行うこと！
+    s = s.replace("<", "&lt;")
+    s = s.replace(">", "&gt;")
+    if quote:
+        s = s.replace('"', "&quot;")
+        s = s.replace('\'', "&#x27;")
+    return s
+```
+
+```python:line-numbers=12 [原文]
 def escape(s, quote=True):
     """
     Replace special characters "&", "<" and ">" to HTML-safe sequences.
@@ -38,6 +59,8 @@ def escape(s, quote=True):
     return s
 ```
 
+:::
+
 ## 前提知識
 
 - **HTML の特殊文字**: `<` と `>` はタグの始まりと終わり、`&` は「文字参照」（`&lt;` のような書き方）の始まり、`"` と `'` は属性値の区切りです。
@@ -50,15 +73,30 @@ def escape(s, quote=True):
 
 `s = 'a < b & "c"'` で追います。
 
-### 1. `&` を置き換える（19 行目）
+### 1. `&` を最初に置き換える
 
-`'a < b &amp; "c"'`
+```python:line-numbers=19
+    s = s.replace("&", "&amp;") # 必ず最初に行うこと！
+```
 
-### 2. `<` と `>` を置き換える（20〜21 行目）
+`'a < b &amp; "c"'` になります。
 
-`'a &lt; b &amp; "c"'`
+### 2. `<` と `>` を置き換える
 
-### 3. 引用符を置き換える（22〜24 行目）
+```python:line-numbers=20
+    s = s.replace("<", "&lt;")
+    s = s.replace(">", "&gt;")
+```
+
+`'a &lt; b &amp; "c"'` になります。
+
+### 3. 引用符を置き換える
+
+```python:line-numbers=22
+    if quote:
+        s = s.replace('"', "&quot;")
+        s = s.replace('\'', "&#x27;")
+```
 
 `quote=True` なので、`'a &lt; b &amp; &quot;c&quot;'` になります。
 
@@ -66,7 +104,7 @@ def escape(s, quote=True):
 
 ### 順番を間違えると壊れる
 
-19 行目のコメント「Must be done first!（最初にやること！）」がこの関数の要です。もし `<` を先に置き換えると、
+最初の置き換えのコメント「必ず最初に行うこと！」がこの関数の要です。もし `<` を先に置き換えると、
 
 1. `'a < b'` → `'a &lt; b'`
 2. `&` を置き換える → `'a &amp;lt; b'`
