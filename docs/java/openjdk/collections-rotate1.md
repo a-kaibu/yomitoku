@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/Collections.java
 lines: [811, 833]
 function: "Collections.rotate1"
 difficulty: 3
+format: 2
 tags: [アルゴリズム, データ構造, 標準ライブラリ]
 ---
 
@@ -58,12 +59,36 @@ tags: [アルゴリズム, データ構造, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 距離を正規化する（812〜819 行目）
+### 1. 距離を正規化する
 
+```java:line-numbers=812
+        int size = list.size();
+        if (size == 0)
+            return;
+        distance = distance % size;
+        if (distance < 0)
+            distance += size;
+        if (distance == 0)
+            return;
+```
 距離が長さより大きくても意味は同じなので、`distance % size` にします。負の距離（左回転）は `size` を足して右回転に直します。0 なら何もしません。
 
-### 2. 玉突きでたどる（821〜832 行目）
+### 2. 玉突きでたどる
 
+```java:line-numbers=821
+        int bound = size - distance;
+        for (int cycleStart = 0, nMoved = 0; nMoved < size; cycleStart++) {
+            T displaced = list.get(cycleStart);
+            int i = cycleStart;
+            do {
+                if (i >= bound)
+                    i -= size;
+                i += distance;
+                displaced = list.set(i, displaced);
+                nMoved++;
+            } while (i != cycleStart);
+        }
+```
 `[a, b, c, d, e]`、`distance = 2` で追います。位置 `i` の要素は位置 `i + 2`（はみ出たら 5 を引く）へ行きます。
 
 - `displaced = a`（0 番の要素を手に持つ）
@@ -79,8 +104,13 @@ tags: [アルゴリズム, データ構造, 標準ライブラリ]
 
 長さ 6・距離 2 だと、`0 → 2 → 4 → 0` の輪と `1 → 3 → 5 → 1` の輪の 2 つに分かれます。1 つ目の輪が終わっても `nMoved` は 3 なので、`cycleStart` を 1 に進めて 2 つ目の輪をたどります。輪の数は長さと距離の最大公約数になりますが、このコードは最大公約数を計算せず、**動かした数を数えるだけ** で終わりを判定しています。
 
-### 4. はみ出しの処理（826〜828 行目）
+### 4. はみ出しの処理
 
+```java:line-numbers=826
+                if (i >= bound)
+                    i -= size;
+                i += distance;
+```
 `i >= bound`（`bound = size - distance`）のときは、足すと範囲を超えるので先に `size` を引いてから `distance` を足します。こうすると途中で `int` が大きくなりすぎることもなく、`%` も使わずに済みます。
 
 ## ここがすごい

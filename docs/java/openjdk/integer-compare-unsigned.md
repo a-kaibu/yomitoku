@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Integer.java
 lines: [1447, 1450]
 function: "Integer.compareUnsigned"
 difficulty: 2
+format: 2
 tags: [ビット演算, 数値計算, ハック]
 ---
 
@@ -40,6 +41,10 @@ Java の `int` は常に「符号付き」で、`-1` は `-1` として扱われ
 ## 何をしているか
 
 ### MIN_VALUE を足すと何が起きるか
+
+```java:line-numbers=1449
+        return compare(x + MIN_VALUE, y + MIN_VALUE);
+```
 
 `MIN_VALUE` は最上位ビットだけが 1 の数です。これを足すと、**最上位ビットだけが反転** します（下位 31 ビットは 0 を足すだけなので変わらず、最上位からの繰り上がりは捨てられます）。
 

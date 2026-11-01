@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/Collections.java
 lines: [835, 848]
 function: "Collections.rotate2"
 difficulty: 2
+format: 2
 tags: [アルゴリズム, データ構造, 標準ライブラリ]
 ---
 
@@ -48,14 +49,29 @@ tags: [アルゴリズム, データ構造, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 切れ目の位置を求める（836〜843 行目）
+### 1. 切れ目の位置を求める
 
+```java:line-numbers=836
+        int size = list.size();
+        if (size == 0)
+            return;
+        int mid =  -distance % size;
+        if (mid < 0)
+            mid += size;
+        if (mid == 0)
+            return;
+```
 右に `distance` 回転すると、末尾の `distance` 個が先頭に来ます。つまり **元のリストの `size - distance` 番目が切れ目** です。これを `-distance % size` で求め、負なら `size` を足します。
 
 `size = 5`、`distance = 2` なら、`-2 % 5 = -2`、`+5` して `mid = 3` です。`distance` が負（左回転）でも、同じ式で正しい切れ目が出ます。`mid` が 0 なら回転しても変わらないので何もしません。
 
-### 2. 3 回反転する（845〜847 行目）
+### 2. 3 回反転する
 
+```java:line-numbers=845
+        reverse(list.subList(0, mid));
+        reverse(list.subList(mid, size));
+        reverse(list);
+```
 ```
 元        : a b c | d e
 前半を反転 : c b a | d e

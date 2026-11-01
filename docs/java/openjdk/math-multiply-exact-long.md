@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Math.java
 lines: [1025, 1040]
 function: "Math.multiplyExact(long, long)"
 difficulty: 3
+format: 2
 tags: [数値計算, 最適化, エラー処理]
 ---
 
@@ -22,7 +23,28 @@ tags: [数値計算, 最適化, エラー処理]
 
 ## コード
 
-```java:line-numbers=1025
+::: code-group
+
+```java:line-numbers=1025 [日本語訳]
+    @IntrinsicCandidate
+    public static long multiplyExact(long x, long y) {
+        long r = x * y;
+        long ax = Math.abs(x);
+        long ay = Math.abs(y);
+        if (((ax | ay) >>> 31 != 0)) {
+            // 2^31 より上のビットがあり、オーバーフローするかもしれない
+            // 割り算で結果を確かめる
+            // また Long.MIN_VALUE * -1 という特別な場合も確かめる
+           if (((y != 0) && (r / y != x)) ||
+               (x == Long.MIN_VALUE && y == -1)) {
+                throw new ArithmeticException("long overflow");
+            }
+        }
+        return r;
+    }
+```
+
+```java:line-numbers=1025 [原文]
     @IntrinsicCandidate
     public static long multiplyExact(long x, long y) {
         long r = x * y;
@@ -41,6 +63,8 @@ tags: [数値計算, 最適化, エラー処理]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`long`**: 64 ビットの符号付き整数です。範囲は約 ±9.2×10^18 です。あふれてもエラーにならず、回り込みます。
@@ -51,23 +75,37 @@ tags: [数値計算, 最適化, エラー処理]
 
 ## 何をしているか
 
-### 1. とりあえず掛ける（1027 行目）
+### 1. とりあえず掛ける
 
+```java:line-numbers=1027
+        long r = x * y;
+```
 まず `r = x * y` を計算します。あふれていれば、回り込んだ間違った値が入っています。
 
-### 2. 小さい数ならすぐ合格（1028〜1030 行目）
+### 2. 小さい数ならすぐ合格
 
+```java:line-numbers=1028
+        long ax = Math.abs(x);
+        long ay = Math.abs(y);
+        if (((ax | ay) >>> 31 != 0)) {
+```
 `ax` と `ay` がどちらも 2^31 未満なら、積は 2^62 未満で、`long` の上限（2^63 − 1）に必ず収まります。`(ax | ay) >>> 31 != 0` が偽なら、そのまま `r` を返します。
 
 2 つの値の上位ビットを OR でまとめて **1 回のシフトと比較で両方を同時に検査** しているのがポイントです。`ax >>> 31 != 0 || ay >>> 31 != 0` と書くより比較が 1 つ少なくなります。
 
-### 3. 大きいときは割り算で確かめる（1034〜1037 行目）
+### 3. 大きいときは割り算で確かめる
 
+```java:line-numbers=1034
+           if (((y != 0) && (r / y != x)) ||
+               (x == Long.MIN_VALUE && y == -1)) {
+                throw new ArithmeticException("long overflow");
+            }
+```
 どちらかが大きいときだけ、`r / y` が `x` に戻るかを確かめます。あふれていなければ `r / y == x` です。戻らなければあふれています。
 
 ### 4. ただ 1 つの落とし穴
 
-`x = Long.MIN_VALUE`、`y = -1` のとき、正しい答え 2^63 は `long` に収まりません。ところが回り込んだ `r` は `MIN_VALUE` で、`r / y` も同じくあふれて `MIN_VALUE` になり、`x` と一致してしまいます。割り算の検査をすり抜けるこの組み合わせだけを、1035 行目で個別にはじいています。
+`x = Long.MIN_VALUE`、`y = -1` のとき、正しい答え 2^63 は `long` に収まりません。ところが回り込んだ `r` は `MIN_VALUE` で、`r / y` も同じくあふれて `MIN_VALUE` になり、`x` と一致してしまいます。割り算の検査をすり抜けるこの組み合わせだけを、`x == Long.MIN_VALUE && y == -1` で個別にはじいています。
 
 なお `Math.abs(Long.MIN_VALUE)` は負のままですが、`>>> 31` で上位ビットが残るので、2 の検査では「大きい側」に正しく振り分けられます。
 

@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/PriorityQueue.java
 lines: [709, 726]
 function: "PriorityQueue.siftDownComparable"
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 標準ライブラリ]
 ---
 
@@ -22,7 +23,30 @@ tags: [データ構造, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```java:line-numbers=709
+::: code-group
+
+```java:line-numbers=709 [日本語訳]
+    private static <T> void siftDownComparable(int k, T x, Object[] es, int n) {
+        // assert n > 0;（n は 0 より大きいはず）
+        Comparable<? super T> key = (Comparable<? super T>)x;
+        int half = n >>> 1;           // 葉でない間ループする
+        while (k < half) {
+            int child = (k << 1) + 1; // 左の子がいちばん小さいと仮定する
+            Object c = es[child];
+            int right = child + 1;
+            if (right < n &&
+                ((Comparable<? super T>) c).compareTo((T) es[right]) > 0)
+                c = es[child = right];
+            if (key.compareTo((T) c) <= 0)
+                break;
+            es[k] = c;
+            k = child;
+        }
+        es[k] = key;
+    }
+```
+
+```java:line-numbers=709 [原文]
     private static <T> void siftDownComparable(int k, T x, Object[] es, int n) {
         // assert n > 0;
         Comparable<? super T> key = (Comparable<? super T>)x;
@@ -42,6 +66,8 @@ tags: [データ構造, アルゴリズム, 標準ライブラリ]
         es[k] = key;
     }
 ```
+
+:::
 
 ## 前提知識
 
@@ -64,19 +90,34 @@ tags: [データ構造, アルゴリズム, 標準ライブラリ]
   7   4 5
 ```
 
-### 1. ループの範囲（712〜713 行目）
+### 1. ループの範囲
 
+```java:line-numbers=712
+        int half = n >>> 1;           // 葉でない間ループする
+        while (k < half) {
+```
 `half = 3` です。位置 0〜2 は子を持ち、3〜5 は葉です。`k < half` の間だけ進みます。
 
-### 2. 小さい方の子を選ぶ（714〜719 行目）
+### 2. 小さい方の子を選ぶ
 
+```java:line-numbers=714
+            int child = (k << 1) + 1; // 左の子がいちばん小さいと仮定する
+            Object c = es[child];
+            int right = child + 1;
+            if (right < n &&
+                ((Comparable<? super T>) c).compareTo((T) es[right]) > 0)
+                c = es[child = right];
+```
 - `k = 0`: 左の子 `3`（位置 1）、右の子 `2`（位置 2）。`3 > 2` なので右を選び、`c = 2`、`child = 2`。
 - `9 <= 2` ではないので、`2` を位置 0 に上げ、`k = 2`。
 - `k = 2`: 左の子は位置 5 の `5`。右の子（位置 6）は `n` の外なので比べません。`9 <= 5` ではないので、`5` を位置 2 に上げ、`k = 5`。
 - `k = 5` は `half` 以上なので終了。
 
-### 3. 最後に書く（725 行目）
+### 3. 最後に書く
 
+```java:line-numbers=725
+        es[k] = key;
+```
 位置 5 に `9` を書き込んで完成です。
 
 ```

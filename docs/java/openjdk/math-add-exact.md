@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Math.java
 lines: [910, 918]
 function: "Math.addExact(int, int)"
 difficulty: 2
+format: 2
 tags: [ビット演算, エラー処理, 防御的プログラミング]
 ---
 
@@ -22,7 +23,21 @@ Java の `int` の足し算は、結果が範囲（約 ±21 億）を超えて�
 
 ## コード
 
-```java:line-numbers=910
+::: code-group
+
+```java:line-numbers=910 [日本語訳]
+    @IntrinsicCandidate
+    public static int addExact(int x, int y) {
+        int r = x + y;
+        // HD 2-12: 両方の引数の符号が結果の符号と逆のとき、かつそのときに限りオーバーフロー
+        if (((x ^ r) & (y ^ r)) < 0) {
+            throw new ArithmeticException("integer overflow");
+        }
+        return r;
+    }
+```
+
+```java:line-numbers=910 [原文]
     @IntrinsicCandidate
     public static int addExact(int x, int y) {
         int r = x + y;
@@ -33,6 +48,8 @@ Java の `int` の足し算は、結果が範囲（約 ±21 億）を超えて�
         return r;
     }
 ```
+
+:::
 
 ## 前提知識
 
@@ -55,8 +72,11 @@ Java の `int` の足し算は、結果が範囲（約 ±21 億）を超えて�
 
 これを言い換えると、「**`x` と `r` の符号が違い、しかも `y` と `r` の符号も違う**」ときにあふれた、となります（コメントの "both arguments have the opposite sign of the result"）。
 
-### 1 行の式に落とす（914 行目）
+### 1 行の式に落とす
 
+```java:line-numbers=914
+        if (((x ^ r) & (y ^ r)) < 0) {
+```
 - `x ^ r` の符号ビット: `x` と `r` の符号が違えば 1
 - `y ^ r` の符号ビット: `y` と `r` の符号が違えば 1
 - 両者の `&` の符号ビット: 両方違えば 1 → 値が負

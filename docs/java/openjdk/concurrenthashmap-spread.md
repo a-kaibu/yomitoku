@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/concurrent/ConcurrentHashMap.java
 lines: [710, 712]
 function: "ConcurrentHashMap.spread"
 difficulty: 3
+format: 2
 tags: [ハッシュ, 並行処理, データ構造]
 ---
 
@@ -28,13 +29,13 @@ tags: [ハッシュ, 並行処理, データ構造]
     }
 ```
 
-`HASH_BITS` などの定数は、同じファイルの 596〜599 行目で次のように定義されています。
+`HASH_BITS` などの定数は、同じファイルで次のように定義されています。
 
-```java
-static final int MOVED     = -1; // hash for forwarding nodes
-static final int TREEBIN   = -2; // hash for roots of trees
-static final int RESERVED  = -3; // hash for transient reservations
-static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
+```java:line-numbers=596
+    static final int MOVED     = -1; // hash for forwarding nodes
+    static final int TREEBIN   = -2; // hash for roots of trees
+    static final int RESERVED  = -3; // hash for transient reservations
+    static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
 ```
 
 ## 前提知識
@@ -47,11 +48,15 @@ static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
 
 ## 何をしているか
 
-### 1. 上位を下位に混ぜる
+### 1. 上位を下位に混ぜて、符号ビットを消す
+
+```java:line-numbers=711
+        return (h ^ (h >>> 16)) & HASH_BITS;
+```
 
 ハッシュ表の位置は下位ビットで決まるので、`h ^ (h >>> 16)` で上位 16 ビットの情報も位置に反映させます（HashMap の `hash` と同じ考え方です）。
 
-### 2. 符号ビットを消す
+### 2. 具体的な値で追う
 
 `h = 0x8000_1234`（負の数）なら、
 

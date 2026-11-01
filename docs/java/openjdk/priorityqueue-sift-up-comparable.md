@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/PriorityQueue.java
 lines: [668, 679]
 function: "PriorityQueue.siftUpComparable"
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -58,15 +59,25 @@ tags: [データ構造, アルゴリズム, 最適化]
   7   4 (0を入れる場所)
 ```
 
-### 1. 親と比べる（670〜674 行目）
+### 1. 親と比べる
 
+```java:line-numbers=670
+        while (k > 0) {
+            int parent = (k - 1) >>> 1;
+            Object e = es[parent];
+            if (key.compareTo((T) e) >= 0)
+                break;
+```
 - `k = 5` の親は `(5 - 1) >>> 1 = 2`、値は `2`。`0 < 2` なので上へ。
-- 親の `2` を位置 5 に下ろします（675 行目）。`k = 2` になります。
+- 親の `2` を位置 5 に下ろします（`es[k] = e`）。`k = 2` になります。
 - `k = 2` の親は `0`、値は `1`。`0 < 1` なので上へ。`1` を位置 2 に下ろし、`k = 0`。
 - `k = 0` は根なので、ループを抜けます。
 
-### 2. 最後に 1 回だけ書く（678 行目）
+### 2. 最後に 1 回だけ書く
 
+```java:line-numbers=678
+        es[k] = key;
+```
 空いた位置 0 に `0` を書き込みます。
 
 ```

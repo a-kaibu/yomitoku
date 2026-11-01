@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/String.java
 lines: [5153, 5161]
 function: "String.repeatCopyRest"
 difficulty: 2
+format: 2
 tags: [文字列処理, 最適化, アルゴリズム]
 ---
 
@@ -22,7 +23,21 @@ tags: [文字列処理, 最適化, アルゴリズム]
 
 ## コード
 
-```java:line-numbers=5153
+::: code-group
+
+```java:line-numbers=5153 [日本語訳]
+    static void repeatCopyRest(byte[] buffer, int offset, int limit, int copied) {
+        // 最初の 1 回分はすでにバッファに入っている。
+        for (; copied < limit - copied; copied <<= 1) {
+            // 2 のべき乗ずつ複製する。
+            System.arraycopy(buffer, offset, buffer, offset + copied, copied);
+        }
+        // 残りを複製する。
+        System.arraycopy(buffer, offset, buffer, offset + copied, limit - copied);
+    }
+```
+
+```java:line-numbers=5153 [原文]
     static void repeatCopyRest(byte[] buffer, int offset, int limit, int copied) {
         // Initial copy is in the buffer.
         for (; copied < limit - copied; copied <<= 1) {
@@ -33,6 +48,8 @@ tags: [文字列処理, 最適化, アルゴリズム]
         System.arraycopy(buffer, offset, buffer, offset + copied, limit - copied);
     }
 ```
+
+:::
 
 ## 前提知識
 
@@ -46,16 +63,25 @@ tags: [文字列処理, 最適化, アルゴリズム]
 
 `"ab".repeat(5)` で、`limit = 10`（全体の長さ）、`copied = 2`（コピー済みの長さ）として追います。
 
-### 1. 倍々にコピー（1155〜1158 行目）
+### 1. 倍々にコピー
 
+```java:line-numbers=1155
+
+    //------------------------------ utf8 ------------------------------------
+
+    /**
+```
 ループの条件 `copied < limit - copied` は「コピー済みの部分をもう 1 つ丸ごと置いても、まだはみ出さないか」です。
 
 - `copied = 2`: `2 < 8` なので、先頭 2 バイト（`ab`）を位置 2 へ → `abab` （`copied = 4`）
 - `copied = 4`: `4 < 6` なので、先頭 4 バイト（`abab`）を位置 4 へ → `abababab` （`copied = 8`）
 - `copied = 8`: `8 < 2` ではないので終了
 
-### 2. 残りを 1 回で（1160 行目）
+### 2. 残りを 1 回で
 
+```java:line-numbers=1160
+     * char array. Used via JavaLangAccess from UTF_8 and other charset
+```
 残りの長さは `limit - copied = 2` です。先頭から 2 バイトを位置 8 へコピーして、`ababababab` の完成です。
 
 先頭からコピーするのが大事な点です。先頭はいつも「繰り返しの始まり」なので、どの長さで切り取っても、正しい続きになります。

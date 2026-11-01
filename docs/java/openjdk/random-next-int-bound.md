@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/Random.java
 lines: [548, 563]
 function: "Random.nextInt(int)"
 difficulty: 3
+format: 2
 tags: [乱数, アルゴリズム, 標準ライブラリ]
 ---
 
@@ -22,7 +23,28 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```java:line-numbers=548
+::: code-group
+
+```java:line-numbers=548 [日本語訳]
+    @Override
+    public int nextInt(int bound) {
+        if (bound <= 0)
+            throw new IllegalArgumentException(BAD_BOUND);
+        int r = next(31);
+        int m = bound - 1;
+        if ((bound & m) == 0)  // つまり bound が 2 のべき乗のとき
+            r = (int)((bound * (long)r) >> 31);
+        else { // 出やすすぎる候補を捨てる
+            for (int u = r;
+                 u - (r = u % bound) + m < 0;
+                 u = next(31))
+                ;
+        }
+        return r;
+    }
+```
+
+```java:line-numbers=548 [原文]
     @Override
     public int nextInt(int bound) {
         if (bound <= 0)
@@ -41,6 +63,8 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`next(31)`**: `Random` の内部関数で、0 以上 2^31 未満（0〜2147483647）の乱数を返します。`Random` は線形合同法という計算で乱数を作り、その **上位ビット** を返します。
@@ -51,14 +75,26 @@ tags: [乱数, アルゴリズム, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 2 のべき乗のとき（553〜554 行目）
+### 1. 2 のべき乗のとき
 
+```java:line-numbers=553
+        int m = bound - 1;
+        if ((bound & m) == 0)  // つまり bound が 2 のべき乗のとき
+```
 `bound` が 2 のべき乗かは `(bound & (bound - 1)) == 0` でわかります。`bound = 8` なら、`r * 8 / 2^31` で、31 ビットの乱数の **上位 3 ビット** を取り出すのと同じです。
 
 ここで下位 3 ビット（`r % 8`）を使わないのは、線形合同法の乱数は下位ビットほど周期が短く、規則的になりやすいからです。上位ビットを使えば質のよい乱数になります。
 
-### 2. それ以外のとき（555〜560 行目）
+### 2. それ以外のとき
 
+```java:line-numbers=555
+            r = (int)((bound * (long)r) >> 31);
+        else { // 出やすすぎる候補を捨てる
+            for (int u = r;
+                 u - (r = u % bound) + m < 0;
+                 u = next(31))
+                ;
+```
 `r` は 0〜2147483647 の 2147483648 通りです。これを 6 で割った余りにすると、2147483648 は 6 で割り切れないので、**最後の中途半端なブロック** の分だけ、一部の余りが 1 回多く出ます。
 
 ```

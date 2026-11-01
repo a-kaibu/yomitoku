@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Integer.java
 lines: [494, 542]
 function: "Integer.parseInt(String, int)"
 difficulty: 3
+format: 2
 tags: [パース, 数値計算, 防御的プログラミング]
 ---
 
@@ -22,7 +23,61 @@ tags: [パース, 数値計算, 防御的プログラミング]
 
 ## コード
 
-```java:line-numbers=494
+::: code-group
+
+```java:line-numbers=494 [日本語訳]
+    public static int parseInt(String s, int radix)
+                throws NumberFormatException {
+        /*
+         * 警告: このメソッドは VM の初期化の早い段階、IntegerCache の
+         * 初期化前に呼ばれることがある。valueOf メソッドを使わないよう
+         * 注意すること。
+         */
+
+        if (s == null) {
+            throw new NumberFormatException("Cannot parse null string");
+        }
+
+        if (radix < Character.MIN_RADIX) {
+            throw new NumberFormatException(String.format(
+                "radix %s less than Character.MIN_RADIX", radix));
+        }
+
+        if (radix > Character.MAX_RADIX) {
+            throw new NumberFormatException(String.format(
+                "radix %s greater than Character.MAX_RADIX", radix));
+        }
+
+        int len = s.length();
+        if (len == 0) {
+            throw NumberFormatException.forInputString("", radix);
+        }
+        int digit = ~0xFF;
+        int i = 0;
+        char firstChar = s.charAt(i++);
+        if (firstChar != '-' && firstChar != '+') {
+            digit = digit(firstChar, radix);
+        }
+        if (digit >= 0 || digit == ~0xFF && len > 1) {
+            int limit = firstChar != '-' ? MIN_VALUE + 1 : MIN_VALUE;
+            int multmin = limit / radix;
+            int result = -(digit & 0xFF);
+            boolean inRange = true;
+            /* 負の側で積み上げると、MAX_VALUE 付近での思わぬ問題を避けられる */
+            while (i < len && (digit = digit(s.charAt(i++), radix)) >= 0
+                    && (inRange = result > multmin
+                        || result == multmin && digit <= radix * multmin - limit)) {
+                result = radix * result - digit;
+            }
+            if (inRange && i == len && digit >= 0) {
+                return firstChar != '-' ? -result : result;
+            }
+        }
+        throw NumberFormatException.forInputString(s, radix);
+    }
+```
+
+```java:line-numbers=494 [原文]
     public static int parseInt(String s, int radix)
                 throws NumberFormatException {
         /*
@@ -74,6 +129,8 @@ tags: [パース, 数値計算, 防御的プログラミング]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`int` の範囲は非対称**: 最大値は `2147483647`、最小値は `-2147483648` です。負の側が 1 つ多いので、`2147483648` という正の数は `int` で表せません。
@@ -85,23 +142,71 @@ tags: [パース, 数値計算, 防御的プログラミング]
 
 ## 何をしているか
 
-### 1. 入力のチェック（502〜519 行目）
+### 1. 入力のチェック
 
+```java:line-numbers=502
+        if (s == null) {
+            throw new NumberFormatException("Cannot parse null string");
+        }
+
+        if (radix < Character.MIN_RADIX) {
+            throw new NumberFormatException(String.format(
+                "radix %s less than Character.MIN_RADIX", radix));
+        }
+
+        if (radix > Character.MAX_RADIX) {
+            throw new NumberFormatException(String.format(
+                "radix %s greater than Character.MAX_RADIX", radix));
+        }
+
+        int len = s.length();
+        if (len == 0) {
+            throw NumberFormatException.forInputString("", radix);
+        }
+```
 `null`、基数の範囲外（2〜36 以外）、空文字列はすぐに例外にします。
 
-### 2. 先頭の符号（520〜525 行目）
+### 2. 先頭の符号
 
+```java:line-numbers=520
+        int digit = ~0xFF;
+        int i = 0;
+        char firstChar = s.charAt(i++);
+        if (firstChar != '-' && firstChar != '+') {
+            digit = digit(firstChar, radix);
+        }
+```
 最初の文字が `-` か `+` でなければ、それを数字として読みます。符号なら `digit` は目印の `~0xFF` のままです。
 
-526 行目の条件は「最初の文字が数字だった」または「符号で、しかも後ろに文字がある」です。`"-"` だけの文字列はここではじかれます。
+次の条件は
 
-### 3. 限界値の準備（527〜528 行目）
+```java:line-numbers=526
+        if (digit >= 0 || digit == ~0xFF && len > 1) {
+```
 
+「最初の文字が数字だった」または「符号で、しかも後ろに文字がある」です。`"-"` だけの文字列はここではじかれます。
+
+### 3. 限界値の準備
+
+```java:line-numbers=527
+            int limit = firstChar != '-' ? MIN_VALUE + 1 : MIN_VALUE;
+            int multmin = limit / radix;
+```
 - `limit`: 許される最小の値。負の数なら `MIN_VALUE`、正の数なら `MIN_VALUE + 1`（= `-2147483647`、最後に反転すると最大値になる）。
 - `multmin`: `limit / radix`。「これより小さくなったら、あと 1 回 `radix` 倍するとあふれる」という境目です。
 
-### 4. 負の数として積み上げる（529〜536 行目）
+### 4. 負の数として積み上げる
 
+```java:line-numbers=529
+            int result = -(digit & 0xFF);
+            boolean inRange = true;
+            /* 負の側で積み上げると、MAX_VALUE 付近での思わぬ問題を避けられる */
+            while (i < len && (digit = digit(s.charAt(i++), radix)) >= 0
+                    && (inRange = result > multmin
+                        || result == multmin && digit <= radix * multmin - limit)) {
+                result = radix * result - digit;
+            }
+```
 `result = radix * result - digit` で、1 桁ずつ「10 倍して、その桁を引く」を繰り返します。`"-2147483648"` なら、最後に `-2147483648` ちょうどになります。もし正の数で積み上げると、途中で `2147483648` という表せない数が必要になり、あふれてしまいます。
 
 ループを続ける条件の `inRange` は、**掛け算の前に** あふれを予測します。
@@ -109,8 +214,14 @@ tags: [パース, 数値計算, 防御的プログラミング]
 - `result > multmin` なら、10 倍しても `limit` 以上なので安全。
 - `result == multmin` のときだけ、次の桁が十分小さいか（`digit <= radix * multmin - limit`）を確かめます。
 
-### 5. 結果を返す（537〜540 行目）
+### 5. 結果を返す
 
+```java:line-numbers=537
+            if (inRange && i == len && digit >= 0) {
+                return firstChar != '-' ? -result : result;
+            }
+        }
+```
 途中で数字以外の文字があれば `digit` が負に、あふれそうなら `inRange` が偽になってループを抜けます。最後まで読めていれば、正の数なら符号を反転して返します。
 
 ## ここがすごい

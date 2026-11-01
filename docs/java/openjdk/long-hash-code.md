@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Long.java
 lines: [1232, 1234]
 function: "Long.hashCode(long)"
 difficulty: 1
+format: 2
 tags: [ハッシュ, ビット演算, 標準ライブラリ]
 ---
 
@@ -37,6 +38,12 @@ Java の `hashCode()` は `int`（32 ビット）を返す決まりです。と�
 - **`^`（XOR）**: 桁ごとに「違えば 1、同じなら 0」です。
 
 ## 何をしているか
+
+### 上半分を下半分に重ねる
+
+```java:line-numbers=1233
+        return (int)(value ^ (value >>> 32));
+```
 
 `value = 0x12345678_9ABCDEF0` で追います。
 

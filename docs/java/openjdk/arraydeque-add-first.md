@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/ArrayDeque.java
 lines: [282, 289]
 function: "ArrayDeque.addFirst"
 difficulty: 2
+format: 2
 tags: [データ構造, 標準ライブラリ, 最適化]
 ---
 
@@ -33,13 +34,13 @@ tags: [データ構造, 標準ライブラリ, 最適化]
     }
 ```
 
-このメソッドが使う `dec` は、同じファイルの 225〜228 行目で次のように定義されています。
+このメソッドが使う `dec` は、同じファイルで次のように定義されています。
 
-```java
-static final int dec(int i, int modulus) {
-    if (--i < 0) i = modulus - 1;
-    return i;
-}
+```java:line-numbers=225
+        if (--i < 0) i = modulus - 1;
+        return i;
+    }
+
 ```
 
 ## 前提知識
@@ -60,8 +61,11 @@ static final int dec(int i, int modulus) {
  head      tail
 ```
 
-### 1. 先頭の位置を 1 つ戻す（286 行目）
+### 1. 先頭の位置を 1 つ戻す
 
+```java:line-numbers=286
+        es[head = dec(head, es.length)] = e;
+```
 `dec(0, 8)` は、`0 - 1 = -1` が負なので、配列の最後の位置 `7` を返します。輪のように、0 番の前は 7 番です。そこに新しい要素 `Z` を書きます。
 
 ```
@@ -71,8 +75,12 @@ static final int dec(int i, int modulus) {
 
 論理的な並びは `Z, A, B, C` です。既存の要素は 1 つも動いていません。
 
-### 2. 満杯になったら広げる（287〜288 行目）
+### 2. 満杯になったら広げる
 
+```java:line-numbers=287
+        if (head == tail)
+            grow(1);
+```
 追加を繰り返して `head` が `tail` に追いつくと、配列は満杯です。そのときだけ `grow(1)` で配列を大きくします。
 
 `ArrayDeque` は「`head == tail` は空」という約束にしているので、満杯の状態をそのままにしておけません。そこで **満杯になった瞬間にすぐ広げ**、常に 1 つ以上の空きがある状態を保っています。

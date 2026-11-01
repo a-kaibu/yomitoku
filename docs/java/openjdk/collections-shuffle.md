@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/Collections.java
 lines: [483, 506]
 function: "Collections.shuffle(List, RandomGenerator)"
 difficulty: 2
+format: 2
 tags: [乱数, アルゴリズム, データ構造]
 ---
 
@@ -22,7 +23,36 @@ tags: [乱数, アルゴリズム, データ構造]
 
 ## コード
 
-```java:line-numbers=483
+::: code-group
+
+```java:line-numbers=483 [日本語訳]
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static void shuffle(List<?> list, RandomGenerator rnd) {
+        int size = list.size();
+        if (size < SHUFFLE_THRESHOLD || list instanceof RandomAccess) {
+            for (int i=size; i>1; i--)
+                swap(list, i-1, rnd.nextInt(i));
+        } else {
+            Object[] arr = list.toArray();
+
+            // 配列をシャッフルする
+            for (int i=size; i>1; i--)
+                swap(arr, i-1, rnd.nextInt(i));
+
+            // 配列の内容をリストに書き戻す
+            // ここで型引数なしの型を使う代わりに、ワイルドカードを
+            // 捕捉することもできるが、そのためには補助の
+            // private メソッドを呼ぶ必要がある
+            ListIterator it = list.listIterator();
+            for (Object e : arr) {
+                it.next();
+                it.set(e);
+            }
+        }
+    }
+```
+
+```java:line-numbers=483 [原文]
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void shuffle(List<?> list, RandomGenerator rnd) {
         int size = list.size();
@@ -49,6 +79,8 @@ tags: [乱数, アルゴリズム, データ構造]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`List<?>`**: 要素の型を問わないリストです。
@@ -60,8 +92,12 @@ tags: [乱数, アルゴリズム, データ構造]
 
 ## 何をしているか
 
-### 1. フィッシャー・イェーツ法（487〜488 行目）
+### 1. フィッシャー・イェーツ法
 
+```java:line-numbers=487
+            for (int i=size; i>1; i--)
+                swap(list, i-1, rnd.nextInt(i));
+```
 `[A, B, C, D]` で追います。`i` は 4 から 2 まで減っていきます。
 
 - `i = 4`: 0〜3 から 1 つ選び（例: 1 = `B`）、最後の位置 3 と入れ替え → `[A, D, C, B]`。位置 3 が確定。
@@ -72,8 +108,27 @@ tags: [乱数, アルゴリズム, データ構造]
 
 選び方は `4 × 3 × 2 = 24` 通りで、4 つの要素の並べ方 `4! = 24` とちょうど一致し、1 対 1 に対応します。だから **どの並びも 1/24 で出ます**。
 
-### 2. 遅いリストの場合（489〜505 行目）
+### 2. 遅いリストの場合
 
+```java:line-numbers=489
+        } else {
+            Object[] arr = list.toArray();
+
+            // 配列をシャッフルする
+            for (int i=size; i>1; i--)
+                swap(arr, i-1, rnd.nextInt(i));
+
+            // 配列の内容をリストに書き戻す
+            // ここで型引数なしの型を使う代わりに、ワイルドカードを
+            // 捕捉することもできるが、そのためには補助の
+            // private メソッドを呼ぶ必要がある
+            ListIterator it = list.listIterator();
+            for (Object e : arr) {
+                it.next();
+                it.set(e);
+            }
+        }
+```
 `LinkedList` で `swap` を使うと、毎回先頭から位置まで歩くので、とても遅くなります。そこで、
 
 1. `list.toArray()` で配列にコピー
