@@ -1,6 +1,6 @@
 ---
-title: "符号付きの 2 倍幅割り算を、符号なしの割り算に帰着させる"
-description: "128 ビットの被除数を 64 ビットの数で割る dividingFullWidth の符号付き版。絶対値を作って符号なしで割り、最後に符号を付け直す。Int.min という例外にも対応する。"
+title: "絶対値で割って、符号を付け直す 2 倍幅の割り算"
+description: "符号付き整数の dividingFullWidth。被除数の絶対値を取り、符号なしの割り算に任せてから、商と余りに符号を付け直す。最小値の商を正しく扱う。"
 language: swift
 project: "Swift"
 repo: https://github.com/swiftlang/swift
@@ -11,16 +11,54 @@ file: stdlib/public/core/Integers.swift
 lines: [3689, 3721]
 function: "FixedWidthInteger.dividingFullWidth(_:)（符号付き）"
 difficulty: 3
-tags: [数値計算, ビット演算, 防御的プログラミング, 標準ライブラリ]
+tags: [数値計算, ビット演算, ジェネリクス, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
-`dividingFullWidth` は、上位と下位の 2 つに分かれた 2 倍幅の数（たとえば 128 ビット）を、ふつうの幅の数（64 ビット）で割り、商と余りを返すメソッドです。
-符号付き整数のこの版は、**割られる数と割る数を絶対値にして符号なしの割り算をし、最後に符号を付け直す** という方法をとります。たとえば -7 ÷ 2 なら、7 ÷ 2 = 3 余り 1 を求め、商 -3、余り -1 にします。
+`dividingFullWidth` は、上位と下位に分かれた 2 倍幅の数（たとえば 128 ビット）を、ふつうの幅の数（64 ビット）で割り、商と余りを返すメソッドです。符号付き整数のこの版は、被除数と除数を絶対値にして符号なしの割り算をします。そして、最後に符号を付け直します。たとえば -7 ÷ 2 なら、7 ÷ 2 を計算して商 3、余り 1 を求め、符号を付けて商 -3、余り -1 とします。
 
 ## コード
 
-```swift:line-numbers=3689
+::: code-group
+
+```swift:line-numbers=3689 [日本語訳]
+  @export(implementation)
+  public func dividingFullWidth(
+    _ dividend: (high: Self, low: Magnitude)
+  ) -> (quotient: Self, remainder: Self) {
+    // 被除数の絶対値を求めます。
+    var magnitudeHigh = Magnitude(truncatingIfNeeded: dividend.high)
+    var magnitudeLow  = dividend.low
+    if dividend.high < .zero {
+      let carry: Bool
+      (magnitudeLow, carry) = (~magnitudeLow).addingReportingOverflow(1)
+      magnitudeHigh = ~magnitudeHigh &+ (carry ? 1 : 0)
+    }
+    // 絶対値どうしで割り算します（符号なし版を使います）。
+    let (unsignedQuotient, unsignedRemainder) = magnitude.dividingFullWidth(
+      (high: magnitudeHigh, low: magnitudeLow)
+    )
+    // 商の符号を付け直します。被除数と除数の符号が違えば、商は負です。
+    // 商が Self に入らなければ、ここでトラップします。
+    let quotient: Self
+    if self ^ dividend.high < .zero {
+      // 商は表現できても、その絶対値が Self に入らないことがあります。
+      // 商が Self.min のときがそれにあたるので、この場合を注意深く扱います。
+      // そのため、ここでは特別な処理をします。
+      _precondition(unsignedQuotient <= Self.min.magnitude,
+                    "Quotient is not representable.")
+      quotient = Self(truncatingIfNeeded: 0 &- unsignedQuotient)
+    } else {
+      quotient = Self(unsignedQuotient)
+    }
+    var remainder = Self(unsignedRemainder)
+    if dividend.high < .zero { remainder = 0 &- remainder }
+    return (quotient, remainder)
+  }
+```
+
+```swift:line-numbers=3689 [原文]
   @export(implementation)
   public func dividingFullWidth(
     _ dividend: (high: Self, low: Magnitude)
@@ -56,43 +94,77 @@ tags: [数値計算, ビット演算, 防御的プログラミング, 標準ラ�
   }
 ```
 
+:::
+
 ## 前提知識
 
 - **タプル引数 `(high: Self, low: Magnitude)`**: 2 倍幅の数を、符号付きの上位と符号なしの下位で表しています。
-- **2 の補数での符号反転**: 負の数の絶対値は「全ビットを反転（`~`）して 1 を足す」で求まります。たとえば 8 ビットで -3 は `11111101`、反転すると `00000010`、1 を足すと `00000011`（3）です。
-- **`addingReportingOverflow(1)`**: 1 を足した結果と、桁あふれしたかどうか（`Bool`）を返します。
-- **`.zero`**: その型の 0 です。
-- **`self ^ dividend.high < .zero`**: 2 つの数の XOR が負になるのは、最上位ビット（符号ビット）が違うとき、つまり符号が違うときです。
-- **`0 &- x`**: 符号を反転します（オーバーフローを許す引き算）。
+- **2 の補数での符号反転**: 負の数の絶対値は、全ビットを反転してから 1 を足すと求まります。
+- **`addingReportingOverflow(_:)`**: 足した結果と、桁あふれしたかどうかを返します。
+- **`self ^ dividend.high < .zero`**: 2 つの数の排他的論理和が負になるのは、符号ビットが違うとき、つまり符号が違うときです。
+- **`0 &- x`**: 符号を反転します。オーバーフローを許す引き算です。
 
 ## 何をしているか
 
-### 1. 被除数の絶対値を作る（この部分）
+### 1. 被除数の絶対値を作る
 
-2 倍幅の数を反転して 1 を足します。ただし 1 を足すのは下位だけで、下位があふれたら（`carry`）上位にも 1 を足します。2 桁の数で繰り上がりを扱うのと同じです。
+負の被除数なら、全ビットを反転して 1 を足します。下位で桁あふれしたら、その繰り上がりを上位へ足します。2 桁の数で繰り上がりを扱うのと同じ考え方です。
 
-### 2. 符号なしで割る（この部分）
+```swift:line-numbers=3693
+    // 被除数の絶対値を求めます。
+    var magnitudeHigh = Magnitude(truncatingIfNeeded: dividend.high)
+    var magnitudeLow  = dividend.low
+    if dividend.high < .zero {
+      let carry: Bool
+      (magnitudeLow, carry) = (~magnitudeLow).addingReportingOverflow(1)
+      magnitudeHigh = ~magnitudeHigh &+ (carry ? 1 : 0)
+    }
+```
+### 2. 絶対値どうしで、符号なしの割り算をする
 
-`magnitude`（割る数の絶対値）の `dividingFullWidth` を呼びます。こちらは符号なし版で、別の場所で実装されています。
+被除数の絶対値と、除数の絶対値で、符号なし版の `dividingFullWidth` を呼びます。符号を気にせずに割り算ができるので、実装がずっと単純になります。
 
-### 3. 商に符号を付ける（この部分）
+```swift:line-numbers=3701
+    // 絶対値どうしで割り算します（符号なし版を使います）。
+    let (unsignedQuotient, unsignedRemainder) = magnitude.dividingFullWidth(
+      (high: magnitudeHigh, low: magnitudeLow)
+    )
+```
+### 3. 商に符号を付ける
 
-割られる数と割る数の符号が違えば、商は負です。
+被除数と除数の符号が違えば、商は負です。ここで注意が要るのは、商が `Int8.min`（-128）になる場合です。絶対値の 128 は `Int8` に入りません。そこで、絶対値が `Self.min` の絶対値以下かを符号なしのまま確かめてから、符号を付けます。
 
-ここで特別な注意が要ります。`Int8` で考えると、商が -128（`Int8.min`）になる場合、絶対値 128 は `Int8` に入りません。そこで「128 以下か」を符号なしのまま確かめてから（この部分）、`0 &- 128` を `Int8` に切り詰めます。結果は正しく -128 になります。
+```swift:line-numbers=3705
+    // 商の符号を付け直します。被除数と除数の符号が違えば、商は負です。
+    // 商が Self に入らなければ、ここでトラップします。
+    let quotient: Self
+    if self ^ dividend.high < .zero {
+      // 商は表現できても、その絶対値が Self に入らないことがあります。
+      // 商が Self.min のときがそれにあたるので、この場合を注意深く扱います。
+      // そのため、ここでは特別な処理をします。
+      _precondition(unsignedQuotient <= Self.min.magnitude,
+                    "Quotient is not representable.")
+      quotient = Self(truncatingIfNeeded: 0 &- unsignedQuotient)
+    } else {
+      quotient = Self(unsignedQuotient)
+    }
+```
+### 4. 余りに符号を付ける
 
-### 4. 余りに符号を付ける（この部分）
+余りの符号は、被除数の符号に合わせます。-7 ÷ 2 なら余りは -1 です。これは Swift の `%` と同じ規則で、`-7 % 2 == -1` になります。
 
-余りの符号は、割られる数の符号に合わせます。-7 ÷ 2 なら余りは -1。これは Swift の `%` と同じ規則です（`-7 % 2 == -1`）。
-
+```swift:line-numbers=3718
+    var remainder = Self(unsignedRemainder)
+    if dividend.high < .zero { remainder = 0 &- remainder }
+```
 ## ここがすごい
 
-- **難しい部分は 1 か所にまとめる**: 符号付きの割り算を直接書くのは大変です。符号を外して符号なしの割り算に任せ、前後で符号を処理するだけにしたので、本体のアルゴリズムは 1 つで済みます。
-- **最小値の罠をきちんと処理**:この部分コメントにある通り、「商は表せるのに、その絶対値は表せない」というケースがあります。素直に `-Self(unsignedQuotient)` と書くと、この場合に停止してしまいます。符号なしのまま範囲を確認し、ビットのまま反転することで正しく扱っています。
-- **XOR で符号の違いを判定**: `(a < 0) != (b < 0)` と書く代わりに `a ^ b < 0` としています。比較 2 回と論理演算が、XOR 1 回と比較 1 回になります。
+- **難しい部分を 1 か所にまとめる**: 符号付きの割り算を直接書くと、場合分けが増えて大変です。符号を外して符号なしの割り算に任せ、前後で符号を処理するだけにしたので、正しさを確かめやすくなっています。
+- **最小値の扱い**: 絶対値が型に入らない `Self.min` の商は、特別に扱われています。コメントに、なぜ注意が要るのかが書かれています。
+- **結果が Swift の `%` と一致**: 余りの符号を被除数に合わせるので、整数の `/` と `%` の規則と同じになります。
 
 ## まとめ
 
-- 符号付きの計算は、絶対値で計算してから符号を付け直すと単純になることが多い。
-- 2 の補数では、最小値の絶対値だけが同じ型に入らない。そこは特別に扱う。
-- 2 つの数の XOR が負なら、符号が違う。
+- 符号付きの 2 倍幅の割り算は、絶対値で割って符号を付け直す。
+- 商が最小値のときは、絶対値が型に入らないので、符号なしのまま確かめる。
+- 余りの符号は被除数に合わせる。

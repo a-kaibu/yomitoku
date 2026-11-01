@@ -1,6 +1,6 @@
 ---
-title: "「一部だけ入っていた」も返す OptionSet の remove"
-description: "OptionSet から要素を取り除く remove。共通部分が空でなければ取り除き、実際に取り除いた部分を返す。複数ビットの要素を渡すと、入っていた部分だけが返る。"
+title: "取り除いた「実際に入っていた部分」を返す"
+description: "OptionSet の remove(_:) で、要素を取り除く実装。取り除けなければ nil を返し、取り除けたときは、要求された要素と実際に入っていた要素の共通部分を返す。"
 language: swift
 project: "Swift"
 repo: https://github.com/swiftlang/swift
@@ -8,51 +8,19 @@ license: Apache-2.0 WITH Swift-exception
 copyright: "Copyright (c) 2014 - 2017 Apple Inc. and the Swift project authors"
 commit: "2b0c27dbdd76ed8b7b5b82bc52980f13bcb8a85d"
 file: stdlib/public/core/OptionSet.swift
-lines: [256, 296]
+lines: [288, 296]
 function: "OptionSet.remove(_:)"
-difficulty: 1
-tags: [ビット演算, API設計, 標準ライブラリ]
+difficulty: 2
+tags: [ビット演算, API設計, 型システム]
+format: 2
 ---
 ## ひとことで
 
-`OptionSet`（ビットフラグを集合のように扱う仕組み）から要素を取り除くメソッドです。取り除いた要素を返し、もともと入っていなければ `nil` を返します。
-ドキュメントの例がおもしろいところで、`[.secondDay]` から `.express`（`.nextDay` と `.secondDay` を合わせた要素）を取り除くと、返ってくるのは `.express` ではなく、**実際に入っていた `.secondDay`** です。
+`OptionSet` から要素を取り除くメソッドです。取り除いた要素を返し、もともと入っていなければ `nil` を返します。このメソッドで面白いのは、返す値が「引数そのもの」ではなく、「実際に入っていた部分」になることです。ドキュメントの例では、`[.secondDay]` から `.express`（`.nextDay` と `.secondDay` を合わせた要素）を取り除くと、返ってくるのは `.express` ではなく、実際に入っていた `.secondDay` です。
 
 ## コード
 
-```swift:line-numbers=256
-  /// Removes the given element and all elements subsumed by it.
-  ///
-  /// In the following example, the `.priority` shipping option is removed from
-  /// the `options` option set. Attempting to remove the same shipping option
-  /// a second time results in `nil`, because `options` no longer contains
-  /// `.priority` as a member.
-  ///
-  ///     var options: ShippingOptions = [.secondDay, .priority]
-  ///     let priorityOption = options.remove(.priority)
-  ///     print(priorityOption == .priority)
-  ///     // Prints "true"
-  ///
-  ///     print(options.remove(.priority))
-  ///     // Prints "nil"
-  ///
-  /// In the next example, the `.express` element is passed to `remove(_:)`.
-  /// Although `.express` is not a member of `options`, `.express` subsumes
-  /// the remaining `.secondDay` element of the option set. Therefore,
-  /// `options` is emptied and the intersection between `.express` and
-  /// `options` is returned.
-  ///
-  ///     let expressOption = options.remove(.express)
-  ///     print(expressOption == .express)
-  ///     // Prints "false"
-  ///     print(expressOption == .secondDay)
-  ///     // Prints "true"
-  ///
-  /// - Parameter member: The element of the set to remove.
-  /// - Returns: The intersection of `[member]` and the set, if the
-  ///   intersection was nonempty; otherwise, `nil`.
-  @inlinable // generic-performance
-  @discardableResult
+```swift:line-numbers=288
   public mutating func remove(_ member: Element) -> Element? {
     let intersectionElements = intersection(member)
     guard !intersectionElements.isEmpty else {
@@ -66,34 +34,44 @@ tags: [ビット演算, API設計, 標準ライブラリ]
 
 ## 前提知識
 
-- **`OptionSet`**: `rawValue` のビット 1 つ 1 つをオン・オフの選択肢として使う型です。`[.secondDay, .priority]` のように配列の書き方で作れます。
+- **`OptionSet`**: `rawValue` のビットを、オン・オフの選択肢として使う型です。
 - **`intersection(_:)`**: 共通部分（ビットの AND）を返します。
-- **`subtract(_:)`**: 差集合にします（自分を書き換える）。ビットでは `self & ~member` です。
-- **`Element?`**: 戻り値はオプショナルで、取り除くものがなければ `nil`。
-- **`guard ... else { return nil }`**: 条件を満たさないときに早めに抜けます。
-- **`print(x == .priority)`**: ドキュメントの例です。`.priority` は型名を省略した書き方（`ShippingOptions.priority`）です。
+- **`subtract(_:)`**: 差集合にします（自分を書き換えます）。ビットでは `self & ~member` にあたります。
+- **`Element?`**: 戻り値はオプショナルで、取り除くものがなければ `nil` になります。
+- **`guard ... else { return nil }`**: 条件を満たさないときに、早めに関数を抜けます。
 
 ## 何をしているか
 
-### 1. 共通部分を求める（この部分）
+### 1. 取り除く要素との共通部分を求める
 
-`options = [.secondDay, .priority]`、`member = .priority` なら、共通部分は `.priority` です。
+`options` が `[.secondDay, .priority]`、取り除く要素が `.priority` なら、共通部分は `.priority` です。ここで求めた共通部分が、戻り値の候補になります。
 
-### 2. 何も入っていなければ nil（この部分）
+```swift:line-numbers=289
+    let intersectionElements = intersection(member)
+```
+### 2. 何も入っていなければ nil を返す
 
-共通部分が空なら、取り除くものはありません。`nil` を返し、`options` は変えません。2 回目の `options.remove(.priority)` がこれにあたります（この部分）。
+共通部分が空なら、取り除くものはありません。`nil` を返し、`options` は変えません。ドキュメントの例で、同じ `.priority` を 2 回目に取り除くと `nil` になるのがこの場合です。
 
-### 3. 取り除いて、取り除いた部分を返す（この部分）
+```swift:line-numbers=290
+    guard !intersectionElements.isEmpty else {
+      return nil
+    }
+```
+### 3. 取り除いて、共通部分を返す
 
-`subtract` で `member` のビットを下ろし、共通部分を返します。
+`subtract` で、取り除く要素のビットを下ろします。そして、求めておいた共通部分を返します。`options` が `[.secondDay]` のとき `.express` を取り除くと、共通部分は `.secondDay` です。`options` は空になり、`.secondDay` が返ります。
 
-`options = [.secondDay]` から `.express`（`nextDay + secondDay`）を取り除くと、共通部分は `.secondDay`。`options` は空になり、`.secondDay` が返ります（この部分例）。
-
+```swift:line-numbers=294
+    self.subtract(member)
+    return intersectionElements
+```
 ## ここがすごい
 
-- **「実際に起きたこと」を返す**: 戻り値を「引数そのもの」ではなく「共通部分」にしたことで、複数ビットの要素を渡したときに、本当に取り除かれたビットがわかります。`Set.remove` は「取り除いた要素」を返しますが、その意味をビットフラグの世界に正しく当てはめた形です。
-- **`nil` で「何もしなかった」を表す**: 共通部分が空のとき `nil` を返すので、呼び出し側は `if let removed = options.remove(.x) { ... }` と書けます。何かが取り除かれたときだけ処理をする、が 1 行で書けます。
-- **ドキュメントがそのままテストケース**: 例の中に「1 回目は取り除ける」「2 回目は nil」「複数ビットの要素なら共通部分」と、境界になる 3 つのケースがそろっています。API の振る舞いを例で示すお手本です。
+- **実際に起きたことを返す**: 戻り値を引数そのものにせず、共通部分にしたことで、複数のビットを持つ要素を渡したときに、本当に取り除かれたビットが分かります。`.express` を渡しても、戻り値が `.secondDay` になるのはそのためです。
+- **`nil` で「何もしなかった」を表す**: 共通部分が空のときは `nil` を返すので、呼び出し側は `if let removed = options.remove(.x) { ... }` と書けます。何かが取り除かれたときだけ処理をする、という書き方が 1 行で表せます。
+- **共通部分の判定を先にする**: 取り除けるかを先に確かめてから、`subtract` を呼びます。取り除けないときに、無駄な書き換えが起きません。
+- **ドキュメントがそのままテストケース**: ドキュメントの例には、「1 回目は取り除ける」「2 回目は nil」「複数ビットの要素なら共通部分だけ返る」という 3 つの境界のケースがそろっています。API の振る舞いを例で示すお手本です。
 
 ## まとめ
 
