@@ -12,6 +12,7 @@ lines: [78, 95]
 function: "Hasher._State.finalize(tailAndByteCount:)"
 difficulty: 2
 tags: [ハッシュ, ビット演算, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -52,19 +53,41 @@ extension Hasher._State {
 
 ## 何をしているか
 
-### compress（80〜84 行目）
+### compress
 
+```swift:line-numbers=80
+  internal mutating func compress(_ m: UInt64) {
+    v3 ^= m
+    _round()
+    v0 ^= m
+  }
+```
 8 バイトの入力 `m` を、まず `v3` に XOR で混ぜます。1 ラウンド回したあと、同じ `m` を今度は `v0` に XOR します。入力を「前」と「後」の 2 か所で混ぜることで、ラウンドの前後で入力の影響が打ち消されるのを防ぎます。
 
-### finalize（87〜94 行目）
+### finalize
 
+```swift:line-numbers=87
+  internal mutating func finalize(tailAndByteCount: UInt64) -> UInt64 {
+    compress(tailAndByteCount)
+    v2 ^= 0xff
+    for _ in 0..<3 {
+      _round()
+    }
+    return _extract()
+  }
+```
 引数 `tailAndByteCount` は、呼び出し側で「端数の 0〜7 バイト」と「入力全体の長さ」を 1 つの 64 ビット値に詰めたものです。上位 8 ビットに長さ、下位に端数バイトが入っています。
 
-1. 88 行目: その値を `compress` で混ぜます。
-2. 89 行目: `v2` に `0xff` を XOR します。
-3. 90〜92 行目: 3 ラウンド回します。
-4. 93 行目: 4 つの状態をまとめて返します。
+その値を `compress` で混ぜ、`v2` に `0xff` を XOR してから 3 ラウンド回し、4 つの状態をまとめて返します。
 
+```swift:line-numbers=88
+    compress(tailAndByteCount)
+    v2 ^= 0xff
+    for _ in 0..<3 {
+      _round()
+    }
+    return _extract()
+```
 ## ここがすごい
 
 - **長さを必ず混ぜる**: 長さを混ぜないと、`"a"` と `"a\0"` のように、末尾に 0 のバイトが付いただけの入力が同じハッシュになりかねません。端数を 0 で埋めて読むので、区別がつかなくなるのです。長さを一緒に詰めることで、どんな長さの違いも結果に反映されます。しかも端数と長さを 1 回の `compress` で済ませているので無駄がありません。

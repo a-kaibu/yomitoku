@@ -12,6 +12,7 @@ lines: [451, 474]
 function: "_minimumMergeRunLength"
 difficulty: 2
 tags: [ソート, ビット演算, アルゴリズム, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -20,7 +21,36 @@ Swift の `sort()` は Timsort（ティムソート）系のアルゴリズム�
 
 ## コード
 
-```swift:line-numbers=451
+::: code-group
+
+```swift:line-numbers=451 [日本語訳]
+/// コレクションをソートするのに最適な、最小のラン長を計算する。
+///
+/// 「… minrun を range(32, 65) から選び、N/minrun がちょうど 2 のべき乗になるように、
+/// それが無理なら 2 のべき乗に近いが厳密にそれより小さくなるようにする。
+/// これは見た目ほど難しくない。N の先頭 6 ビットを取り、
+/// 残りのビットに 1 が 1 つでも立っていれば 1 を足せばよい。」
+/// - Timsort の解説文書より:
+///   https://svn.python.org/projects/python/trunk/Objects/listsort.txt （参照先）
+///
+/// - 引数 c: コレクションの要素数。
+/// - 戻り値: `c <= 64` なら `c`。そうでなければ次の範囲の値を返す:
+///   `32...64`.
+@inlinable
+internal func _minimumMergeRunLength(_ c: Int) -> Int {
+  // 上限は `2^6 == 64` 要素
+  let bitsToUse = 6
+  
+  if c < 1 << bitsToUse {
+    return c
+  }
+  let offset = (Int.bitWidth - bitsToUse) - c.leadingZeroBitCount
+  let mask = (1 << offset) - 1
+  return c >> offset + (c & mask == 0 ? 0 : 1)
+}
+```
+
+```swift:line-numbers=451 [原文]
 /// Calculates an optimal minimum run length for sorting a collection.
 ///
 /// "... pick a minrun in range(32, 65) such that N/minrun is exactly a power
@@ -47,6 +77,8 @@ internal func _minimumMergeRunLength(_ c: Int) -> Int {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`///` コメント**: Swift のドキュメンテーションコメントです。Xcode などで関数の説明として表示されます。
@@ -60,12 +92,22 @@ internal func _minimumMergeRunLength(_ c: Int) -> Int {
 
 ## 何をしているか
 
-### 1. 小さい配列はそのまま（468〜470 行目）
+### 1. 小さい配列はそのまま
 
+```swift:line-numbers=468
+  if c < 1 << bitsToUse {
+    return c
+  }
+```
 `c < 64` なら `c` をそのまま返します。64 要素未満なら配列全体を 1 本のランとして挿入ソートで並べるほうが速いからです。
 
-### 2. 先頭 6 ビットを取り出す（471〜473 行目）
+### 2. 先頭 6 ビットを取り出す
 
+```swift:line-numbers=471
+  let offset = (Int.bitWidth - bitsToUse) - c.leadingZeroBitCount
+  let mask = (1 << offset) - 1
+  return c >> offset + (c & mask == 0 ? 0 : 1)
+```
 64 以上のときは、`c` を 2 進数で書いたときの **上から 6 ビット** だけを残します。
 
 具体例として `c = 1000` を考えます。1000 は 2 進数で `1111101000`（10 桁）です。
@@ -85,7 +127,7 @@ internal func _minimumMergeRunLength(_ c: Int) -> Int {
 ## ここがすごい
 
 - **割り算もループもない**: 「`c / minrun` が 2 のべき乗に近くなる minrun を 32〜64 から探す」と言われると、候補を 1 つずつ試したくなります。しかし先頭 6 ビットを取り出すだけで答えが出ます。`leadingZeroBitCount` は多くの CPU で 1 命令（`lzcnt` や `clz`）になるので、計算はほぼ一瞬です。
-- **出典をコメントに残している**: 451〜458 行目に、Python の Timsort の解説文書（listsort.txt）からの引用があります。アルゴリズムの意図がコードの外の資料に頼らずにわかります。
+- **出典をコメントに残している**: 関数の上のドキュメントコメントに、Python の Timsort の解説文書（listsort.txt）からの引用があります。アルゴリズムの意図がコードの外の資料に頼らずにわかります。
 - **マージのバランスを最初に整える**: マージソートは「長さが近いもの同士」をマージすると効率がよくなります。長さ 1000 と 10 をマージすると、短いほうを入れるために長いほうを何度も動かすことになるからです。最初のラン長を工夫するだけで、後段のマージ全体がきれいな二分木の形になります。
 
 素直に書くなら `return max(32, c / 16)` のような近似でも動きますが、それでは `c / minrun` が 2 のべき乗から外れやすく、末尾に短いランが残ります。この関数は Timsort の作者 Tim Peters の考えた方法をビット演算で忠実に再現しています。

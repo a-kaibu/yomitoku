@@ -12,6 +12,7 @@ lines: [246, 296]
 function: "_UnsafeBitset.Word.minimum / maximum / intersecting(elementsBelow:)"
 difficulty: 2
 tags: [ビット演算, データ構造, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -94,24 +95,63 @@ extension _UnsafeBitset.Word {
 
 `value = 0b1011_0100`（`{2, 4, 5, 7}`）、64 ビットとして追います。
 
-### minimum（248〜254 行目）
+### minimum
 
+```swift:line-numbers=248
+  var minimum: Int? {
+    @inline(__always)
+    get {
+      guard value != 0 else { return nil }
+      return value.trailingZeroBitCount
+    }
+  }
+```
 右端の 0 は 2 個なので `trailingZeroBitCount = 2`。最小の要素は **2** です。
 
-### maximum（257〜263 行目）
+### maximum
 
+```swift:line-numbers=257
+  var maximum: Int? {
+    @inline(__always)
+    get {
+      guard value != 0 else { return nil }
+      return _UnsafeBitset.Word.capacity &- 1 &- value.leadingZeroBitCount
+    }
+  }
+```
 左端の 0 は 64 − 8 = 56 個。`64 - 1 - 56 = 7` で最大の要素は **7** です。
 
-### subtracting(elementsBelow: 4)（275〜279 行目）
+### subtracting(elementsBelow: 4)
 
+```swift:line-numbers=275
+  internal func subtracting(elementsBelow bit: Int) -> _UnsafeBitset.Word {
+    _internalInvariant(bit >= 0 && bit < _UnsafeBitset.Word.capacity)
+    let mask = UInt.max &<< bit
+    return _UnsafeBitset.Word(value & mask)
+  }
+```
 `UInt.max &<< 4` は `…1111_0000`（下位 4 ビットだけ 0）。AND すると `0b1011_0000`、つまり `{4, 5, 7}`。4 より小さい 2 が消えました。
 
-### intersecting(elementsBelow: 5)（283〜287 行目）
+### intersecting(elementsBelow: 5)
 
+```swift:line-numbers=283
+  internal func intersecting(elementsBelow bit: Int) -> _UnsafeBitset.Word {
+    _internalInvariant(bit >= 0 && bit < _UnsafeBitset.Word.capacity)
+    let mask: UInt = (1 as UInt &<< bit) &- 1
+    return _UnsafeBitset.Word(value & mask)
+  }
+```
 `(1 << 5) - 1 = 0b1_1111`（下位 5 ビットが 1）。AND すると `0b0001_0100`、つまり `{2, 4}`。
 
-### intersecting(elementsAbove: 4)（291〜295 行目）
+### intersecting(elementsAbove: 4)
 
+```swift:line-numbers=291
+  internal func intersecting(elementsAbove bit: Int) -> _UnsafeBitset.Word {
+    _internalInvariant(bit >= 0 && bit < _UnsafeBitset.Word.capacity)
+    let mask = (UInt.max &<< bit) &<< 1
+    return _UnsafeBitset.Word(value & mask)
+  }
+```
 `(UInt.max << 4) << 1` は `…1110_0000`（下位 5 ビットが 0）。AND すると `0b1010_0000`、つまり `{5, 7}`。4 自身は含みません。
 
 ## ここがすごい

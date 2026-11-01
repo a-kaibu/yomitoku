@@ -12,6 +12,7 @@ lines: [19, 52]
 function: "_loadPartialUnalignedUInt64LE(_:byteCount:)"
 difficulty: 2
 tags: [ビット演算, ハッシュ, 低レイヤ, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -72,12 +73,35 @@ internal func _loadPartialUnalignedUInt64LE(
 
 `byteCount = 3`、メモリに `0x41, 0x42, 0x43` が並んでいる場合で追います。
 
-1. `switch` は `case 3:` に飛びます（38 行目）。
-2. 39 行目: 3 バイト目（オフセット 2）の `0x43` を読み、16 ビット左へずらして OR します。`result = 0x430000`。
-3. `fallthrough` で `case 2:` へ。42 行目: 2 バイト目の `0x42` を 8 ビットずらして OR。`result = 0x434200`。
-4. `fallthrough` で `case 1:` へ。45 行目: 1 バイト目の `0x41` をそのまま OR。`result = 0x434241`。
-5. `fallthrough` で `case 0:` へ。48 行目で `result` を返します。
+### 1. 入口へ飛ぶ
 
+`switch` は `case 3:` に飛びます。3 バイト目（オフセット 2）の `0x43` を読み、16 ビット左へずらして OR します。`result = 0x430000`。
+
+```swift:line-numbers=38
+  case 3:
+    unsafe result |= UInt64(p.load(fromByteOffset: 2, as: UInt8.self)) &<< 16
+    fallthrough
+```
+### 2. 下の case へ落ちていく
+
+`fallthrough` で `case 2:` へ進み、2 バイト目の `0x42` を 8 ビットずらして OR。`result = 0x434200`。さらに `case 1:` で 1 バイト目の `0x41` をそのまま OR し、`result = 0x434241` になります。
+
+```swift:line-numbers=41
+  case 2:
+    unsafe result |= UInt64(p.load(fromByteOffset: 1, as: UInt8.self)) &<< 8
+    fallthrough
+  case 1:
+    unsafe result |= UInt64(p.load(fromByteOffset: 0, as: UInt8.self))
+    fallthrough
+```
+### 3. case 0 で返す
+
+最後に `case 0:` へ落ちて `result` を返します。0 バイトのときは、いきなりここに来て 0 を返します。
+
+```swift:line-numbers=47
+  case 0:
+    return result
+```
 `byteCount` がいくつでも、**その数から 0 まで階段を下りるように** 実行されます。
 
 ## ここがすごい

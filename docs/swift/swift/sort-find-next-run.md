@@ -12,6 +12,7 @@ lines: [476, 511]
 function: "_findNextRun(in:from:by:)"
 difficulty: 2
 tags: [ソート, アルゴリズム, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -20,7 +21,48 @@ tags: [ソート, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```swift:line-numbers=476
+::: code-group
+
+```swift:line-numbers=476 [日本語訳]
+/// 次の整列済みの区間（ラン）の終わりと、`start..<end` の要素が
+/// 降順かどうかを示す真偽値を返す。
+///
+/// - 前提条件: `start < elements.endIndex`
+@inlinable
+internal func _findNextRun<C: RandomAccessCollection>(
+  in elements: C,
+  from start: C.Index,
+  by areInIncreasingOrder: (C.Element, C.Element) throws -> Bool
+) rethrows -> (end: C.Index, descending: Bool) {
+  _internalInvariant(start < elements.endIndex)
+
+  var previous = start
+  var current = elements.index(after: start)
+  guard current < elements.endIndex else {
+    // 1 要素だけのランなので、昇順として扱えば
+    // 意味のない `reverse()` の呼び出しを省ける。
+    return (current, false)
+  }
+
+  // `start` から始まるランが昇順か降順かを調べる。
+  // 昇順のランは等しい要素が続いてもよいが、降順のランは
+  // 後で反転されるので、厳密に降順でなければならない。
+  let isDescending =
+    try areInIncreasingOrder(elements[current], elements[previous])
+  
+  // 昇順 / 降順のパターンが途切れるまで `current` を進める。
+  // （続き）
+  repeat {
+    previous = current
+    elements.formIndex(after: &current)
+  } while try current < elements.endIndex &&
+    isDescending == areInIncreasingOrder(elements[current], elements[previous])
+    
+  return(current, isDescending)
+}
+```
+
+```swift:line-numbers=476 [原文]
 /// Returns the end of the next in-order run along with a Boolean value
 /// indicating whether the elements in `start..<end` are in descending order.
 ///
@@ -59,6 +101,8 @@ internal func _findNextRun<C: RandomAccessCollection>(
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **ジェネリクス `<C: RandomAccessCollection>`**: 型 `C` を引数のように受け取る仕組みです。`RandomAccessCollection` は「添字で任意の位置にすぐアクセスできるコレクション」を表すプロトコル（インターフェースのようなもの）です。配列はこれに当てはまります。
@@ -74,18 +118,38 @@ internal func _findNextRun<C: RandomAccessCollection>(
 
 `[1, 3, 5, 4, 2]` を `start = 0` から調べる場合で追います。比較関数は `<` とします。
 
-### 1. 1 要素しか残っていない場合（488〜494 行目）
+### 1. 1 要素しか残っていない場合
 
+```swift:line-numbers=488
+  var previous = start
+  var current = elements.index(after: start)
+  guard current < elements.endIndex else {
+    // 1 要素だけのランなので、昇順として扱えば
+    // 意味のない `reverse()` の呼び出しを省ける。
+    return (current, false)
+  }
+```
 `previous = 0`、`current = 1` にします。もし `current` が末尾を越えていたら、ランは 1 要素だけです。このとき「昇順」として返します。1 要素を「降順だから反転」するのは無駄だからです（コメントにもそう書かれています）。
 
-### 2. 向きを決める（499〜500 行目）
+### 2. 向きを決める
 
+```swift:line-numbers=499
+  let isDescending =
+    try areInIncreasingOrder(elements[current], elements[previous])
+```
 最初の 2 要素を比べます。`areInIncreasingOrder(elements[1], elements[0])` は `3 < 1` なので false。つまり **昇順** のランです。
 
 ここで比べる順番が「後ろ, 前」であることに注目してください。「後ろの要素が前の要素より真に小さい」ときだけ降順とみなします。
 
-### 3. 向きが変わるまで進める（504〜508 行目）
+### 3. 向きが変わるまで進める
 
+```swift:line-numbers=504
+  repeat {
+    previous = current
+    elements.formIndex(after: &current)
+  } while try current < elements.endIndex &&
+    isDescending == areInIncreasingOrder(elements[current], elements[previous])
+```
 `repeat` ループで `current` を 1 つずつ進め、毎回「同じ比較をしたときに、最初と同じ答え（`isDescending`）になるか」を確かめます。
 
 - `current = 2`: `5 < 3` は false。`isDescending`（false）と一致するので続行。
@@ -95,7 +159,7 @@ internal func _findNextRun<C: RandomAccessCollection>(
 
 ## ここがすごい
 
-- **等しい要素の扱いで安定性を守る**: 497〜498 行目のコメントが核心です。昇順のランには「等しい要素が続く」ことを許しますが、降順のランは **厳密に** 降順でなければいけません。降順のランは後で反転されます。もし `[2, 2]` のような等しい要素を降順のランに入れて反転すると、等しい要素の順番が入れ替わってしまいます。Swift の `sort` は安定ソート（等しい要素の元の順番を保つソート）なので、これは許されません。比較の向きを「後ろ, 前」にしているのは、このためです。
+- **等しい要素の扱いで安定性を守る**: 「降順のランは後で反転されるので、厳密に降順でなければならない」というコメントが核心です。昇順のランには「等しい要素が続く」ことを許しますが、降順のランは **厳密に** 降順でなければいけません。降順のランは後で反転されます。もし `[2, 2]` のような等しい要素を降順のランに入れて反転すると、等しい要素の順番が入れ替わってしまいます。Swift の `sort` は安定ソート（等しい要素の元の順番を保つソート）なので、これは許されません。比較の向きを「後ろ, 前」にしているのは、このためです。
 - **比較 1 つで両方向を判定**: 昇順用・降順用の 2 本のループを書かず、`isDescending == areInIncreasingOrder(...)` という 1 つの式で「最初と同じ傾向が続いているか」を判定しています。コードが半分で済みます。
 - **降順も無駄にしない**: 単純なマージソートは降順のデータに弱いことがあります。Timsort は降順のランを見つけたら反転して昇順のランにするので、`[5, 4, 3, 2, 1]` のような完全な逆順データも O(n) で並べ終わります。
 
