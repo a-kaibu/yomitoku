@@ -12,6 +12,7 @@ lines: [26, 66]
 function: "LockFreeTaskQueue"
 difficulty: 3
 tags: [並行処理, ロック不要, データ構造]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,54 @@ tags: [並行処理, ロック不要, データ構造]
 
 ## コード
 
-```kotlin:line-numbers=26
+
+::: code-group
+
+```kotlin:line-numbers=26 [日本語訳]
+internal open class LockFreeTaskQueue<E : Any>(
+    singleConsumer: Boolean // 消費者が 1 つだけのとき true（少し速く、ロックフリー）
+) {
+    private val _cur = atomic(Core<E>(Core.INITIAL_CAPACITY, singleConsumer))
+
+    // 注意: remove 操作との間で不可分ではない（isEmpty が false でも、remove が一時的に失敗することがある）
+    val isEmpty: Boolean get() = _cur.value.isEmpty
+    val size: Int get() = _cur.value.size
+
+    fun close() {
+        _cur.loop { cur ->
+            if (cur.close()) return // この配列を閉じた
+            _cur.compareAndSet(cur, cur.next()) // 次の配列へ進める
+        }
+    }
+
+    fun addLast(element: E): Boolean {
+        _cur.loop { cur ->
+            when (cur.addLast(element)) {
+                Core.ADD_SUCCESS -> return true
+                Core.ADD_CLOSED -> return false
+                Core.ADD_FROZEN -> _cur.compareAndSet(cur, cur.next()) // 次の配列へ進める
+            }
+        }
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    fun removeFirstOrNull(): E? {
+        _cur.loop { cur ->
+            val result = cur.removeFirstOrNull()
+            if (result !== Core.REMOVE_FROZEN) return result as E?
+            _cur.compareAndSet(cur, cur.next())
+        }
+    }
+
+    // テストの検証のためだけに使う
+    fun <R> map(transform: (E) -> R): List<R> = _cur.value.map(transform)
+
+    // テストの検証のためだけに使う
+    fun isClosed(): Boolean = _cur.value.isClosed()
+}
+```
+
+```kotlin:line-numbers=26 [原文]
 internal open class LockFreeTaskQueue<E : Any>(
     singleConsumer: Boolean // true when there is only a single consumer (slightly faster & lock-free)
 ) {
@@ -67,31 +115,42 @@ internal open class LockFreeTaskQueue<E : Any>(
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **ロックフリー（lock-free）**: ロックを使わず、CAS（compareAndSet: 期待どおりなら書き換える不可分な操作）だけで複数スレッドから安全に使えるようにする手法です。誰かが途中で止まっても、他のスレッドは進めます。
-- **`Core<E>`**: 7 行目の `typealias`（型の別名）で、`LockFreeTaskQueueCore<E>` のことです。固定長の配列を持つ本体で、満杯になると「凍結（frozen）」され、それ以上変更できなくなります。`next()` で次の（2 倍の）配列を取得できます。
+- **`Core<E>`**: ファイル先頭の `typealias`（型の別名）で、`LockFreeTaskQueueCore<E>` のことです。固定長の配列を持つ本体で、満杯になると「凍結（frozen）」され、それ以上変更できなくなります。`next()` で次の（2 倍の）配列を取得できます。
 - **`atomic(...)` と `_cur.loop { cur -> ... }`**: atomicfu ライブラリの原子変数と、その値を読んでブロックを繰り返し実行する関数です。ブロックの中で `return` するまで繰り返します。
 - **`singleConsumer`**: 取り出す側が 1 スレッドだけと分かっているかどうかです。分かっていれば少し速い処理を選べます。
 - **`ADD_SUCCESS` / `ADD_FROZEN` / `ADD_CLOSED`**: Core の `addLast` が返す結果の定数です。
 
 ## 何をしているか
 
-### 1. 追加する（42〜50 行目）
+### 1. 追加する
 
-今の配列に `addLast` を頼みます。
+今の配列に `addLast` を頼みます。結果によって、次のように分かれます。
 
-- 成功 → `true`
-- 閉じられている（もう使わない）→ `false`
-- 凍結されている（満杯でコピー中など）→ `_cur` を次の配列に CAS で進めて、もう一度
+```kotlin:line-numbers=44
+            when (cur.addLast(element)) {
+```
 
-### 2. 取り出す（53〜59 行目）
+- `ADD_SUCCESS` → `true` を返して終わり
+- `ADD_CLOSED`（閉じられていて、もう使わない）→ `false` を返して終わり
+- `ADD_FROZEN`（満杯でコピー中など）→ `_cur` を次の配列に CAS で進めて、もう一度
 
-今の配列から取り出しを頼み、凍結されていれば次の配列に進めてやり直します。
+### 2. 取り出す
 
-### 3. 閉じる（35〜40 行目）
+今の配列から取り出しを頼みます。凍結されていれば（`REMOVE_FROZEN`）次の配列に進めて、やり直します。
 
-今の配列を閉じます。凍結されていて閉じられなければ、次の配列に進めてやり直します。
+```kotlin:line-numbers=56
+            if (result !== Core.REMOVE_FROZEN) return result as E?
+            _cur.compareAndSet(cur, cur.next())
+```
+
+### 3. 閉じる
+
+今の配列を閉じます。閉じられなければ（凍結されていれば）、次の配列に進めてやり直します。
 
 ### 乗り換えの例
 
@@ -106,9 +165,9 @@ internal open class LockFreeTaskQueue<E : Any>(
 ## ここがすごい
 
 - **役割の分担**: 難しい「凍結とコピー」は Core に任せ、外側は「凍結されていたら次へ進む」だけです。どの操作も同じ形のループになっていて、読みやすく、間違いにくくなっています。
-- **CAS が失敗しても気にしない**: 47 行目と 57 行目の `compareAndSet` は、結果を見ていません。失敗したのは、他のスレッドがすでに進めてくれたからです。どちらにしても次のループで最新の `_cur` を読み直すので、正しく動きます。
+- **CAS が失敗しても気にしない**: 進めるための `compareAndSet` は結果を見ていません。失敗したのは、他のスレッドがすでに進めてくれたからです。どちらにしても次のループで最新の `_cur` を読み直すので、正しく動きます。
 - **配列は伸ばさず、乗り換える**: ロックなしで配列を伸ばすのは非常に難しいので、「古い配列を凍らせて読み取り専用にし、新しい配列にコピーする」という方法にしています。凍結された配列は誰も変更しないので、安全にコピーできます。
-- **正直なコメント**: 31 行目のコメントは「`isEmpty` は取り出しと不可分ではない」と、この設計の弱点を明記しています。ロックフリーのデータ構造では、どの操作がどこまで保証されるかを書いておくことが大切です。
+- **弱点を正直に書く**: コメントは、`isEmpty` が取り出し操作と不可分ではないことを明記しています。ロックフリーのデータ構造では、どの操作がどこまで保証するかを書いておくことが大切です。
 
 ## まとめ
 
