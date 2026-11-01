@@ -11,8 +11,10 @@ file: more_itertools/more.py
 lines: [5619, 5640]
 function: _full_period_lcg
 difficulty: 3
+format: 2
 tags: [乱数, ビット演算, アルゴリズム, メモリ管理]
 ---
+
 ## ひとことで
 
 `_full_period_lcg(n)` は、**0 から n-1 までの整数を、ランダムな順番で、それぞれちょうど 1 回ずつ出す** ジェネレータです。
@@ -20,7 +22,34 @@ tags: [乱数, ビット演算, アルゴリズム, メモリ管理]
 
 ## コード
 
-```python:line-numbers=5619
+::: code-group
+
+```python:line-numbers=5619 [日本語訳]
+def _full_period_lcg(n):
+    "Returns values from range(n) in randomly shuffled order."
+
+    # このアルゴリズムは、フラックス付きの全周期線形合同法である。
+    # 大きさ *m* は 2 のべき乗。*mask* により剰余の計算が速くなる。
+    # 乗数 *a* と加数 *c* は Hull–Dobell の定数である。参照:
+    # https://jackgiffin.com/main/pdfs/Random-Number-Generators-T-E-Hull-and-A-R-Dobell.pdf
+    # 値 *x* はランダムな開始位置である。
+    # *flux* のビット列は、LCG の規則的なパターンを崩す。
+
+    m = 1 << n.bit_length()
+    mask = m - 1
+    a = randrange(5, m, 4) if m > 4 else 1
+    c = randrange(1, m, 2) if m > 1 else 1
+    x = randrange(m)
+    flux = randrange(m)
+
+    for _ in repeat(None, m):
+        index = x ^ flux
+        if index < n:
+            yield index
+        x = (a * x + c) & mask
+```
+
+```python:line-numbers=5619 [原文]
 def _full_period_lcg(n):
     "Returns values from range(n) in randomly shuffled order."
 
@@ -45,6 +74,8 @@ def _full_period_lcg(n):
         x = (a * x + c) & mask
 ```
 
+:::
+
 `randrange` は `random.randrange`、`repeat` は `itertools.repeat` です。
 
 ## 前提知識
@@ -60,11 +91,23 @@ def _full_period_lcg(n):
 
 `n = 5` で考えます。
 
-### 1. n 以上の 2 のべき乗を選ぶ（5629〜5630 行目）
+### 1. n 以上の 2 のべき乗を選ぶ
+
+```python:line-numbers=5629
+    m = 1 << n.bit_length()
+    mask = m - 1
+```
 
 `5.bit_length()` は 3 なので、`m = 8`、`mask = 7` です。
 
-### 2. 全周期になる係数を選ぶ（5631〜5634 行目）
+### 2. 全周期になる係数を選ぶ
+
+```python:line-numbers=5631
+    a = randrange(5, m, 4) if m > 4 else 1
+    c = randrange(1, m, 2) if m > 1 else 1
+    x = randrange(m)
+    flux = randrange(m)
+```
 
 - `a`: 5, 9, 13, ... から選ぶので、`a - 1` は必ず 4 の倍数
 - `c`: 1, 3, 5, ... から選ぶので、必ず奇数
@@ -73,7 +116,15 @@ def _full_period_lcg(n):
 
 これで、Hull–Dobell の条件がいつも満たされます。
 
-### 3. m 回まわして、n 未満のものだけ出す（5636〜5640 行目）
+### 3. m 回まわして、n 未満のものだけ出す
+
+```python:line-numbers=5636
+    for _ in repeat(None, m):
+        index = x ^ flux
+        if index < n:
+            yield index
+        x = (a * x + c) & mask
+```
 
 `x` は 0〜7 をすべて 1 回ずつ通ります。`x ^ flux` も 0〜7 を 1 回ずつ通ります（XOR は 1 対 1 の入れ替えだから）。そのうち 5 未満のもの（0〜4）だけを出せば、0〜4 がちょうど 1 回ずつ、ランダムな順番で出てきます。
 
@@ -93,7 +144,7 @@ def _full_period_lcg(n):
 
 ### XOR で単調さを消す
 
-LCG の列は、下位のビットが規則的に変わるなどのくせがあります。5627 行目のコメントの通り、`flux` との XOR はそうしたパターンを崩すための工夫です。XOR は 1 対 1 なので、全周期の性質を壊さずにかき混ぜられます。
+LCG の列は、下位のビットが規則的に変わるなどのくせがあります。`flux` との XOR はそうしたパターンを崩すための工夫です。XOR は 1 対 1 なので、全周期の性質を壊さずにかき混ぜられます。
 
 ## まとめ
 
