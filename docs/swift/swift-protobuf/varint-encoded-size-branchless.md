@@ -25,8 +25,8 @@ Protocol Buffers は、整数を **varint（可変長整数）** で書きます
 
 ```swift:line-numbers=23 [日本語訳]
     package static func encodedSize(of value: UInt32) -> Int {
-        // この計算は C++ の CodedOutputStream::VarintSize32(uint32_t) から取ったもので、分岐のない計算を行う。
-        // （上の実装の続き）
+        // この計算は C++ の CodedOutputStream::VarintSize32(uint32_t) から取ったものです。
+        // 分岐のない方法で、サイズを計算します。
         let clz = value.leadingZeroBitCount
         return ((UInt32.bitWidth &* 9 &+ 64) &- (clz &* 9)) / 64
     }
