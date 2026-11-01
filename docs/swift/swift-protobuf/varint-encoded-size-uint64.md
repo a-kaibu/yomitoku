@@ -25,8 +25,8 @@ format: 2
 
 ```swift:line-numbers=56 [日本語訳]
     static func encodedSize(of value: UInt64) -> Int {
-        // この計算は C++ の CodedOutputStream::VarintSize64(uint64_t) から取ったもので、分岐のない計算を行う。
-        // （上の実装の続き）
+        // この計算は C++ の CodedOutputStream::VarintSize64(uint64_t) から取ったものです。
+        // 分岐のない方法で、サイズを計算します。
         let clz = value.leadingZeroBitCount
         return ((UInt64.bitWidth &* 9 &+ 64) &- (clz &* 9)) / 64
     }
