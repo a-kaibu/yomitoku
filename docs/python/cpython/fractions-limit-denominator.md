@@ -1,6 +1,6 @@
 ---
 title: 円周率から 22/7 を見つけ出す、連分数による最良近似
-description: fractions.Fraction.limit_denominator は、分母が指定以下の分数のうち、元の値にいちばん近いものを返す。連分数の考え方で候補を絞り、最後に 2 つを比べている。
+description: fractions.Fraction.limit_denominator は、分母が上限以下で元の値に最も近い分数を返す。連分数の収束値と準収束値を順に作り、上限を超える直前の候補と比べて近い方を選ぶ。
 language: python
 project: CPython
 repo: https://github.com/python/cpython
@@ -11,17 +11,79 @@ file: Lib/fractions.py
 lines: [384, 439]
 function: Fraction.limit_denominator
 difficulty: 3
+format: 2
 tags: [数値計算, アルゴリズム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
-`limit_denominator(max_denominator)` は、**分母が `max_denominator` 以下の分数の中で、元の値にいちばん近いもの** を返すメソッドです。
-`Fraction('3.141592653589793').limit_denominator(10)` は `22/7` を返します。昔から知られる円周率の近似値が、計算で自動的に見つかります。
-分母を 1 から順に全部試すのではなく、**連分数** という数学の道具で、候補を一気に絞り込んでいます。
+`limit_denominator(max_denominator)` は、**分母が `max_denominator` 以下の分数のうち、元の値に最も近いもの** を返す関数です。
+`Fraction('3.141592653589793').limit_denominator(10)` は `Fraction(22, 7)` を返します。円周率の近似として知られる `22/7` が出てきます。
 
 ## コード
 
-```python:line-numbers=384
+::: code-group
+
+```python:line-numbers=384 [日本語訳]
+    def limit_denominator(self, max_denominator=1000000):
+        """分母が max_denominator 以下で、self に最も近い Fraction。
+
+        >>> Fraction('3.141592653589793').limit_denominator(10)
+        Fraction(22, 7)
+        >>> Fraction('3.141592653589793').limit_denominator(100)
+        Fraction(311, 99)
+        >>> Fraction(4321, 8765).limit_denominator(10000)
+        Fraction(4321, 8765)
+
+        """
+        # アルゴリズムの注記: 任意の実数 x について、*最良の上からの近似* を定義する。
+        # 次を満たす有理数 p/q を、x の最良の上からの近似とする:
+        #
+        #   (1) p/q >= x であり、かつ
+        #   (2) 任意の有理数 r/s について、p/q > r/s >= x なら s > q
+        #
+        # 同様に *最良の下からの近似* を定義する。すると、
+        # 有理数が x の最良の上または下からの近似であることは、
+        # x に対応する連分数の、収束値か
+        # 準収束値（唯一の最短の連分数）であることと同じである。
+        # 対応する。
+        #
+        # 分母が M 以下の最良の有理近似を求めるには、
+        # 分母が M 以下の、最良の上と下からの近似を求め、
+        # そのうち x に近い方を選ぶ。
+        # 距離が同じなら、分母の小さい方を選ぶ。
+        # 両方の分母が等しい場合（これが起きるのは
+        # max_denominator が 1 で、self が 2 つの整数の中間にあるときだけ）、
+        # 下側の限界、つまり self の床関数の値を
+        # 選ぶ。
+
+        if max_denominator < 1:
+            raise ValueError("max_denominator should be at least 1")
+        if self._denominator <= max_denominator:
+            return Fraction(self)
+
+        p0, q0, p1, q1 = 0, 1, 1, 0
+        n, d = self._numerator, self._denominator
+        while True:
+            a = n//d
+            q2 = q0+a*q1
+            if q2 > max_denominator:
+                break
+            p0, q0, p1, q1 = p1, q1, p0+a*p1, q2
+            n, d = d, n-a*d
+        k = (max_denominator-q0)//q1
+
+        # 候補 (p0+k*p1)/(q0+k*q1) と p1/q1 のどちらが
+        # self に近いかを判定する。両者の距離は 1/(q1*(q0+k*q1)) で、
+        # p1/q1 と self の距離は d/(q1*self._denominator) なので、
+        # 2*(q0+k*q1) と self._denominator/d を比べればよい。
+        if 2*d*(q0+k*q1) <= self._denominator:
+            return Fraction._from_coprime_ints(p1, q1)
+        else:
+            return Fraction._from_coprime_ints(p0+k*p1, q0+k*q1)
+```
+
+```python:line-numbers=384 [原文]
     def limit_denominator(self, max_denominator=1000000):
         """Closest Fraction to self with denominator at most max_denominator.
 
@@ -80,61 +142,84 @@ tags: [数値計算, アルゴリズム, 標準ライブラリ]
             return Fraction._from_coprime_ints(p0+k*p1, q0+k*q1)
 ```
 
-`self._numerator` と `self._denominator` は分数の分子と分母です。`Fraction._from_coprime_ints(p, q)` は、`p` と `q` がすでに約分済みとわかっているときに、約分を省いて分数を作る内部用のメソッドです。
+:::
 
 ## 前提知識
 
-- **`Fraction`**: 分数を正確に表すクラスです。`Fraction(1, 3)` は 1/3 で、小数のような誤差がありません。
-- **連分数**: 数を「整数 + 1/(整数 + 1/(整数 + …))」の形で表したものです。円周率は `3 + 1/(7 + 1/(15 + 1/(1 + …)))` です。途中で打ち切ると、3、22/7、333/106、355/113……と、どんどん精度の良い分数（**近似分数**）が得られます。
-- **`n // d`**: 切り捨ての割り算です。
-- **多重代入**: `p0, q0, p1, q1 = p1, q1, p0+a*p1, q2` は、右辺を全部計算してから左辺に代入します。
-- **`while True` と `break`**: 条件を満たすまで繰り返し、`break` で抜けます。
+- **有理数（分数）**: 2 つの整数の比で表せる数です。`Fraction` は、分子と分母を持つ分数の型です。
+- **連分数**: `a + 1/(b + 1/(c + ...))` の形で表す数の表し方です。途中で打ち切った値を「収束値」と呼びます。
+- **準収束値（semiconvergent）**: 収束値の間にある、分母がより大きい値です。
+- **床関数（floor）**: 数を超えない最大の整数です。
 
 ## 何をしているか
 
-π（`n/d = 3141592653589793 / 1000000000000000`）、`max_denominator = 10` で追います。
+### 1. 上限の確認と、そのまま返す場合
 
-### 1. すでに条件を満たすなら、そのまま（416〜419 行目）
+```python:line-numbers=416
+        if max_denominator < 1:
+            raise ValueError("max_denominator should be at least 1")
+        if self._denominator <= max_denominator:
+            return Fraction(self)
+```
 
-分母がもともと 10 以下なら、自分自身を返します。
+分母の上限が 1 より小さければ、`ValueError` で止めます。元の分母がすでに上限以下なら、自分自身をそのまま返します。
 
-### 2. 連分数を展開して近似分数を作る（421〜429 行目）
+### 2. 連分数の収束値を作る
 
-`p1/q1` が最新の近似分数、`p0/q0` が 1 つ前の近似分数です。
+```python:line-numbers=421
+        p0, q0, p1, q1 = 0, 1, 1, 0
+        n, d = self._numerator, self._denominator
+```
 
-| a（連分数の項） | 新しい分母 q2 | 近似分数 p1/q1 |
-| --- | --- | --- |
-| 3 | 1 | 3/1 |
-| 7 | 7 | 22/7 |
-| 15 | 106 > 10 | （打ち切り） |
+`p0, q0, p1, q1` は、2 つ前と 1 つ前の収束値の分子と分母です。`n, d` は、今の分数の分子と分母です。
 
-各ステップで、`n/d` の整数部分 `a` を取り出し、`n, d = d, n - a*d` で「残りの小数部分の逆数」に進みます。これはユークリッドの互除法と同じ計算です。分母が 10 を超えたら止めます。
+```python:line-numbers=423
+        while True:
+            a = n//d
+            q2 = q0+a*q1
+            if q2 > max_denominator:
+                break
+            p0, q0, p1, q1 = p1, q1, p0+a*p1, q2
+            n, d = d, n-a*d
+```
 
-### 3. もう 1 つの候補を作る（430 行目）
+`a = n//d` が、連分数の次の項です。`q2` は次の分母で、上限を超えたら止めます。超えなければ、収束値の分子と分母を更新し、分数の残りを次の段階へ回します。
 
-近似分数の「間」にも良い候補（中間近似分数）があります。`k = (10 - 1) // 7 = 1` で、`(p0 + k*p1) / (q0 + k*q1) = 25/8` を作ります。分母が 10 以下に収まる最大の `k` です。
+### 3. 準収束値を求める
 
-### 4. 2 つの候補のうち近い方を選ぶ（436〜439 行目）
+```python:line-numbers=430
+        k = (max_denominator-q0)//q1
+```
 
-候補は 22/7（≒3.1429）と 25/8（=3.125）です。π に近いのは 22/7 なので、これを返します。比較は小数を使わず、整数の掛け算だけで行っています。
+上限を超えない範囲で、準収束値に使える係数 `k` を求めます。
+
+### 4. 近い方を選ぶ
+
+```python:line-numbers=436
+        if 2*d*(q0+k*q1) <= self._denominator:
+            return Fraction._from_coprime_ints(p1, q1)
+        else:
+            return Fraction._from_coprime_ints(p0+k*p1, q0+k*q1)
+```
+
+候補 `(p0+k*p1)/(q0+k*q1)` と `p1/q1` のどちらが元の値に近いかを、比べて決めます。近い方の分数を返します。
 
 ## ここがすごい
 
-### 「最良近似は近似分数か中間近似分数」という定理を使う
+### 連分数が、近似の候補を並べてくれる
 
-395〜414 行目のコメントにある通り、「分母がそれより小さい分数では、これより近づけない」という意味で最良の近似分数は、必ず連分数の **近似分数か中間近似分数** になることが証明されています。そのため、調べる必要があるのは最後の 2 つの候補だけです。
-分母を 1 から M まで全部試すと M 回の計算が必要ですが、連分数の展開は数十回で終わります。`max_denominator` が 100 万でも一瞬です。
+連分数の収束値は、分母が小さい中で最も良い近似になることが知られています。連分数を順に作るだけで、上限までの候補が自然に並びます。
 
-### 小数を一切使わない
+### 候補を 2 つに絞って比べる
 
-比較の式 `2*d*(q0+k*q1) <= self._denominator` は、「どちらが近いか」を整数の掛け算に変形したものです（432〜435 行目のコメント）。小数を使うと丸め誤差で判定を誤る可能性がありますが、整数ならどれだけ大きくても正確です。
+すべての分母を試すのではなく、収束値と準収束値の 2 つだけを比べます。上限が大きくても、計算は連分数の長さの分だけで済みます。
 
-### 約分を省く
+### 同じ距離のときの決まり
 
-連分数から得られる近似分数は、性質上すでに約分済みです。それを知っているので `_from_coprime_ints` を使い、最大公約数の計算を省いています。
+コメントには、同じ距離なら分母の小さい方を選ぶという決まりが書かれています。どちらを返すかが、はっきり決められています。
 
 ## まとめ
 
-- 「分母が M 以下で最も近い分数」は、連分数の近似分数と中間近似分数の 2 つを比べれば求まる。
-- 数学の定理を使うと、全探索を数十回の計算に減らせる。
-- 大小の比較は、式を変形すれば整数だけで正確に行える。
+- 連分数の収束値と準収束値を順に作ると、分母の上限以下の良い近似が得られる。
+- 候補を 2 つに絞って比べるので、分母の上限が大きくても速く答えが出る。
+- 同じ距離の場合の決まりを明確にしておくと、結果が予測しやすい。
