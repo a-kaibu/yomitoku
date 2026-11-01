@@ -11,6 +11,7 @@ file: library/alloc/src/collections/binary_heap/mod.rs
 lines: [1597, 1607]
 function: <Hole<T> as Drop>::drop
 difficulty: 2
+format: 2
 tags: [メモリ管理, 防御的プログラミング, 設計パターン]
 ---
 
@@ -22,7 +23,23 @@ tags: [メモリ管理, 防御的プログラミング, 設計パターン]
 
 ## コード
 
-```rust:line-numbers=1597
+::: code-group
+
+```rust:line-numbers=1597 [日本語訳]
+impl<T> Drop for Hole<'_, T> {
+    #[inline]
+    fn drop(&mut self) {
+        // 穴を埋め直す
+        let pos = self.pos;
+        // ignore-tidy-undocumented-unsafe
+        unsafe {
+            ptr::copy_nonoverlapping(&*self.elt, self.data.get_unchecked_mut(pos), 1);
+        }
+    }
+}
+```
+
+```rust:line-numbers=1597 [原文]
 impl<T> Drop for Hole<'_, T> {
     #[inline]
     fn drop(&mut self) {
@@ -36,9 +53,11 @@ impl<T> Drop for Hole<'_, T> {
 }
 ```
 
-`Hole` 型の定義（同じファイルの 1533〜1537 行目）は次のとおりです。
+:::
 
-```rust
+`Hole` 型の定義は次のとおりです。
+
+```rust:line-numbers=1533
 struct Hole<'a, T: 'a> {
     data: &'a mut [T],
     elt: ManuallyDrop<T>,
@@ -57,11 +76,23 @@ struct Hole<'a, T: 'a> {
 
 ## 何をしているか
 
-### 1. 穴の位置を確認する（1601 行目）
+### 1. 穴の位置を確認する
+
+```rust:line-numbers=1601
+        let pos = self.pos;
+```
+
 
 `self.pos` が、いま穴になっている位置です。ヒープの操作中に `move_to` で何度も動いています。
 
-### 2. 手元の要素を書き戻す（1603〜1605 行目）
+### 2. 手元の要素を書き戻す
+
+```rust:line-numbers=1603
+        unsafe {
+            ptr::copy_nonoverlapping(&*self.elt, self.data.get_unchecked_mut(pos), 1);
+        }
+```
+
 
 `elt` に持っている要素を、`data[pos]` にコピーします。これで配列に穴がなくなり、すべての位置が有効な要素で埋まります。
 

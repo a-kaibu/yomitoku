@@ -11,6 +11,7 @@ file: library/alloc/src/raw_vec/mod.rs
 lines: [163, 176]
 function: min_non_zero_cap
 difficulty: 1
+format: 2
 tags: [メモリ管理, 最適化, 可読性]
 ---
 
@@ -27,7 +28,26 @@ tags: [メモリ管理, 最適化, 可読性]
 
 ## コード
 
-```rust:line-numbers=163
+::: code-group
+
+```rust:line-numbers=163 [日本語訳]
+// 小さすぎる Vec は無駄が多い。次の値にする:
+// - 要素の大きさが 1 バイトなら 8（多くのヒープアロケータは 8 バイト未満の要求を切り上げるため）
+//   8 バイト未満の要求でも少なくとも 8 バイトは確保されるから。
+// - 1 KiB 以下の要素なら 4
+// - それ以外は 1（とても短い Vec で領域を無駄にしないため）
+const fn min_non_zero_cap(size: usize) -> usize {
+    if size == 1 {
+        8
+    } else if size <= 1024 {
+        4
+    } else {
+        1
+    }
+}
+```
+
+```rust:line-numbers=163 [原文]
 // Tiny Vecs are dumb. Skip to:
 // - 8 if the element size is 1, because any heap allocator is likely
 //   to round up a request of less than 8 bytes to at least 8 bytes.
@@ -44,6 +64,8 @@ const fn min_non_zero_cap(size: usize) -> usize {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`const fn`**: コンパイル時にも実行できる関数です。引数が定数なら、結果もコンパイル時に計算されます。
@@ -56,15 +78,40 @@ const fn min_non_zero_cap(size: usize) -> usize {
 
 この関数は、容量を増やす関数 `grow_amortized` の中で `max(min_non_zero_cap(要素の大きさ), 新しい容量)` のように使われます。つまり、新しい容量がこの値より小さいときに、この値まで引き上げます。
 
-### 1. 1 バイトの要素なら 8（169〜170 行目）
+### 1. 1 バイトの要素なら 8
 
-`Vec<u8>` に 1 バイト追加するとき、1 バイトだけ確保してもあまり意味がありません。164〜165 行目のコメントのとおり、ほとんどのアロケータは 8 バイト未満の要求でも少なくとも 8 バイト（またはそれ以上）を割り当てるからです。どうせ 8 バイト使うなら、最初から容量 8 として扱えば、7 回分の作り直しを省けます。
+```rust:line-numbers=169
+    if size == 1 {
+        8
+```
 
-### 2. 1 KiB 以下なら 4（171〜172 行目）
+
+`Vec<u8>` に 1 バイト追加するとき、1 バイトだけ確保してもあまり意味がありません。のコメントのとおり、ほとんどのアロケータは 8 バイト未満の要求でも少なくとも 8 バイト（またはそれ以上）を割り当てるからです。どうせ 8 バイト使うなら、最初から容量 8 として扱えば、7 回分の作り直しを省けます。
+
+```rust:line-numbers=164
+// - 8 if the element size is 1, because any heap allocator is likely
+//   to round up a request of less than 8 bytes to at least 8 bytes.
+```
+
+
+### 2. 1 KiB 以下なら 4
+
+```rust:line-numbers=171
+    } else if size <= 1024 {
+        4
+```
+
 
 `Vec<i32>`（4 バイト）や、ちょっとした構造体の `Vec` なら、最初は 4 個分を確保します。`push` で 1 個ずつ追加すると、容量は `4 → 8 → 16 → ...` と増えていきます。
 
-### 3. 大きい要素なら 1（173〜175 行目）
+### 3. 大きい要素なら 1
+
+```rust:line-numbers=173
+    } else {
+        1
+    }
+```
+
 
 1 個が 1 KiB を超えるような大きな要素で 4 個分を確保すると、1 個しか使わない場合に 3 KiB 以上が無駄になります。そこで大きな要素では最低 1 個にとどめます。
 

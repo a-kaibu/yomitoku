@@ -11,6 +11,7 @@ file: library/core/src/slice/memchr.rs
 lines: [10, 20]
 function: contains_zero_byte
 difficulty: 3
+format: 2
 tags: [ビット演算, 最適化, ハック]
 ---
 
@@ -23,7 +24,23 @@ tags: [ビット演算, 最適化, ハック]
 
 ## コード
 
-```rust:line-numbers=10
+::: code-group
+
+```rust:line-numbers=10 [日本語訳]
+/// `x` のどこかに 0 のバイトがあれば `true` を返す。
+///
+/// 出典: J. Arndt『Matters Computational』
+///
+/// 「各バイトから 1 を引き、借りが最上位ビットまで伝わったバイトを探す」
+/// というのが考え方である。
+/// 」
+#[inline]
+const fn contains_zero_byte(x: usize) -> bool {
+    x.wrapping_sub(LO_USIZE) & !x & HI_USIZE != 0
+}
+```
+
+```rust:line-numbers=10 [原文]
 /// Returns `true` if `x` contains any zero byte.
 ///
 /// From *Matters Computational*, J. Arndt:
@@ -36,6 +53,8 @@ const fn contains_zero_byte(x: usize) -> bool {
     x.wrapping_sub(LO_USIZE) & !x & HI_USIZE != 0
 }
 ```
+
+:::
 
 ## 前提知識
 
@@ -50,6 +69,12 @@ const fn contains_zero_byte(x: usize) -> bool {
 アイデアはコメントの引用のとおり、「**各バイトから 1 を引くと、0 のバイトだけは借りが最上位ビットまで伝わる**」ことです。
 
 ### 1. 各バイトから 1 を引く
+
+```rust:line-numbers=18
+const fn contains_zero_byte(x: usize) -> bool {
+    x.wrapping_sub(LO_USIZE) & !x & HI_USIZE != 0
+}
+```
 
 `x.wrapping_sub(LO_USIZE)` は、全バイトから同時に 1 を引くのに近い計算です。
 `0x00` のバイトから 1 を引くと `0xFF` になり、最上位ビットが 1 になります。

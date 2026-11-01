@@ -11,6 +11,7 @@ file: library/core/src/str/count.rs
 lines: [110, 118]
 function: contains_non_continuation_byte
 difficulty: 3
+format: 2
 tags: [ビット演算, Unicode, 最適化]
 ---
 
@@ -22,7 +23,21 @@ tags: [ビット演算, Unicode, 最適化]
 
 ## コード
 
-```rust:line-numbers=110
+::: code-group
+
+```rust:line-numbers=110 [日本語訳]
+// `w` の各バイトが UTF-8 の文字の先頭バイトかどうかを調べる。
+// 継続バイトなら `0x00`（false）、先頭バイトなら `0x01`（true）を残す。
+// （ここでは false/true は値の意味を表す）
+//
+#[inline]
+fn contains_non_continuation_byte(w: usize) -> usize {
+    const LSB: usize = usize::repeat_u8(0x01);
+    ((!w >> 7) | (w >> 6)) & LSB
+}
+```
+
+```rust:line-numbers=110 [原文]
 // Checks each byte of `w` to see if it contains the first byte in a UTF-8
 // sequence. Bytes in `w` which are continuation bytes are left as `0x00` (e.g.
 // false), and bytes which are non-continuation bytes are left as `0x01` (e.g.
@@ -34,20 +49,27 @@ fn contains_non_continuation_byte(w: usize) -> usize {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **UTF-8 の継続バイト**: UTF-8 で 2 バイト以上になる文字は、先頭バイトのあとに `10xxxxxx`（最上位ビットが 1、次が 0）という形のバイトが続きます。これを継続バイトと呼びます。ASCII（`0xxxxxxx`）や先頭バイト（`11xxxxxx`）はそれ以外の形です。
 - **`usize::repeat_u8(0x01)`**: 1 バイトの値 `0x01` を `usize` のすべてのバイトに並べた定数を作ります。64 ビットなら `0x0101010101010101` です。
 - **`!w`**: 整数に対する `!` はビット反転（0 と 1 を入れ替える）です。
 - **`>>`、`|`、`&`**: 右シフト、ビットごとの OR、ビットごとの AND です。
-- **最後の式が戻り値**: 117 行目には `;` がないので、その値が返ります。
+- **最後の式が戻り値**: 関数本体の最後の式には `;` がないので、その値が返ります。
 
 ## 何をしているか
 
 1 バイト分だけを取り出して考えます。バイトのビットを上から `b7 b6 ... b0` とすると、継続バイトは `b7 = 1` かつ `b6 = 0` のときです。
 逆に言えば、**「`b7` が 0」または「`b6` が 1」なら継続バイトではない** ので、`(!b7) | b6` を計算すればよいことになります。
 
-### 1. `!w >> 7`（117 行目）
+### 1. `!w >> 7`
+
+```rust:line-numbers=117
+    ((!w >> 7) | (w >> 6)) & LSB
+```
+
 
 `w` を反転してから 7 ビット右にずらすと、各バイトの `b7` の反転が、そのバイトの最下位ビット（`b0` の位置）に来ます。
 

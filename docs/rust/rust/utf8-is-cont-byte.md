@@ -11,6 +11,7 @@ file: library/core/src/str/validations.rs
 lines: [20, 25]
 function: utf8_is_cont_byte
 difficulty: 2
+format: 2
 tags: [Unicode, ビット演算, ハック]
 ---
 
@@ -23,7 +24,18 @@ tags: [Unicode, ビット演算, ハック]
 
 ## コード
 
-```rust:line-numbers=20
+::: code-group
+
+```rust:line-numbers=20 [日本語訳]
+/// バイトが UTF-8 の継続バイト（先頭が `10` のバイト）かどうかを調べる。
+///（先頭 2 ビットが `10` かどうか）
+#[inline]
+pub(super) const fn utf8_is_cont_byte(byte: u8) -> bool {
+    (byte as i8) < -64
+}
+```
+
+```rust:line-numbers=20 [原文]
 /// Checks whether the byte is a UTF-8 continuation byte (i.e., starts with the
 /// bits `10`).
 #[inline]
@@ -32,15 +44,25 @@ pub(super) const fn utf8_is_cont_byte(byte: u8) -> bool {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`u8` と `i8`**: `u8` は 0〜255 を表す符号なし 8 ビット整数、`i8` は -128〜127 を表す符号付き 8 ビット整数です。
 - **`as` による型変換**: `byte as i8` は、**ビットの並びはそのままに** 符号付きとして読み替えます。最上位ビットが 1 のバイトは負の数になります。たとえば `0x80`（`1000 0000`）は `-128`、`0xBF`（`1011 1111`）は `-65`、`0xFF` は `-1` です。これは 2 の補数という負の数の表し方によるものです。
 - **`pub(super)`**: 「1 つ上のモジュールからだけ使える」という公開範囲の指定です。
 - **`const fn`**: コンパイル時にも実行できる関数です。
-- **`->` と最後の式**: `-> bool` は戻り値の型、24 行目の式がそのまま戻り値です。
+- **`->` と最後の式**: `-> bool` は戻り値の型、`(byte as i8) < -64` の式がそのまま戻り値です。
 
 ## 何をしているか
+
+### 1. 符号付きとして並べ直す
+
+```rust:line-numbers=23
+pub(super) const fn utf8_is_cont_byte(byte: u8) -> bool {
+    (byte as i8) < -64
+}
+```
 
 符号付きとして読み替えたとき、各バイトは次のように並びます。
 
@@ -51,6 +73,8 @@ pub(super) const fn utf8_is_cont_byte(byte: u8) -> bool {
 ```
 
 継続バイトはちょうど **いちばん小さい側にまとまっている** ので、「-64 より小さいか」だけで判定できます。
+
+### 2. 具体的な値で判定する
 
 具体例:
 
