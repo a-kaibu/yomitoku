@@ -1,6 +1,6 @@
 ---
-title: "0 個・1 個のときはリストを作らない InlineList"
-description: "要素が 0 個なら null、1 個ならその要素そのもの、2 個以上で初めて ArrayList を使う小さなリスト。value class で包むので、包み自体のコストもない。"
+title: "要素が 1 個ならただの値で持つ InlineList"
+description: "要素の数が少ないことが多い場面のための、インラインのリスト。要素が 1 個ならそのまま値として持ち、2 個目が来たときだけ ArrayList に切り替える。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -11,23 +11,57 @@ file: kotlinx-coroutines-core/common/src/internal/InlineList.kt
 lines: [13, 44]
 function: "InlineList"
 difficulty: 2
-tags: [データ構造, メモリ管理, 最適化, 型システム]
+tags: [最適化, メモリ管理, 型システム]
+format: 2
 ---
 
 ## ひとことで
 
-`InlineList` は、kotlinx.coroutines の内部で使われる **とても小さな「リストのようなもの」** です。
-中身は `holder` という変数 1 つだけで、
+`InlineList<E>` は、**要素を少ししか持たないことが多い場面のための、軽いリスト** です。要素がないときは `null`、1 個のときは **その要素そのもの** を入れておき、2 個目が来たときだけ `ArrayList` を作ります。
 
-- 要素 0 個 → `null`
-- 要素 1 個 → その要素そのもの
-- 要素 2 個以上 → `ArrayList`
-
-と、**数に応じて持ち方を変えます**。ほとんどの場合 0 個か 1 個しか入らない場面で、リストのオブジェクトを作らずに済ませるための工夫です。
+リストを 1 個の値の箱として包む `@JvmInline value class` なので、箱そのものの追加のコストは、ほとんどかかりません。
 
 ## コード
 
-```kotlin:line-numbers=13
+
+::: code-group
+
+```kotlin:line-numbers=13 [日本語訳]
+@JvmInline
+internal value class InlineList<E>(private val holder: Any? = null) {
+    operator fun plus(element: E): InlineList<E>  {
+        assert { element !is List<*> } // リストは禁止
+        return when (holder) {
+            null -> InlineList(element)
+            is ArrayList<*> -> {
+                (holder as ArrayList<E>).add(element)
+                InlineList(holder)
+            }
+            else -> {
+                val list = ArrayList<E>(4)
+                list.add(holder as E)
+                list.add(element)
+                InlineList(list)
+            }
+        }
+    }
+
+    inline fun forEachReversed(action: (E) -> Unit) {
+        when (holder) {
+            null -> return
+            !is ArrayList<*> -> action(holder as E)
+            else -> {
+                val list = holder as ArrayList<E>
+                for (i in (list.size - 1) downTo 0) {
+                    action(list[i])
+                }
+            }
+        }
+    }
+}
+```
+
+```kotlin:line-numbers=13 [原文]
 @JvmInline
 internal value class InlineList<E>(private val holder: Any? = null) {
     operator fun plus(element: E): InlineList<E>  {
@@ -62,42 +96,54 @@ internal value class InlineList<E>(private val holder: Any? = null) {
 }
 ```
 
+:::
+
 ## 前提知識
 
-- **`value class`（値クラス）と `@JvmInline`**: 1 つの値を包む型を作るための仕組みです。コンパイル後は、包みのオブジェクトは作られず、中身の値がそのまま使われます。型としては区別されるのに、実行時のコストはゼロです。
-- **`Any?`**: 何でも入り、`null` も入る型です。`holder` は「要素」か「リスト」か「`null`」のどれかを入れます。
-- **`operator fun plus`**: `+` 演算子の意味を定義する書き方です。`list + element` と書くと `plus` が呼ばれます。
-- **`when (holder) { null -> ...; is ArrayList<*> -> ...; else -> ... }`**: 値や型で分岐します。`is` は型チェック、`!is` はその否定です。
-- **`as E`**: 型のキャストです。ファイル先頭で「未検査のキャスト」の警告を抑えています。
-- **`downTo`**: `(list.size - 1) downTo 0` は、大きい数から 0 まで 1 ずつ減らす範囲です。
+- **`@JvmInline value class`**: 1 つの値を包む型です。実行時には包まれた値そのものとして扱われるため、包むことによる余分なオブジェクトが作られにくくなります。
+- **`holder: Any?`**: 中身を入れておく変数です。`null`、1 個の要素、`ArrayList` のどれかが入ります。
+- **`operator fun plus`**: `list + element` の形で書ける演算子関数です。
+- **`is`**: 型を調べる式です。`is ArrayList<*>` は「`ArrayList` かどうか」です。
+- **`inline fun`**: 呼び出し元にコードを展開する関数です。`action` のラムダも一緒に展開されます。
+- **`assert { ... }`**: 開発時にだけ確かめる条件です。
 
 ## 何をしているか
 
-### 1. 要素を足す（15〜30 行目）
+### 1. 要素を追加する: 状態で分岐する
 
-`InlineList<String>()` に `"a"`、`"b"`、`"c"` を順に足すと:
+`plus` は、今の `holder` の状態によって、3 通りに分かれます。
 
-| 足す前の `holder` | 足す要素 | 足した後の `holder` |
-| --- | --- | --- |
-| `null` | `"a"` | `"a"`（要素そのもの） |
-| `"a"` | `"b"` | `["a", "b"]`（ここで初めてリストを作る） |
-| `["a", "b"]` | `"c"` | `["a", "b", "c"]`（同じリストに追加） |
+```kotlin:line-numbers=17
+        return when (holder) {
+            null -> InlineList(element)
+```
 
-16 行目の `assert` は、要素自体が `List` だと「要素 1 個」と「リスト」の区別がつかなくなるため、それを禁止しています。
+- `null`（空）: 要素をそのまま `holder` に入れる。
+- `ArrayList`（すでに 2 個以上）: 同じリストに追加する。
+- それ以外（1 個）: 新しい `ArrayList` を作り、古い要素と新しい要素を入れる。
 
-### 2. 逆順に回す（32〜43 行目）
+### 2. 逆順に取り出す: 状態に合わせて処理する
 
-`null` なら何もしない、要素 1 個ならそれだけ、リストなら後ろから順に `action` を呼びます。`inline` なので、`action` のラムダは呼び出し元に展開されます。
+`forEachReversed` は、`holder` の状態に応じて、要素を後ろから順に `action` に渡します。
+
+```kotlin:line-numbers=33
+        when (holder) {
+            null -> return
+            !is ArrayList<*> -> action(holder as E)
+```
+
+空なら何もせず、1 個ならその要素を 1 回だけ渡し、リストなら後ろから順に渡します。
 
 ## ここがすごい
 
-- **よくある場合に何も確保しない**: たとえば「取り消されたときに呼ぶ処理」の一覧は、ほとんど 0 個か 1 個です。毎回 `ArrayList` を作ると、空のリストや要素 1 個のリストのためにメモリと時間を使います。この型なら、2 個目が来るまでリストは作られません。
-- **value class で「包み」のコストも消す**: 普通のクラスで包むと、包み自体のオブジェクトが増えて本末転倒です。`value class` なら、実行時には `holder` の値がそのまま渡されるので、包みは存在しません。それでいて型は `InlineList<E>` なので、普通の `Any?` と取り違えることもありません。
-- **使う側には区別を見せない**: 利用者は `+` と `forEachReversed` だけを使い、中身が 1 個なのかリストなのかを意識しません。持ち方の切り替えは、この小さなクラスの中に閉じ込められています。
-- **制約をコメントと assert で守る**: 「要素にリストを入れてはいけない」という、この表現の弱点を `assert` で明示しています。
+- **1 個のときは余分な箱を作らない**: 要素が 1 個だけの場合、`ArrayList` を作らずに、要素そのものを入れておきます。多くの場合は要素が少ないので、この処理が全体の割り当て回数を大きく減らします。
+- **型で中身を判別する**: `holder` には `null`、要素、`ArrayList` のどれかが入るので、`is` の判定だけで状態が分かります。
+- **値クラスで包む**: 外から見ると、ただの `InlineList<E>` です。中身の形式を隠しながら、箱のコストを抑えています。
+- **`inline` で関数呼び出しを省く**: `forEachReversed` は `inline` なので、ラムダの呼び出しが展開されて余分な処理を省けます。
+- **リストの入れ子を禁止**: `assert` で、要素がリストでないことを確かめています。要素とリストを区別できなくなるのを防ぐためです。
 
 ## まとめ
 
-- 「ほとんどの場合 0 個か 1 個」なら、数に応じて持ち方を変えると、オブジェクトの確保を減らせる。
-- `value class` を使うと、型の安全さを保ったまま、包みのコストをなくせる。
-- 表現上の弱点（ここでは「要素がリストだと区別できない」）は、`assert` で使い方を制限して守る。
+- 要素が少ないことが多いなら、1 個のときは要素そのものを持ち、2 個目から `ArrayList` に切り替えると割り当てを減らせる。
+- 状態を型で判別すると、分岐がはっきりする。
+- 値クラスで包むと、中身の形式を隠しつつ、箱のコストを抑えられる。

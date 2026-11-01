@@ -1,6 +1,6 @@
 ---
-title: "失敗後の emit を封じる ThrowingCollector と onCompletion"
-description: "Flow の完了時に処理を実行する onCompletion。失敗したときは emit すると即例外になる collector を渡し、finally と同じ順序の感覚を保っている。"
+title: "正常終了と失敗のどちらでも呼ばれる onCompletion"
+description: "Flow が終わったときに必ず実行する処理を登録する onCompletion。失敗時は投げるだけの収集者で後始末をし、正常終了時は安全な収集者で実行する。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -12,18 +12,46 @@ lines: [138, 159]
 function: "Flow.onCompletion"
 difficulty: 3
 tags: [非同期, エラー処理, 設計パターン]
+format: 2
 ---
 
 ## ひとことで
 
-`onCompletion { cause -> ... }` は、Flow が **終わったとき**（正常終了でも、失敗やキャンセルでも）にブロックを実行する演算子です。`cause` には、失敗なら例外、正常終了なら `null` が入ります。
-正常終了なら、ブロックの中で `emit("Done")` のように最後の値を追加で流せます。
+`flow.onCompletion { cause -> ... }` は、Flow が **終わったとき** に 1 回だけ処理を実行する演算子です。正常に終わったときは `cause` が `null`、失敗したときは原因の例外が渡ります。
 
-工夫は失敗時です。下流がもう壊れているのに値を流そうとすると話がおかしくなるので、**`emit` を呼んだ瞬間に元の例外を投げる collector**（`ThrowingCollector`）を渡しています。
+`finally` に似ていますが、Flow では後始末の処理の中で **値を流せる** という違いがあります。そのため、正常終了と失敗で、呼び方を分けています。
 
 ## コード
 
-```kotlin:line-numbers=138
+
+::: code-group
+
+```kotlin:line-numbers=138 [日本語訳]
+public fun <T> Flow<T>.onCompletion(
+    action: suspend FlowCollector<T>.(cause: Throwable?) -> Unit
+): Flow<T> = unsafeFlow { // 注意: ここでは unsafe flow を使うが、完了時のアクションを呼ぶには安全な収集者を使う
+    try {
+        collect(this)
+    } catch (e: Throwable) {
+        /*
+         * 下流が失敗しているとき、完了の処理から要素が出ないように、投げるだけの収集者を使う。
+         * そうしないと、`finally` では表せない、順番どおりでない振る舞いになるおそれがある。
+         * 完了の処理で要素が流れると、順番が崩れてしまうためである。
+         */
+        ThrowingCollector(e).invokeSafely(action, e)
+        throw e
+    }
+    // 正常終了の場合
+    val sc = SafeCollector(this, currentCoroutineContext())
+    try {
+        sc.action(null)
+    } finally {
+        sc.releaseIntercepted()
+    }
+}
+```
+
+```kotlin:line-numbers=138 [原文]
 public fun <T> Flow<T>.onCompletion(
     action: suspend FlowCollector<T>.(cause: Throwable?) -> Unit
 ): Flow<T> = unsafeFlow { // Note: unsafe flow is used here, but safe collector is used to invoke completion action
@@ -48,41 +76,53 @@ public fun <T> Flow<T>.onCompletion(
 }
 ```
 
-`ThrowingCollector` と `invokeSafely` は同じファイルの 199〜215 行目にあります。前者は `emit` されると持っている例外 `e` を投げるだけの collector、後者は `action` を実行し、そこで別の例外が起きたら元の例外を suppressed として付けて投げる関数です。
+:::
 
 ## 前提知識
 
-- **Flow と collector**: Flow は値を順に流すもので、受け取り口が `FlowCollector` です。`emit(値)` を呼ぶと、その値が下流に届きます。
-- **`unsafeFlow { ... }`**: 検査を省いた内部用の Flow ビルダーです。ブロックの中の `this` は下流の collector です。
-- **`collect(this)`**: 上流の値を、そのまま下流（`this`）へ流す書き方です。中継するだけなので速く動きます。
-- **`suspend FlowCollector<T>.(cause: Throwable?) -> Unit`**: 「collector を `this` にして、原因（`null` かもしれない例外）を受け取る、一時停止できる関数」の型です。
-- **`SafeCollector`**: 利用者のコードが `emit` するときに、正しい使い方かを検査する collector です。
-- **`addSuppressed`**: 例外に、関連する別の例外をくっつける仕組みです。
+- **`Flow` の完了**: Flow は、すべての値を流し終えて正常に終わるか、途中で例外により失敗して終わります。どちらの場合も、`collect` の呼び出しが終わります。
+- **`FlowCollector`**: 値を受け取る側（下流）です。`emit` で値を渡します。
+- **`unsafeFlow`**: 検査を省いた軽い Flow を作る内部関数です（この記事の範囲外の詳細）。
+- **`SafeCollector`**: 中で `emit` が正しいコルーチンから呼ばれているかを検査する収集者です。利用者のブロックを実行するときに使います。
+- **`ThrowingCollector`**: `emit` されたら例外を投げる収集者です。ここでは、完了の処理で値を流させないために使います。
+- **`invokeSafely`**: 収集者の中で、ブロックを安全に呼ぶための拡張関数です。
 
 ## 何をしているか
 
-### 1. 上流をそのまま流す（141〜142 行目）
+### 1. 失敗したとき: 投げるだけの収集者で後始末する
 
-普段は上流の値をそのまま下流へ流します。
+上流か下流で例外が起きたら、`catch` で受け取ります。完了の処理は、`ThrowingCollector` を使って呼びます。
 
-### 2. 失敗したら、emit 禁止で action を呼ぶ（143〜151 行目）
+```kotlin:line-numbers=149
+        ThrowingCollector(e).invokeSafely(action, e)
+        throw e
+```
 
-上流か下流で例外 `e` が起きたら、`ThrowingCollector(e)` を `this` として `action(e)` を呼びます。
-`action` の中で `emit` しようとすると、その場で `e` が投げられます。`action` が終われば、元の例外 `e` を投げ直します。
+完了の処理の中で `emit` が呼ばれると、その時点で例外になります。こうして、失敗した後に値が流れることを防ぎます。終わったあと、元の例外を `throw e` で投げ直します。
 
-### 3. 正常終了なら、普通に action を呼ぶ（152〜158 行目）
+### 2. 正常終了のとき: 安全な収集者で完了の処理を呼ぶ
 
-`SafeCollector` を作って `action(null)` を呼びます。ここでは `emit` が普通に使えるので、`flowOf("a", "b").onCompletion { emit("Done") }` は `a, b, Done` を流します。
+正常に終わった場合は、`SafeCollector` を作って、`cause` に `null` を渡して完了の処理を呼びます。
+
+```kotlin:line-numbers=153
+    val sc = SafeCollector(this, currentCoroutineContext())
+    try {
+        sc.action(null)
+    } finally {
+        sc.releaseIntercepted()
+    }
+```
+
+完了の処理が中で `emit` すると、その値は下流へ流れます。`finally` で `releaseIntercepted()` を呼び、後始末をします。
 
 ## ここがすごい
 
-- **`finally` と同じ感覚を守る**: 144〜148 行目のコメントの通り、失敗後に値が流れると「処理が終わったはずなのに値が届く」という、`try/finally` ではありえない順序になってしまいます。`emit` を封じる collector を渡すだけで、それを防いでいます。
-- **禁止を「型を変えずに」実現**: `action` の型は変えず、渡す collector を差し替えるだけで「この状況では `emit` できない」を実現しています。ルールをオブジェクトに持たせる、設計パターンでいう **ヌルオブジェクト** の変形のような発想です。
-- **例外の情報を失わない**: `action` の中でさらに例外が起きても、`invokeSafely` が元の例外を suppressed として付けるので、最初の失敗の原因が消えません。
-- **場面ごとの collector**: 中継は検査なしで速く、利用者のコードには `SafeCollector`、失敗時には `ThrowingCollector`。同じ `FlowCollector` という型の別実装を使い分けているのがよく分かる例です。
+- **失敗時と正常時で使う収集者を分ける**: 失敗時は、値を流すと順番が崩れるので、値が流れない収集者を使います。正常時は、値を流してもよいので、安全な収集者で検査しながら呼びます。同じ `onCompletion` の中で、場面ごとに最適な道を選んでいます。
+- **`finally` では表せない振る舞い**: `finally` は値を流せません。`onCompletion` は完了の処理で値を流せるので、「最後に 1 つ値を足す」といった使い方ができます。その代わり、失敗時には値が流れないように守っています。
+- **元の例外を保つ**: 完了の処理が例外を投げても、最後に `throw e` で元の失敗を投げ直すので、原因が消えません。
 
 ## まとめ
 
-- 完了時の処理は、正常終了と失敗で「できること」を変える必要がある。
-- 引数で渡すオブジェクトを差し替えるだけで、利用者のコードの振る舞いを制限できる。
-- 後始末中に起きた例外は、元の例外に suppressed として付けて情報を残す。
+- 完了時の処理は、正常終了と失敗で、使う収集者を分けると安全に作れる。
+- 失敗時は、後から値を流せないように「投げるだけの収集者」を使う。
+- 元の例外は、後始末のあとで投げ直し、原因が消えないようにする。
