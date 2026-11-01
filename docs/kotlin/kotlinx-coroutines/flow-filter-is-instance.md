@@ -12,6 +12,7 @@ lines: [31, 32]
 function: "Flow.filterIsInstance (reified)"
 difficulty: 2
 tags: [型システム, ジェネリクス, 非同期]
+format: 2
 ---
 
 ## ひとことで
@@ -40,7 +41,11 @@ public inline fun <reified R> Flow<*>.filterIsInstance(): Flow<R> = filter { it 
 
 ## 何をしているか
 
-### 1. 呼び出し元に展開される（32 行目）
+### 1. 呼び出し元に展開される
+
+```kotlin:line-numbers=32
+public inline fun <reified R> Flow<*>.filterIsInstance(): Flow<R> = filter { it is R } as Flow<R>
+```
 
 `filterIsInstance<String>()` と書くと、`inline` なのでコンパイラは呼び出し元に次のようなコードを埋め込みます。
 
@@ -65,7 +70,7 @@ filter { it is String } as Flow<String>
 
 ## ここがすごい
 
-- **型消去の壁を `inline` で越える**: Java では同じことをするのに `Class<R>` オブジェクトを引数で渡す必要がありました。実際、すぐ下の 37 行目には `KClass` を受け取る版もあります。`reified` 版なら `filterIsInstance<String>()` と型を書くだけで済み、呼び出しがすっきりします。
+- **型消去の壁を `inline` で越える**: Java では同じことをするのに `Class<R>` オブジェクトを引数で渡す必要がありました。実際、同じファイルには `KClass` を受け取る版もあります。`reified` 版なら `filterIsInstance<String>()` と型を書くだけで済み、呼び出しがすっきりします。
 - **既存の部品を組み合わせるだけ**: 判定は `filter`、型の付け直しはキャストに任せ、新しい処理はほとんど書いていません。安全なキャストかどうかは「`is R` で通したものだけ」という論理で保証されています。
 - **2 つの版を用意する理由**: `reified` は `inline` 関数でしか使えず、型がコンパイル時に決まっていないと呼べません。実行時に型が決まる場合のために `KClass` 版も並べてあるのは、API 設計として親切です。
 

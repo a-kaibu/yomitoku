@@ -12,6 +12,7 @@ lines: [15, 30]
 function: "Flow.reduce"
 difficulty: 2
 tags: [非同期, 関数型, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -53,20 +54,40 @@ public suspend fun <S, T : S> Flow<T>.reduce(operation: suspend (accumulator: S,
 
 ## 何をしているか
 
-### 1. 累積値を番兵で始める（16 行目）
+### 1. 累積値を番兵で始める
+
+```kotlin:line-numbers=16
+    var accumulator: Any? = NULL
+```
 
 `accumulator` を `NULL` にしておきます。
 
-### 2. 値ごとに畳み込む（18〜25 行目）
+### 2. 値ごとに畳み込む
+
+```kotlin:line-numbers=18
+    collect { value ->
+        accumulator = if (accumulator !== NULL) {
+            @Suppress("UNCHECKED_CAST")
+            operation(accumulator as S, value)
+        } else {
+            value
+        }
+```
 
 `1, 2, 3, 4` を足し合わせる場合:
 
-- `1` が来る: `accumulator` は `NULL` なので、`1` をそのまま累積値にする（23 行目）
+- `1` が来る: `accumulator` は `NULL` なので、`1` をそのまま累積値にする（`else` の `value`）
 - `2` が来る: `operation(1, 2)` で `3`
 - `3` が来る: `operation(3, 3)` で `6`
 - `4` が来る: `operation(6, 4)` で `10`
 
-### 3. 空なら例外、そうでなければ返す（27〜29 行目）
+### 3. 空なら例外、そうでなければ返す
+
+```kotlin:line-numbers=27
+    if (accumulator === NULL) throw NoSuchElementException("Empty flow can't be reduced")
+    @Suppress("UNCHECKED_CAST")
+    return accumulator as S
+```
 
 Flow が 1 個も流さなかった場合、`accumulator` は `NULL` のままです。初期値がないので答えを作れず、例外を投げます。
 
@@ -75,7 +96,7 @@ Flow が 1 個も流さなかった場合、`accumulator` は `NULL` のまま�
 - **初期値がいらない理由**: 最大値を求めるとき、`fold` なら「最小の値」を初期値として用意する必要があります。`reduce` は最初の要素を種にするので、そうした「ありえない値」を考えずに済みます。
 - **フラグ変数を使わない**: 「1 個目かどうか」を `Boolean` で管理すると変数が 2 つになり、更新を忘れる危険があります。番兵 `NULL` を使えば、累積値の変数 1 つで「まだ空」と「値あり」を表せます。値として `null` が来ても `NULL` とは別物なので混ざりません。
 - **型を少し広げられる**: `<S, T : S>` のおかげで、結果の型を要素の型より広くできます。標準ライブラリの `Iterable.reduce` と同じ設計で、使い勝手がそろっています。
-- **`fold` との違いがよく分かる**: 同じファイルの `fold`（35〜44 行目）は初期値があるので番兵も例外も不要で、`inline` で書かれています。`reduce` と見比べると、初期値の有無が実装をどう変えるかが学べます。
+- **`fold` との違いがよく分かる**: 同じファイルの `fold` は初期値があるので番兵も例外も不要で、`inline` で書かれています。`reduce` と見比べると、初期値の有無が実装をどう変えるかが学べます。
 
 ## まとめ
 

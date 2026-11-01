@@ -12,6 +12,7 @@ lines: [121, 131]
 function: "Flow.runningReduce"
 difficulty: 2
 tags: [非同期, 関数型, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -43,15 +44,30 @@ public fun <T> Flow<T>.runningReduce(operation: suspend (accumulator: T, value: 
 - **拡張関数**: `fun <T> Flow<T>.runningReduce(...)` は、`Flow` 型に外から関数を追加する書き方です。ブロック内の `collect` は元の Flow のものです。
 - **畳み込み**: 「累積値」と「次の値」から新しい累積値を作る操作を、要素ごとに繰り返すことです。
 - **`Any?` と `NULL`**: `Any?` は何でも（`null` も）入る型です。`NULL` はライブラリ内部の番兵オブジェクトで、「まだ値がない」を表します。
-- **`as T`**: 型のキャストです。`accumulator` は `Any?` 型なので、`operation` に渡したり `emit` したりする前に `T` とみなします。このファイルは 3 行目で「未検査のキャスト」の警告をまとめて抑えています。
+- **`as T`**: 型のキャストです。`accumulator` は `Any?` 型なので、`operation` に渡したり `emit` したりする前に `T` とみなします。このファイルは先頭の注釈で「未検査のキャスト」の警告をまとめて抑えています。
 
 ## 何をしているか
 
-### 1. 番兵で初期化（122 行目）
+### 1. 番兵で初期化する
+
+```kotlin:line-numbers=122
+    var accumulator: Any? = NULL
+```
 
 `accumulator` を `NULL` にします。
 
-### 2. 値ごとに累積して流す（123〜130 行目）
+### 2. 値ごとに累積して流す
+
+```kotlin:line-numbers=123
+    collect { value ->
+        accumulator = if (accumulator === NULL) {
+            value
+        } else {
+            operation(accumulator as T, value)
+        }
+        emit(accumulator as T)
+    }
+```
 
 `1, 2, 3, 4` の場合:
 
@@ -62,11 +78,11 @@ public fun <T> Flow<T>.runningReduce(operation: suspend (accumulator: T, value: 
 | 3 | `3 + 3` | 6 | 6 |
 | 4 | `6 + 4` | 10 | 10 |
 
-`if` が式として値を返すので、124〜128 行目は「最初なら値そのもの、そうでなければ `operation` の結果」を 1 つの代入で書いています。
+`if` が式として値を返すので、`accumulator = if (...) ... else ...` の 1 つの代入で、「最初なら値そのもの、そうでなければ `operation` の結果」を書いています。
 
 ## ここがすごい
 
-- **初期値を流さない**: 同じファイルの `runningFold`（101〜108 行目）は、初期値をまず `emit` してから畳み込みます（`0, 1, 3, 6, 10`）。`runningReduce` は最初の要素を種にするので、出力の数が入力と同じになります。用途に応じて選べるように 2 つ用意されています。
+- **初期値を流さない**: 同じファイルの `runningFold` は、初期値をまず `emit` してから畳み込みます（`0, 1, 3, 6, 10`）。`runningReduce` は最初の要素を種にするので、出力の数が入力と同じになります。用途に応じて選べるように 2 つ用意されています。
 - **空の Flow でも例外にならない**: `reduce` は空だと例外を投げますが、`runningReduce` は「途中経過を流す」ものなので、空なら何も流さずに終わるだけです。番兵の判定は 1 個目の処理にしか使われません。
 - **状態は変数 1 つ**: 「1 個目かどうか」のフラグを別に持たず、累積値の変数に番兵を入れておくだけで済んでいます。値として `null` が流れてきても、`NULL` とは別のオブジェクトなので誤判定しません。
 - **コルーチンでも素直に書ける**: `operation` が `suspend` 関数でも、普通のループと同じ見た目で書けます。Flow の `collect` が順番に 1 個ずつ呼んでくれるので、ロックなども不要です。
