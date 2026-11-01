@@ -11,17 +11,40 @@ file: more_itertools/recipes.py
 lines: [391, 406]
 function: roundrobin
 difficulty: 3
+format: 2
 tags: [イテレータ, ハック, 遅延評価]
 ---
+
 ## ひとことで
 
 `roundrobin(*iterables)` は、複数のデータから **順番に 1 つずつ** 取り出す関数です。トランプを配るように、1 周ごとに各入力から 1 つずつ出します。
 `roundrobin('ABC', 'D', 'EF')` は `A, D, E, B, F, C` になります。
-途中で尽きた入力は飛ばされ、すべてが尽きたら終わります。4 行のコードの中に、イテレータの性質を突いた技が詰まっています。
+途中で尽きた入力は飛ばされ、すべてが尽きたら終わります。数行のコードの中に、イテレータの性質を突いた技が詰まっています。
 
 ## コード
 
-```python:line-numbers=391
+::: code-group
+
+```python:line-numbers=391 [日本語訳]
+def roundrobin(*iterables):
+    """入力のイテラブルを順番に巡り、それぞれが尽きるまで続ける。
+
+        >>> list(roundrobin('ABC', 'D', 'EF'))
+        ['A', 'D', 'E', 'B', 'F', 'C']
+
+    This function produces the same output as :func:`interleave_longest`, but
+    may perform better for some inputs (in particular when the number of
+    iterables is small).
+
+    """
+    # アルゴリズムは George Sakkis による
+    iterators = map(iter, iterables)
+    for num_active in range(len(iterables), 0, -1):
+        iterators = cycle(islice(iterators, num_active))
+        yield from map(next, iterators)
+```
+
+```python:line-numbers=391 [原文]
 def roundrobin(*iterables):
     """Visit input iterables in a cycle until each is exhausted.
 
@@ -40,7 +63,9 @@ def roundrobin(*iterables):
         yield from map(next, iterators)
 ```
 
-`cycle`、`islice` は `itertools` の関数です。402 行目のコメントにある通り、このアルゴリズムは George Sakkis 氏によるものです。
+:::
+
+`cycle`、`islice` は `itertools` の関数です。
 
 ## 前提知識
 
@@ -55,23 +80,33 @@ def roundrobin(*iterables):
 
 入力 `'ABC'`, `'D'`, `'EF'` のイテレータを `I1`, `I2`, `I3` とします。
 
-### 1. 3 本とも生きている段階（`num_active = 3`）
+### 1. 入力を準備する
 
-`cycle(islice(iterators, 3))` で、`I1, I2, I3, I1, I2, I3, ...` と回り続けるイテレータを作ります。`map(next, ...)` で順に `next()` を呼ぶと、
+```python:line-numbers=403
+    iterators = map(iter, iterables)
+```
+
+`map(iter, iterables)` で、それぞれの入力をイテレータにします。
+
+### 2. 本数を減らしながら回す
+
+```python:line-numbers=404
+    for num_active in range(len(iterables), 0, -1):
+        iterators = cycle(islice(iterators, num_active))
+        yield from map(next, iterators)
+```
+
+まず 3 本で回し、尽きた入力が出たら、その時点の `cycle` の続きから残りの本数ぶんを切り出して作り直します。
+
+3 本の段階（`num_active = 3`）では、`cycle(islice(iterators, 3))` が `I1, I2, I3, I1, ...` と回ります。`map(next, ...)` で順に `next()` を呼ぶと、
 
 `A`（I1）、`D`（I2）、`E`（I3）、`B`（I1）、ここで I2 の `next()` が `StopIteration` を出す
 
 ので、`map` が終わります。ここで大事なのは、**cycle の現在位置が「I2 の次」で止まっている** ことです。
 
-### 2. 2 本の段階（`num_active = 2`）
+2 本の段階（`num_active = 2`）では、`islice(iterators, 2)` が止まっていた cycle の続きから `I3, I1` を取り出します。**尽きた I2 は自然に外れています。** `F`（I3）、`C`（I1）と出て、I3 が尽きて終わります。
 
-`islice(iterators, 2)` は、止まっていた cycle の続きから 2 つ、つまり `I3, I1` を取り出します。**尽きた I2 は自然に外れています。** これを新しい cycle にして、
-
-`F`（I3）、`C`（I1）、ここで I3 が尽きて終わり
-
-### 3. 1 本の段階（`num_active = 1`）
-
-cycle の続きから 1 つ、`I1` を取り出します。`next(I1)` は即座に尽きるので終わりです。
+1 本の段階では、cycle の続きから `I1` だけを取り出し、残りを流して終わります。
 
 結果は `A, D, E, B, F, C` です。
 
