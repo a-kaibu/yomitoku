@@ -1,6 +1,6 @@
 ---
-title: "例外で流れを止める take と「持ち主の印」"
-description: "Flow の先頭 n 個だけを取り出す take。最後の 1 個を流した直後に専用の例外を投げて上流を止め、その例外が自分のものかを目印オブジェクトで確かめている。"
+title: "指定の個数だけ流して上流を打ち切る take"
+description: "先頭から指定の個数だけ値を流す take。最後の値を流したあと例外で上流を止める。途中の値は状態機械を使わずに流し、終わるときだけ例外を使う。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -8,19 +8,18 @@ license: Apache-2.0
 copyright: "Copyright 2016-2025 JetBrains s.r.o and contributors"
 commit: "7e0d1b3e9ca83652427ae00dda7d1673f058a743"
 file: kotlinx-coroutines-core/common/src/flow/operators/Limit.kt
-lines: [47, 73]
+lines: [47, 68]
 function: "Flow.take"
 difficulty: 3
-tags: [非同期, エラー処理, 最適化, 標準ライブラリ]
+tags: [非同期, 遅延評価, 最適化]
 format: 2
 ---
 
 ## ひとことで
 
-`take(n)` は、次々と値を流してくる **Flow（フロー）** から、先頭の `n` 個だけを受け取って、残りはもう要らないと上流に伝える関数です。
-たとえば `flowOf(1, 2, 3, 4, 5).take(2)` は `1, 2` だけを流して終わります。
+`take()` は、Flow（非同期に流れる値の列）の先頭から **指定した個数だけ** を流し、そのあとで上流の処理を止める関数です。たとえば `take(3)` なら、最初の 3 個だけを下流に渡します。
 
-おもしろいのは「もう要らない」の伝え方です。Flow には「止まって」と頼む専用の仕組みがないので、**例外を投げて上流の処理を強制的に抜けさせ**、その例外が本当に自分の投げたものかを **目印のオブジェクト** で確かめています。
+4 個目以降の値は、そもそも下流に流れません。そこで上流の収集を、例外を使って打ち切っています。
 
 ## コード
 
@@ -35,10 +34,10 @@ public fun <T> Flow<T>.take(count: Int): Flow<T> {
         var consumed = 0
         try {
             collect { value ->
-                // 注意: この take は、わざと collectWhile を使わずに書かれています。
-                // 先に条件を調べて、emit か emitAbort のどちらかを末尾で呼びます。
-                // こうすると通常の処理では状態機械が要らず、終わるときだけ例外を使います。
-                // 別の書き方との比較は "TakeBenchmark" を参照してください。
+                // 注意: この take は collectWhile を使わずに書いている。意図的な選択。
+                // 先に条件を調べ、そのあと emit か emitAbort への末尾呼び出しをする。
+                // こうすると、通常の処理は状態機械を必要とせず、終わるときだけ emitAbort を使う。
+                // 異なる方式の比較は "TakeBenchmark" を参照。
                 if (++consumed < count) {
                     return@collect emit(value)
                 } else {
@@ -49,11 +48,6 @@ public fun <T> Flow<T>.take(count: Int): Flow<T> {
             e.checkOwnership(owner = ownershipMarker)
         }
     }
-}
-
-private suspend fun <T> FlowCollector<T>.emitAbort(value: T, ownershipMarker: Any) {
-    emit(value)
-    throw AbortFlowException(ownershipMarker)
 }
 ```
 
@@ -80,58 +74,37 @@ public fun <T> Flow<T>.take(count: Int): Flow<T> {
         }
     }
 }
-
-private suspend fun <T> FlowCollector<T>.emitAbort(value: T, ownershipMarker: Any) {
-    emit(value)
-    throw AbortFlowException(ownershipMarker)
-}
 ```
 
 :::
 
 ## 前提知識
 
-- **Flow**: kotlinx.coroutines の「時間をかけて値を 1 つずつ流すもの」です。`collect { ... }` を呼ぶと、流れてきた値ごとにブロックが実行されます。リストと違って、値は受け取る側が `collect` したときに初めて作られます。
-- **`suspend` 関数**: 途中で一時停止（中断）できる関数です。ネットワーク待ちなどの間スレッドを手放せます。Kotlin のコンパイラは `suspend` 関数を「どこまで進んだか」を覚える **状態機械**（状態を番号で管理するクラス）に変換します。
-- **拡張関数 `fun <T> Flow<T>.take(...)`**: 既存の型 `Flow` に、外からメソッドを生やす書き方です。中では `this` が元の Flow を指し、`collect` はその Flow の `collect` です。`<T>` は「中身の型は何でもよい」というジェネリクスです。
-- **`require(条件) { メッセージ }`**: 条件が偽なら `IllegalArgumentException` を投げる標準関数です。引数チェックに使います。
-- **`flow { ... }`**: Flow を作るビルダーです。ブロックの中で `emit(値)` を呼ぶと、その値が下流へ流れます。この関数では別名インポートで、安全チェックを省いた軽量版の `flow` が使われています。
-- **`return@collect`**: ラムダ（無名関数）の中から「そのラムダだけ」を抜ける書き方です。`@collect` はどのラムダから戻るかを示すラベルです。
-- **`Any()`**: 何の機能もない、ただのオブジェクトを 1 個作ります。ここでは **世界に 1 つしかない目印** として使われます。
+- **Flow と `collect`**: `collect` は、上流の値を 1 つずつ受け取る処理です。ここでは、受け取った値を下流へ流すかどうかを決めます。
+- **`require`**: 条件が満たされないときに例外で止める関数です。`count` が 0 以下なら、最初に止まります。
+- **`AbortFlowException`**: 上流の処理を強制的に打ち切るための例外です。コルーチンライブラリの内部で使われる特別な例外です。
+- **`ownershipMarker`**: この `take` だけが作る目印です。別の `take` が投げた例外と区別するために使われます。
+- **`return@collect`**: `collect` のラムダから、その回だけ抜けるための書き方です。
 
 ## 何をしているか
 
-### 1. 引数チェック
-
-```kotlin:line-numbers=48
-    require(count > 0) { "Requested element count $count should be positive" }
-```
-
-`take(0)` や負の数はエラーにします。0 個を取る Flow は意味がないので、最初に弾いています。
-
-### 2. 目印とカウンタを用意する
-
-```kotlin:line-numbers=50
-        val ownershipMarker = Any()
-        var consumed = 0
-```
-
-`ownershipMarker` は、この `take` 呼び出し専用の目印です。`consumed` は何個受け取ったかを数えます。
-
-### 3. 1 個受け取るたびに数える
+### 1. 数えながら流す
 
 ```kotlin:line-numbers=58
                 if (++consumed < count) {
                     return@collect emit(value)
-                } else {
 ```
 
-`take(2)` で `1, 2, 3, ...` が来る場合を追ってみます。
+値が来るたびに、数を 1 増やします。まだ上限に達していなければ、そのまま下流へ流します。
 
-- `1` が来る: `++consumed` で `consumed = 1`。`1 < 2` なので普通に `emit(1)` して下流へ流します。
-- `2` が来る: `consumed = 2`。`2 < 2` は偽なので `emitAbort(2, ownershipMarker)` を呼びます。
+### 2. 最後の 1 個は流してから打ち切る
 
-### 4. 最後の 1 個を流して例外で止める
+```kotlin:line-numbers=60
+                } else {
+                    return@collect emitAbort(value, ownershipMarker)
+```
+
+上限に達したら `emitAbort` を呼びます。
 
 ```kotlin:line-numbers=70
 private suspend fun <T> FlowCollector<T>.emitAbort(value: T, ownershipMarker: Any) {
@@ -140,29 +113,26 @@ private suspend fun <T> FlowCollector<T>.emitAbort(value: T, ownershipMarker: An
 }
 ```
 
-`emitAbort` は、まず `emit(value)` で最後の値を下流に渡し、そのあと `AbortFlowException(ownershipMarker)` を投げます。
-この例外は上流の `collect` を突き抜けて、上流が次の値を作ろうとする前に処理を終わらせます。上流が `try/finally` を持っていれば、後始末もきちんと走ります。
+`emitAbort` は、最後の値を流してから、例外を投げます。例外で上流の `collect` が止まるので、それ以上の値は流れません。
 
-### 5. 自分の例外かを確かめて握りつぶす
+### 3. 自分の例外だけを受け止める
 
 ```kotlin:line-numbers=64
         } catch (e: AbortFlowException) {
             e.checkOwnership(owner = ownershipMarker)
 ```
 
-`catch` で例外を受け止め、`checkOwnership(owner = ownershipMarker)` で **目印が自分のものか** を確認します。
-自分のものなら正常終了として扱い、違えば（たとえば下流の別の `take` が投げたものなら）もう一度投げ直します。
+打ち切りの例外を受け止めます。`checkOwnership` で、この `take` が投げた例外かを確かめます。別の `take` が投げた例外なら、ここで止まらずに外へ伝わります。
 
 ## ここがすごい
 
-- **例外を「制御の流れ」として使う**: Flow の `collect` はただの関数呼び出しの入れ子なので、外から途中で止める手段がありません。例外は呼び出しの入れ子をまとめて抜けられる唯一の仕組みで、それを「打ち切り」の合図に流用しています。
-- **目印で入れ子を区別する**: `flow.take(5).map { ... }.take(2)` のように `take` が重なると、例外がどちらの `take` 宛てか分からなくなります。呼び出しごとに `Any()` を作り、例外に持たせることで、**自分が投げたものだけを止め、他人のものは通す** ようにしています。
-- **状態機械を作らせない工夫**: 注意コメントにある通り、この `take` はあえて共通部品の `collectWhile` を使っていません。`if` で判定してから `emit` か `emitAbort` のどちらかを **最後に呼ぶだけ**（末尾呼び出し）にすると、コンパイラは `suspend` の状態機械を作らずに済み、普段の 1 個ずつの処理が軽くなります。重い処理（例外）は最後の 1 回にだけ寄せています。
-- **最後の 1 個を取りこぼさない**: 「n 個目を受け取ったら止める」を素直に書くと、n 個目を流す前に止めてしまったり、n+1 個目を作らせてしまったりしがちです。`emitAbort` で「流してから止める」を 1 つの関数にまとめ、順番を間違えようがない形にしています。
+- **通常の流れに余計な仕掛けがない**: 途中の値は、数えて流すだけです。打ち切りの仕組みは、最後の 1 回だけ使われます。
+- **所有者の目印で誤爆を防ぐ**: 入れ子になった Flow が、互いの打ち切りを取り違えないように、`ownershipMarker` で持ち主を確かめています。
+- **条件を先に調べる**: 上限かどうかを先に判定して、そのあと `emit` か `emitAbort` を末尾で呼ぶので、分岐の形が単純です。
+- **意図の注記**: `collectWhile` を使わない理由が、コメントで残されています。性能を測って選んだ結果だと分かる書き方です。
 
 ## まとめ
 
-- 外から止められない処理の入れ子を抜けるには、例外を合図に使う手がある。
-- 例外に「持ち主の印」を持たせると、入れ子になった同じ仕組みどうしを区別できる。
-- `suspend` 関数は末尾で別の関数を呼ぶだけにすると、余計な状態機械を作らずに済む。
-- 速さが必要なところは共通部品をあえて使わず、コメントで理由を残しておくとよい。
+- `take` は、先頭から指定の個数だけ流し、最後の値を流したあとで上流を例外で止める。
+- 途中の値は状態機械を使わずに流し、終わるときだけ `emitAbort` を使う。
+- 所有者の目印で、自分が投げた打ち切りだけを受け止める。
