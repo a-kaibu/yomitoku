@@ -12,6 +12,7 @@ lines: [139, 157]
 function: "ThreadSafeHeap.realloc / swap"
 difficulty: 2
 tags: [データ構造, メモリ管理, 最適化]
+format: 2
 ---
 
 ## ひとことで
@@ -56,17 +57,38 @@ tags: [データ構造, メモリ管理, 最適化]
 
 ## 何をしているか
 
-### realloc（140〜147 行目）
+### realloc
+
+```kotlin:line-numbers=141
+        val a = this.a
+        return when {
+            a == null -> (arrayOfNulls<ThreadSafeHeapNode>(4) as Array<T?>).also { this.a = it }
+            size >= a.size -> a.copyOf(size * 2).also { this.a = it }
+            else -> a
+        }
+```
 
 1. まだ配列がなければ（`a == null`）、長さ 4 の配列を作って保存し、それを返します。
-2. 要素数が配列の長さに達していたら、長さを `size * 2` にした新しい配列を作り、保存して返します。
-3. 余裕があれば、今の配列をそのまま返します。
+2. 要素数が配列の長さに達していたら（`size >= a.size`）、長さを `size * 2` にした新しい配列を作り、保存して返します。
+3. 余裕があれば（`else -> a`）、今の配列をそのまま返します。
 
 要素を 1 個ずつ足していくと、配列の長さは 4 → 8 → 16 → 32 … と増えます。
 
-### swap（149〜157 行目）
+### swap
 
-位置 `i` と `j` の要素を入れ替えます。ポイントは 155〜156 行目で、入れ替えた要素それぞれの `index` を新しい位置に書き換えています。
+```kotlin:line-numbers=149
+    private fun swap(i: Int, j: Int) {
+        val a = a!!
+        val ni = a[j]!!
+        val nj = a[i]!!
+        a[i] = ni
+        a[j] = nj
+        ni.index = i
+        nj.index = j
+    }
+```
+
+位置 `i` と `j` の要素を入れ替えます。ポイントは `ni.index = i` と `nj.index = j` の 2 行で、入れ替えた要素それぞれの `index` を新しい位置に書き換えています。
 
 例: `a = [A(0), B(1)]` で `swap(0, 1)` すると、`a = [B, A]` になり、`B.index = 0`、`A.index = 1` に更新されます。
 

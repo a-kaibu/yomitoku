@@ -12,6 +12,7 @@ lines: [149, 166]
 function: "Flow.chunked"
 difficulty: 2
 tags: [非同期, メモリ管理, 最適化]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,31 @@ tags: [非同期, メモリ管理, 最適化]
 
 ## コード
 
-```kotlin:line-numbers=149
+
+::: code-group
+
+```kotlin:line-numbers=149 [日本語訳]
+@ExperimentalCoroutinesApi
+public fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> {
+    require(size >= 1) { "Expected positive chunk size, but got $size" }
+    return flow {
+        var result: ArrayList<T>? = null // 事前には何も確保しない
+        collect { value ->
+            // 必要になったときに確保する
+            val acc = result ?: ArrayList<T>(size).also { result = it }
+            acc.add(value)
+            if (acc.size == size) {
+                emit(acc)
+                // 後始末はするが、確保はしない。これが最後の要素だったかもしれないため
+                result = null
+            }
+        }
+        result?.let { emit(it) }
+    }
+}
+```
+
+```kotlin:line-numbers=149 [原文]
 @ExperimentalCoroutinesApi
 public fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> {
     require(size >= 1) { "Expected positive chunk size, but got $size" }
@@ -44,6 +69,8 @@ public fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **Flow**: 値を順番に流す仕組みです。`flow { ... }` の中で `collect` で上流の値を受け取り、`emit` で下流へ流します。
@@ -56,15 +83,32 @@ public fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> {
 
 ## 何をしているか
 
-### 1. 引数チェック（151 行目）
+### 1. 引数チェック
+
+```kotlin:line-numbers=151
+    require(size >= 1) { "Expected positive chunk size, but got $size" }
+```
 
 まとめる数は 1 以上でなければいけません。
 
-### 2. 必要になったらリストを作る（153〜156 行目）
+### 2. 必要になったらリストを作る
+
+```kotlin:line-numbers=156
+            val acc = result ?: ArrayList<T>(size).also { result = it }
+            acc.add(value)
+```
 
 最初、`result` は `null` です。値が来るたびに、`result` があればそれを使い、なければ容量 `size` のリストを作って `result` にも入れます。
 
-### 3. 満杯になったら流して、手放す（157〜162 行目）
+### 3. 満杯になったら流して、手放す
+
+```kotlin:line-numbers=158
+            if (acc.size == size) {
+                emit(acc)
+                // 後始末はするが、確保はしない。これが最後の要素だったかもしれないため
+                result = null
+            }
+```
 
 `size = 2` で `1, 2, 3, 4, 5` の場合:
 
@@ -74,13 +118,17 @@ public fun <T> Flow<T>.chunked(size: Int): Flow<List<T>> {
 - `4`: `[3, 4]` → 流す → `result = null`
 - `5`: リスト作成 → `[5]`
 
-### 4. 余りを流す（164 行目）
+### 4. 余りを流す
+
+```kotlin:line-numbers=164
+        result?.let { emit(it) }
+```
 
 上流が終わったとき、`result` に `[5]` が残っているので流します。もし入力が `1, 2, 3, 4` なら `result` は `null` で、何も流しません。
 
 ## ここがすごい
 
-- **「確保しない」ことを明示したコメント**: 153 行目の「事前に確保しない」、160 行目の「片付けるが確保はしない。これが最後の要素だったかもしれない」というコメントが意図をはっきり伝えています。流した直後に `ArrayList(size)` を作る素直な書き方だと、入力がちょうど割り切れる場合に毎回 1 個の空リストが無駄になります。
+- **「確保しない」ことを明示したコメント**: 事前に確保しないこと、流した直後には確保しないことが、コメントではっきり書かれています。流した直後に `ArrayList(size)` を作る素直な書き方だと、入力がちょうど割り切れる場合に毎回 1 個の空リストが無駄になります。
 - **流したリストを使い回さない**: `emit(acc)` のあと `acc.clear()` して再利用すると、下流が受け取ったリストの中身が書き換わってしまいます。毎回新しいリストを作ることで、下流は受け取ったリストを安心して保持できます。
 - **余りの処理が自然に書ける**: 「まだ流していないリスト」が `result` に残るという形にしたので、最後の `result?.let` 1 行で余りを処理できています。
 - **容量の指定**: `ArrayList(size)` と最初から容量を指定しているので、リストが内部で配列を作り直すことがありません。
