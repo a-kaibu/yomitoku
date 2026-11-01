@@ -10,7 +10,7 @@ commit: "85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
 file: "src/bind.zsh"
 lines: [63, 92]
 function: "_zsh_autosuggest_bind_widgets"
-difficulty: 4
+difficulty: 3
 format: 2
 tags: [設計パターン, イディオム, 文字列処理]
 ---

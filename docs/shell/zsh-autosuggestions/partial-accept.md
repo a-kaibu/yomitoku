@@ -10,7 +10,7 @@ commit: "85919cd1ffa7d2d5412f6d3fe437ebdbeeec4fc5"
 file: "src/widgets.zsh"
 lines: [162, 194]
 function: "_zsh_autosuggest_partial_accept"
-difficulty: 4
+difficulty: 3
 format: 2
 tags: [CLI, 設計パターン, 文字列処理]
 ---
