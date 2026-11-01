@@ -1,6 +1,6 @@
 ---
 title: 「ちょうど n 個」を、n 個目と n+1 個目だけ見て判定する
-description: more_itertools.exactly_n は、条件を満たす要素がちょうど n 個かを調べる。全部数えずに n 個目まで飛ばし、その次があるかだけを確かめるので、途中で答えが出る。
+description: more_itertools.exactly_n は、真になる要素がちょうど n 個あるかを返す。filter で真の要素だけを残し、islice で n-1 個を飛ばして、そこから先の 2 個だけを確かめる。n+1 個目が見つかった時点で止まる。
 language: python
 project: more-itertools
 repo: https://github.com/more-itertools/more-itertools
@@ -11,17 +11,52 @@ file: more_itertools/more.py
 lines: [3206, 3234]
 function: exactly_n
 difficulty: 2
+format: 2
 tags: [イテレータ, 最適化, イディオム]
 ---
+
 ## ひとことで
 
-`exactly_n(iterable, n, predicate)` は、**条件を満たす要素がちょうど n 個あるか** を調べる関数です。
-`exactly_n([True, True, False], 2)` は `True`、`exactly_n(range(10), 3, lambda x: x < 3)` も `True` です。
-全部を数えるのではなく、「n 個目があるか」と「n+1 個目がないか」の 2 点だけを確かめるので、条件を満たすものが大量にあっても、n+1 個目を見つけた時点で `False` を返せます。
+`exactly_n(iterable, n, predicate=bool)` は、**真になる要素がちょうど `n` 個あるか** を返す関数です。
+`exactly_n([True, True, False], 2)` は `True`、`exactly_n([True, True, False], 1)` は `False` を返します。
 
 ## コード
 
-```python:line-numbers=3206
+::: code-group
+
+```python:line-numbers=3206 [日本語訳]
+def exactly_n(iterable, n, predicate=bool):
+    """イテラブルの中で、*predicate* が真にする要素がちょうど ``n`` 個なら ``True`` を返す。
+    *predicate* 関数による判定に従う。
+
+        >>> exactly_n([True, True, False], 2)
+        True
+        >>> exactly_n([True, True, False], 1)
+        False
+        >>> exactly_n([0, 1, 2, 3, 4, 5], 3, lambda x: x < 3)
+        True
+
+    ``n + 1`` 個の真の要素が見つかるまで、イテラブルを読み進める。
+    そのため、無限のイテラブルには使わないこと。
+
+    """
+    iterator = filter(predicate, iterable)
+    if n <= 0:
+        if n < 0:
+            return False
+        for _ in iterator:
+            return False
+        return True
+
+    iterator = islice(iterator, n - 1, None)
+    for _ in iterator:
+        for _ in iterator:
+            return False
+        return True
+    return False
+```
+
+```python:line-numbers=3206 [原文]
 def exactly_n(iterable, n, predicate=bool):
     """Return ``True`` if exactly ``n`` items in the iterable are ``True``
     according to the *predicate* function.
@@ -53,55 +88,65 @@ def exactly_n(iterable, n, predicate=bool):
     return False
 ```
 
+:::
+
 ## 前提知識
 
-- **`filter(predicate, iterable)`**: 条件を満たす要素だけを出すイテレータです。デフォルトの `predicate=bool` は「真とみなせる値」だけを残します。
-- **`islice(iterator, n - 1, None)`**: 先頭から n-1 個を飛ばして、残りを出します。
-- **同じイテレータを二重の `for` で回す**: 内側の `for` は外側の続きを読みます。
-- **`for` の中の `return`**: 1 つ取り出せた時点で関数を終えられます。
+- **述語（predicate）**: 要素を受け取り、真か偽かを返す関数です。省略すると `bool` が使われます。
+- **`filter`**: 述語が真になる要素だけを残すイテレータです。
+- **`islice`**: 列の一部を切り出すイテレータです。ここでは先頭の数個を飛ばすのに使います。
 
 ## 何をしているか
 
-### 1. 条件を満たすものだけにする（3221 行目）
+### 1. 真の要素だけを残す
 
-`filter` を通すと、以降は「条件を満たす要素」だけを数えればよくなります。
+```python:line-numbers=3221
+    iterator = filter(predicate, iterable)
+```
 
-### 2. n が 0 以下の場合（3222〜3227 行目）
+`filter(predicate, iterable)` で、真になる要素だけを順に出すイテレータを作ります。以降は、この数だけを数えればよくなります。
 
-n が負なら、ちょうど負の個数はありえないので `False`。n が 0 なら、1 つでも条件を満たすものがあれば `False`、なければ `True` です。
+### 2. `n` が 0 以下の場合
 
-### 3. n - 1 個を飛ばす（3229 行目）
+```python:line-numbers=3222
+    if n <= 0:
+        if n < 0:
+            return False
+        for _ in iterator:
+            return False
+        return True
+```
 
-`n = 3` なら、条件を満たす要素の先頭 2 個を飛ばします。
+`n` が 0 のときは、真の要素が 1 つもなければ `True` です。最初の真の要素が見つかった時点で `False` を返します。負の数なら、ちょうど負の個数は存在しないので `False` です。
 
-### 4. n 個目と n+1 個目を確かめる（3230〜3234 行目）
+### 3. `n` 個目を飛ばし、その次があるかを見る
 
-- 外側の `for` で 1 つ取れた → n 個目がある
-  - 内側の `for` でもう 1 つ取れた → n+1 個目もあるので `False`
-  - 取れなかった → ちょうど n 個なので `True`
-- 外側の `for` で取れなかった → n 個に足りないので `False`
+```python:line-numbers=3229
+    iterator = islice(iterator, n - 1, None)
+    for _ in iterator:
+        for _ in iterator:
+            return False
+        return True
+```
+
+`islice` で、真の要素を `n - 1` 個だけ飛ばします。そこから、次の真の要素を 1 つ取り、さらに次の真の要素があるかを確かめます。次があれば、個数が `n` を超えるので `False` です。なければ `True` です。
 
 ## ここがすごい
 
-### 全部数えなくてよい
+### 数え切らずに判定する
 
-素直に書くと `sum(map(predicate, iterable)) == n` ですが、これは最後まで数え切ります。100 万個の要素がすべて条件を満たしていて n = 3 なら、99 万 9996 個を無駄に数えることになります。
-`exactly_n` は n+1 個目を見つけた時点で答えが出るので、読むのは最大で「n+1 個目の位置」までです。
+全部の真の要素を数える必要はありません。`n` 個目と `n+1` 個目だけを見れば、「ちょうど `n` 個」かが決まります。
 
-### 飛ばす部分も C に任せる
+### 読む量が `n+1` 個で止まる
 
-n-1 個を飛ばす処理は `islice` が C の中で行うので、Python のループで 1 つずつ数えるより速くなります。条件判定も `filter` の中なので、Python で書いているのは最後の 2 つの確認だけです。
+判定に必要な分を読んだら、それ以上は読みません。大きな列でも、先頭の一部だけを読んで答えが出ます。
 
-### 二重の `for` で「次があるか」を表す
+### 無限の列には使えない
 
-`next()` と `try`/`except StopIteration` を使う代わりに、`for` を「1 つ取り出せるか」の確認に使っています。外側と内側の 2 段で「n 個目」「n+1 個目」を表しているので、条件分岐が読みやすい形にまとまっています。
-
-### 境界の値も正しく扱う
-
-n = 0 では `islice(iterator, -1, None)` が作れないので、先に別扱いしています。負の n も含めて、利用者がどんな値を渡しても正しい答えを返します。
+「`n+1` 個見つかるまで」読むので、真の要素が十分に出てこない無限の列では終わりません。注意が必要です。
 
 ## まとめ
 
-- 「ちょうど n 個か」は、「n 個目がある」かつ「n+1 個目がない」で判定できる。
-- 答えが確定した時点で読むのをやめると、大きな入力でも速い。
-- 飛ばす処理は `islice` に任せると、C の速さで行える。
+- 真の要素だけを残して、`n+1` 個目まで読めば、ちょうど `n` 個かを判定できる。
+- 全部を数えないので、無駄な読み取りが減る。
+- 無限のイテラブルには使えないので、呼び出す前に確かめる。
