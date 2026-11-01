@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [911, 929]
 function: sieve
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 数値計算, 最適化, ハック]
 ---
+
 ## ひとことで
 
 `sieve(n)` は、**n 未満の素数を小さい順に出す** 関数です。`list(sieve(30))` は `[2, 3, 5, 7, 11, 13, 17, 19, 23, 29]` です。
@@ -20,7 +22,31 @@ tags: [アルゴリズム, 数値計算, 最適化, ハック]
 
 ## コード
 
-```python:line-numbers=911
+::: code-group
+
+```python:line-numbers=911 [日本語訳]
+def sieve(n):
+    """n 未満の素数を順に出す。
+
+    >>> list(sieve(30))
+    [2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
+
+    """
+    # この実装は、itertools の古い版のドキュメントから来ている。
+    # 新しい実装は読みやすいが、
+    # 怠惰さ（必要になるまで計算しない性質）が弱い。
+    if n > 2:
+        yield 2
+    start = 3
+    data = bytearray((0, 1)) * (n // 2)
+    for p in iter_index(data, 1, start, stop=isqrt(n) + 1):
+        yield from iter_index(data, 1, start, p * p)
+        data[p * p : n : p + p] = bytes(len(range(p * p, n, p + p)))
+        start = p * p
+    yield from iter_index(data, 1, start)
+```
+
+```python:line-numbers=911 [原文]
 def sieve(n):
     """Yield the primes less than n.
 
@@ -42,7 +68,9 @@ def sieve(n):
     yield from iter_index(data, 1, start)
 ```
 
-`isqrt(n)` は n の平方根の整数部分です。`iter_index(data, 1, start, stop)` は、同じファイルの 865 行目にある関数で、`data` の中で値が `1` の位置を、`start` 以上 `stop` 未満の範囲で順に出します。
+:::
+
+`isqrt(n)` は n の平方根の整数部分です。`iter_index(data, 1, start, stop)` は、同じファイルの `iter_index` という関数で、`data` の中で値が `1` の位置を、`start` 以上 `stop` 未満の範囲で順に出します。
 
 ## 前提知識
 
@@ -55,18 +83,36 @@ def sieve(n):
 
 ## 何をしているか
 
-### 1. 2 は特別扱い、奇数だけを候補にする（921〜924 行目）
+### 1. 2 は特別扱いし、奇数だけを候補にする
+
+```python:line-numbers=921
+    if n > 2:
+        yield 2
+    start = 3
+    data = bytearray((0, 1)) * (n // 2)
+```
 
 偶数で素数なのは 2 だけなので、先に出します。`data` は「位置 i が奇数なら 1、偶数なら 0」の配列で、最初から偶数は候補から外れています。
 
-### 2. 素数 p ごとに倍数を消す（925〜928 行目）
+### 2. 素数 p ごとに倍数を消す
+
+```python:line-numbers=925
+    for p in iter_index(data, 1, start, stop=isqrt(n) + 1):
+        yield from iter_index(data, 1, start, p * p)
+        data[p * p : n : p + p] = bytes(len(range(p * p, n, p + p)))
+        start = p * p
+```
 
 n = 30 で追います。`stop = isqrt(30) + 1 = 6` までの範囲で、値が 1 の位置を探します。
 
-- **p = 3**: まず `start`（3）から `p*p`（9）の手前までの素数 `3, 5, 7` を出します（926 行目）。9 未満の数で消えていないものは、もう素数と確定しているからです。次に `data[9:30:6]` に 0 を書き込み、9, 15, 21, 27 を消します（927 行目）。
+- **p = 3**: まず `start`（3）から `p*p`（9）の手前までの素数 `3, 5, 7` を出します（`yield from iter_index(data, 1, start, p * p)`）。9 未満の数で消えていないものは、もう素数と確定しているからです。次にスライス代入で、9, 15, 21, 27 を消します。
 - **p = 5**: 9 から 25 の手前までで残っている `11, 13, 17, 19, 23` を出し、`data[25:30:10]` で 25 を消します。
 
-### 3. 残りを出す（929 行目）
+### 3. 残りを出す
+
+```python:line-numbers=929
+    yield from iter_index(data, 1, start)
+```
 
 25 以降で残っている `29` を出します。
 
@@ -81,7 +127,7 @@ for m in range(p * p, n, p):
     data[m] = 0
 ```
 
-という Python のループになります。927 行目は、0 を並べたバイト列をスライスに代入するだけなので、書き換えはすべて C の中で一気に行われます。
+という Python のループになります。`data[p * p : n : p + p] = bytes(...)` は、0 を並べたバイト列をスライスに代入するだけなので、書き換えはすべて C の中で一気に行われます。
 
 ### `p*p` から、`2p` おきに
 
@@ -90,7 +136,7 @@ for m in range(p * p, n, p):
 
 ### 確定した素数はすぐに出す
 
-918〜920 行目のコメントの通り、この実装は「より怠惰（lazy）」な版です。p×p 未満の数は p で消す前に素数と確定するので、ふるいを最後まで終える前に、確定した分から順に `yield` しています。`sieve(10**8)` でも、最初の素数はすぐに手に入ります。
+コメントにあるとおり、この実装は「より怠惰（lazy）」な版です。p×p 未満の数は p で消す前に素数と確定するので、ふるいを最後まで終える前に、確定した分から順に `yield` しています。`sieve(10**8)` でも、最初の素数はすぐに手に入ります。
 
 ### 値の探索も `iter_index` で速く
 

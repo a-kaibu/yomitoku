@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [1054, 1067]
 function: _factor_pollard
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 数値計算, 乱数]
 ---
+
 ## ひとことで
 
 `_factor_pollard(n)` は、**合成数 n の約数（1 と n 以外）を 1 つ見つける** 関数です。素因数分解をする `factor()` の中で、小さい素数で割り切れなかった大きな数に使われます。
@@ -20,7 +22,26 @@ tags: [アルゴリズム, 数値計算, 乱数]
 
 ## コード
 
-```python:line-numbers=1054
+::: code-group
+
+```python:line-numbers=1054 [日本語訳]
+def _factor_pollard(n):
+    # ポラードのロー法で n の約数を 1 つ返す。
+    # n が奇数の合成数のとき効率がよい。
+    for b in range(1, n):
+        x = y = 2
+        d = 1
+        while d == 1:
+            x = (x * x + b) % n
+            y = (y * y + b) % n
+            y = (y * y + b) % n
+            d = gcd(x - y, n)
+        if d != n:
+            return d
+    raise ValueError('prime or under 5')  # pragma: no cover
+```
+
+```python:line-numbers=1054 [原文]
 def _factor_pollard(n):
     # Return a factor of n using Pollard's rho algorithm.
     # Efficient when n is odd and composite.
@@ -37,6 +58,8 @@ def _factor_pollard(n):
     raise ValueError('prime or under 5')  # pragma: no cover
 ```
 
+:::
+
 `gcd` は `math.gcd`（最大公約数）です。
 
 ## 前提知識
@@ -48,11 +71,25 @@ def _factor_pollard(n):
 
 ## 何をしているか
 
-### 1. 数列を作るルールを決める（1057〜1059 行目）
+### 1. 数列を作るルールを決める
+
+```python:line-numbers=1057
+    for b in range(1, n):
+        x = y = 2
+        d = 1
+```
 
 `f(x) = (x * x + b) % n` という計算を繰り返して数列を作ります。`x` と `y` はどちらも 2 から始めます。
 
-### 2. カメとウサギを進める（1060〜1064 行目）
+### 2. カメとウサギを進める
+
+```python:line-numbers=1060
+        while d == 1:
+            x = (x * x + b) % n
+            y = (y * y + b) % n
+            y = (y * y + b) % n
+            d = gcd(x - y, n)
+```
 
 `x` は 1 回、`y` は 2 回 `f` を適用します。そのたびに `gcd(x - y, n)` を計算し、1 でなくなるまで続けます。
 
@@ -64,9 +101,15 @@ def _factor_pollard(n):
 
 1 回目で 7 が見つかりました。
 
-### 3. 失敗したら b を変える（1065〜1067 行目）
+### 3. 失敗したら b を変える
 
-`d` が n そのものになったら（x と y が完全に一致してしまった）、この `b` では見つからなかったので、次の `b` で最初からやり直します。
+```python:line-numbers=1065
+        if d != n:
+            return d
+    raise ValueError('prime or under 5')  # pragma: no cover
+```
+
+`d` が n そのものになったら（x と y が完全に一致してしまった）、この `b` では見つからなかったので、次の `b` で最初からやり直します。最後まで見つからなければ、`ValueError` を出します。
 
 ## ここがすごい
 
