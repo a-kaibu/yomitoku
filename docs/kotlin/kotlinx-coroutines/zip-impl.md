@@ -12,6 +12,7 @@ lines: [82, 139]
 function: "zipImpl"
 difficulty: 3
 tags: [非同期, 並行処理, エラー処理]
+format: 2
 ---
 
 ## ひとことで
@@ -22,7 +23,71 @@ tags: [非同期, 並行処理, エラー処理]
 
 ## コード
 
-```kotlin:line-numbers=82
+
+::: code-group
+
+```kotlin:line-numbers=82 [日本語訳]
+internal fun <T1, T2, R> zipImpl(flow: Flow<T1>, flow2: Flow<T2>, transform: suspend (T1, T2) -> R): Flow<R> =
+    unsafeFlow {
+        coroutineScope {
+            val second = produce<Any> {
+                flow2.collect { value ->
+                    return@collect channel.send(value ?: NULL)
+                }
+            }
+
+            /*
+             * このやり方は、ランデブー（容量 0）のチャネルでしか正しく動きません。
+             * 次のような場面で正しさを守るために必要です。
+             * ```
+             * val f1 = flow { emit(1); delay(Long.MAX_VALUE) }
+             * val f2 = flowOf(1)
+             * f1.zip(f2) { ... }
+             * ```
+             *
+             * 不変条件: この節は、チャネルのすべての要素が処理された後にだけ呼ばれる（ランデブーの制約による）。
+             */
+            val collectJob = Job()
+            (second as SendChannel<*>).invokeOnClose {
+                // 他方の Flow が終わったとき、AbortFlowException の確保を避ける最適化
+                if (collectJob.isActive) collectJob.cancel(AbortFlowException(collectJob))
+            }
+
+            try {
+                /*
+                 * 非自明な、ディスパッチなし（undispatched）の階層です。正しいコンテキストにいて、構造化並行性も使わないので、その場で実行します:
+                 * - zip 全体を所有する外側の coroutineScope
+                 * - 1 本目の Flow は子の collectJob で集める。
+                 *   そのため 2 本目が終わったら、安全にすぐ取り消せる。
+                 * - **ただし** 下流は、2 本目が終わっても取り消してはならない。
+                 *   そのため下流へは coroutineScope の Job から流す。
+                 * 通常、この階層にはチャネルで通信する収集用のコルーチンが必要だが、
+                 * それは高すぎるので、この工夫を使っている。
+                 * （この工夫で、余計なコルーチンを作らずに済む）
+                 *
+                 */
+                val scopeContext = coroutineContext
+                val cnt = threadContextElements(scopeContext)
+                withContextUndispatched(coroutineContext + collectJob, Unit) {
+                    flow.collect { value ->
+                        withContextUndispatched(scopeContext, Unit, cnt) {
+                            val otherValue = second.receiveCatching().getOrElse {
+                                throw it ?: AbortFlowException(collectJob)
+                            }
+                            emit(transform(value, NULL.unbox(otherValue)))
+                        }
+                    }
+                }
+            } catch (e: AbortFlowException) {
+                e.checkOwnership(owner = collectJob)
+            } finally {
+                second.cancel()
+            }
+        }
+    }
+```
+
+```kotlin:line-numbers=82 [原文]
 internal fun <T1, T2, R> zipImpl(flow: Flow<T1>, flow2: Flow<T2>, transform: suspend (T1, T2) -> R): Flow<R> =
     unsafeFlow {
         coroutineScope {
@@ -83,6 +148,8 @@ internal fun <T1, T2, R> zipImpl(flow: Flow<T1>, flow2: Flow<T2>, transform: sus
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **Flow とチャネル**: Flow は値を順に流すもの、チャネルはコルーチン間で値を渡す管です。`produce { ... }` は、別コルーチンで値を作ってチャネルに送り、そのチャネルを返します。
@@ -95,17 +162,36 @@ internal fun <T1, T2, R> zipImpl(flow: Flow<T1>, flow2: Flow<T2>, transform: sus
 
 ## 何をしているか
 
-### 1. 2 本目をチャネルへ（85〜89 行目）
+### 1. 2 本目をチャネルへ
 
 `flow2` の値を `second` チャネルへ送ります。`null` は `NULL` に置き換えます。
 
-### 2. 2 本目が先に終わったら、1 本目の収集を止める準備（102〜106 行目）
+```kotlin:line-numbers=85
+            val second = produce<Any> {
+                flow2.collect { value ->
+                    return@collect channel.send(value ?: NULL)
+                }
+            }
+```
+
+### 2. 2 本目が先に終わったら、1 本目の収集を止める準備
 
 `collectJob` は 1 本目の収集用の Job です。チャネルが閉じられた（2 本目が終わった）ら、この Job を `AbortFlowException` で取り消します。こうすると、1 本目が次の値を作ろうとして待っている途中でも止まります。
 
-### 3. 1 本目を集め、1 個ずつ組にする（121〜132 行目）
+```kotlin:line-numbers=105
+                if (collectJob.isActive) collectJob.cancel(AbortFlowException(collectJob))
+```
+
+### 3. 1 本目を集め、1 個ずつ組にする
 
 1 本目の値が来るたびに、`second` から 1 個受け取り、`transform` で組にして流します。受け取れなかった（2 本目が終わった）なら、例外を投げて打ち切ります。
+
+```kotlin:line-numbers=126
+                            val otherValue = second.receiveCatching().getOrElse {
+                                throw it ?: AbortFlowException(collectJob)
+                            }
+                            emit(transform(value, NULL.unbox(otherValue)))
+```
 
 `flowOf(1, 2, 3).zip(flowOf("a", "b"))` の場合:
 
@@ -113,14 +199,22 @@ internal fun <T1, T2, R> zipImpl(flow: Flow<T1>, flow2: Flow<T2>, transform: sus
 - `2` → `"b"` を受信 → `"2b"`
 - `3` → チャネルは閉じている → 打ち切り
 
-### 4. 後始末（133〜137 行目）
+### 4. 後始末
 
 自分の打ち切り例外なら正常終了。最後に必ずチャネルを取り消して、2 本目のコルーチンを止めます。
+
+```kotlin:line-numbers=133
+            } catch (e: AbortFlowException) {
+                e.checkOwnership(owner = collectJob)
+            } finally {
+                second.cancel()
+            }
+```
 
 ## ここがすごい
 
 - **非対称な作りで 1 対 1 を実現**: 2 本とも別コルーチンにすると、組にするための待ち合わせが複雑になります。片方だけをチャネルにし、もう片方の `collect` の中で 1 個ずつ受け取れば、自然に 1 対 1 になります。
-- **先に終わった側が、もう片方を止める**: 2 本目が終わったのに 1 本目が重い計算で次の値を作り続けるのは無駄です。チャネルの閉鎖をきっかけに 1 本目の Job を取り消すので、すぐ止まります。104 行目のコメントの通り、他方が終わったときに例外オブジェクトを余計に作らない最適化でもあります。
+- **先に終わった側が、もう片方を止める**: 2 本目が終わったのに 1 本目が重い計算で次の値を作り続けるのは無駄です。チャネルの閉鎖をきっかけに 1 本目の Job を取り消すので、すぐ止まります。`invokeOnClose` の中の最適化は、他方が終わったときに例外オブジェクトを余計に作らないためのものです。
 - **持ち主チェックで例外を取り違えない**: `AbortFlowException` の持ち主を `collectJob` にしているので、入れ子の `zip` でも自分の打ち切りだけを正常終了にできます。
 - **`finally` で必ず片付ける**: どんな終わり方でも、2 本目のコルーチンは `second.cancel()` で止められ、取り残されることはありません。
 
