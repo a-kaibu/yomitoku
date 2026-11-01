@@ -1,6 +1,6 @@
 ---
-title: 「例外が出るまで呼び続ける」をイテレータに変換する
-description: more_itertools.iter_except は、関数を繰り返し呼び、指定した例外が出たら止まるイテレータを作る。pop のような「空ならエラー」の API を、for 文で回せる形に変える。
+title: 例外が出るまで関数を呼び続けて、イテレータにする
+description: more_itertools.iter_except は、関数を繰り返し呼び、例外が出たところで止まるイテレータを作る。番兵の代わりに例外を使い、contextlib.suppress で受け止めて終わらせる。
 language: python
 project: more-itertools
 repo: https://github.com/more-itertools/more-itertools
@@ -10,16 +10,15 @@ commit: "08dca284ba5446a026afdc34067b658f9da989eb"
 file: more_itertools/recipes.py
 lines: [543, 565]
 function: iter_except
-difficulty: 1
+difficulty: 3
 format: 2
-tags: [イテレータ, エラー処理, イディオム]
+tags: [イテレータ, エラー処理, 遅延評価]
 ---
 
 ## ひとことで
 
-`iter_except(function, exception)` は、**関数を何度も呼び、指定した例外が起きたら止まる** イテレータを作ります。
-たとえば `iter_except(d.popitem, KeyError)` は、辞書から要素を 1 つずつ取り出し、空になって `KeyError` が出たら終わります。
-「空になったらエラー」という作りの関数を、`for` 文で回せる形に変換する道具です。
+`iter_except(function, exception, first=None)` は、**関数を呼び続けて、指定した例外が出たところで終わるイテレータ** を作る関数です。
+キューや辞書から、空になるまで値を取り出す処理を、`for` 文で書けるようにします。
 
 ## コード
 
@@ -27,21 +26,21 @@ tags: [イテレータ, エラー処理, イディオム]
 
 ```python:line-numbers=543 [日本語訳]
 def iter_except(function, exception, first=None):
-    """例外が送出されるまで、関数の結果を繰り返し出す。
+    """Yields results from a function repeatedly until an exception is raised.
 
-    Converts a call-until-exception interface to an iterator interface.
-    Like ``iter(function, sentinel)``, but uses an exception instead of a sentinel
-    to end the loop.
+    例外で終わる呼び出しの形を、イテレータの形に変換する。
+    ``iter(function, sentinel)`` に似ているが、番兵の代わりに例外を使う
+    ことで、繰り返しを終わらせる。
 
-    Examples:
-        iter_except(functools.partial(heappop, h), IndexError)   # priority queue iterator
-        iter_except(d.popitem, KeyError)                         # non-blocking dict iterator
-        iter_except(d.popleft, IndexError)                       # non-blocking deque iterator
-        iter_except(q.get_nowait, Queue.Empty)                   # loop over a producer Queue
-        iter_except(s.pop, KeyError)                             # non-blocking set iterator
+    例:
+        iter_except(functools.partial(heappop, h), IndexError)   # 優先度付きキューのイテレータ
+        iter_except(d.popitem, KeyError)                         # 待たずに取り出す dict のイテレータ
+        iter_except(d.popleft, IndexError)                       # 待たずに取り出す deque のイテレータ
+        iter_except(q.get_nowait, Queue.Empty)                   # 生産者の Queue を順に回す
+        iter_except(s.pop, KeyError)                             # 待たずに取り出す set のイテレータ
 
-    Multiple exceptions can be specified as a stopping condition, for example
-    ``(IndexError, TypeError)``.
+    終わりの条件には、複数の例外も指定できる。例えば
+    ``(IndexError, TypeError)`` のように書く。
 
     """
     with suppress(exception):
@@ -79,78 +78,57 @@ def iter_except(function, exception, first=None):
 
 :::
 
-`suppress` は `contextlib.suppress` で、指定した例外を握りつぶす `with` 文を作ります。
-
 ## 前提知識
 
-- **ジェネレータ関数**: `yield` を含む関数です。呼ぶとジェネレータが返り、値を求められるたびに次の `yield` まで動きます。
-- **`with suppress(例外):`**: ブロックの中でその例外が起きたら、エラーにせず、ブロックの外へ抜けます。
-- **「空ならエラー」の API**: `list.pop()` は空のリストで `IndexError`、`dict.popitem()` は空の辞書で `KeyError`、`queue.get_nowait()` は空のキューで `Empty` を出します。
-- **`iter(function, sentinel)`**: 組み込みの `iter` には、「関数を呼び続け、戻り値が `sentinel` と等しくなったら止まる」という使い方もあります。
+- **番兵（sentinel）**: 繰り返しの終わりを知らせるための、特別な値です。`iter(function, sentinel)` は、その値が出たら止まります。
+- **例外**: プログラムの中で起きた問題を知らせる仕組みです。`IndexError` は範囲外の添字、`KeyError` は存在しないキーを使ったときに出ます。
+- **ジェネレータ**: `yield` で値を 1 つずつ出す関数です。途中で止めたり、続けたりできます。
+- **`contextlib.suppress`**: 指定した例外を、無視して先に進むための道具です。
 
 ## 何をしているか
 
-```python
-stack = [1, 2, 3]
-for x in iter_except(stack.pop, IndexError):
-    print(x)   # 3, 2, 1
-```
-
-### 1. 例外を握りつぶす範囲を作る
+### 1. 指定した例外を無視する範囲を作る
 
 ```python:line-numbers=561
     with suppress(exception):
 ```
 
-`with suppress(IndexError):` の中で起きた `IndexError` は、ジェネレータの終わりとして扱われます。
+`suppress(exception)` の中で値を出します。この中で、指定した例外が出ると、その例外は外に伝わらず、ジェネレータが終わります。
 
-### 2. 最初に 1 回だけ呼ぶ関数
+### 2. 最初の 1 回だけ特別に呼ぶ
 
 ```python:line-numbers=562
         if first is not None:
             yield first()
 ```
 
-`first` を渡すと、最初に 1 回だけそれを呼んだ結果を出します。たとえばデータベースの接続を開いてから読み込む、といった使い方ができます。
+`first` が指定されていれば、最初の値だけはその関数で出します。ヒープの先頭を先に見たい、といった場面で使えます。
 
-### 3. 呼び続ける
+### 3. 例外が出るまで、繰り返し呼ぶ
 
 ```python:line-numbers=564
         while True:
             yield function()
 ```
 
-`stack.pop()` を呼んで `3`、`2`、`1` を順に出します。4 回目の `pop()` で `IndexError` が起き、`suppress` によって `with` の外へ抜け、関数が終わります。ジェネレータが終わったので、`for` も終わります。
+`while True` で、`function()` を何度も呼びます。例外が出た時点で、`suppress` が受け止め、ループが終わります。
 
 ## ここがすごい
 
-### 例外を「終わりの合図」に読み替える
+### 番兵の代わりに例外を使える
 
-組み込みの `iter(function, sentinel)` は「特別な値が返ったら終わり」を表せますが、「例外が出たら終わり」は表せません。`iter_except` はその穴を埋めています。
+`iter(function, sentinel)` は、戻り値が番兵と等しいかで止まります。`heappop` や `popitem` のように、空のときに例外を出す関数では、この例外を終わりの合図として使えます。
 
-素直に書くと、
+### 例外を外に漏らさない
 
-```python
-while True:
-    try:
-        x = stack.pop()
-    except IndexError:
-        break
-    print(x)
-```
+終わりの例外は、ループの正常な終わりなので、`for` 文の外には出ません。呼び出す側は、`try` と `except` を書かずに、普通の繰り返しとして書けます。
 
-のように、使う場所ごとに `try` とループを書く必要があります。`iter_except` を使えば、`for` 文 1 つで済み、「空になるまで取り出す」という意図がはっきりします。
+### 他の用途にも広がる
 
-### `with suppress` で `try` を外に出す
-
-`try`/`except` をループの内側に書くと、1 回ごとに例外処理の範囲に入り直します。`with suppress(...)` で **ループ全体を囲む** ことで、例外が起きたときだけ外へ抜ける構造になっています。コードも短く読みやすくなります。
-
-### 部品として組み合わせやすい
-
-戻り値はふつうのイテレータなので、`list(iter_except(...))` で全部取り出したり、`islice` で先頭だけ取ったりと、ほかのイテレータ用の道具とそのまま組み合わせられます。docstring には、ヒープ、辞書、deque、キュー、集合での使用例が並んでいます。
+キューや集合など、同じ形で空になる入れ物に広く使えます。値を取り出すたびに消える入れ物を、1 本の `for` 文で回せます。
 
 ## まとめ
 
-- 「空ならエラー」の関数は、`iter_except` で `for` 文で回せるようになる。
-- 例外を「終わりの合図」として扱うと、ループがすっきりする。
-- `with suppress` でループ全体を囲むと、例外処理が 1 か所にまとまる。
+- 例外で終わる呼び出しを、`iter_except` でイテレータにできる。
+- `suppress` で終わりの例外を受け止めると、呼び出し側が `try` を書かずに済む。
+- 空になる入れ物から、順に値を取り出す処理に向いている。
