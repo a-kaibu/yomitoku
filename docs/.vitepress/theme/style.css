@@ -230,14 +230,18 @@
 .vp-doc div[class*='language-'] > span.lang { display: none; }
 .vp-doc div[class*='language-'] pre,
 .vp-doc div[class*='language-'] .line-numbers-wrapper { padding-top: 44px; }
-.vp-doc div[class*='language-'] > button.copy { top: 8px; right: 104px; width: 30px; height: 30px; background-size: 16px; }
+.vp-doc div[class*='language-'] > button.copy { top: 8px; right: 112px; width: 30px; height: 30px; background-size: 16px; opacity: 1; }
+:root { --vp-code-copy-copied-text-content: 'コピーしました'; }
 .vp-doc div[class*='language-'] > button.yk-wrap-btn {
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 3;
+  box-sizing: border-box;
+  width: 96px;
   height: 30px;
-  padding: 0 10px;
+  padding: 0;
+  text-align: center;
   border: 1px solid var(--vp-code-copy-code-border-color);
   border-radius: 6px;
   background: var(--vp-code-copy-code-bg);
@@ -247,8 +251,8 @@
   white-space: nowrap;
 }
 .vp-doc div[class*='language-'] > button.yk-wrap-btn:hover { color: var(--vp-c-text-1); border-color: var(--vp-code-copy-code-hover-border-color); }
-.vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '↩ 折り返し: オフ'; }
-html.yk-wrap .vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '↩ 折り返し: オン'; }
+.vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '↩ 折り返し'; }
+html.yk-wrap .vp-doc div[class*='language-'] > button.yk-wrap-btn::after { content: '✓ 折り返し'; }
 html.yk-wrap .vp-doc div[class*='language-'] > button.yk-wrap-btn { color: var(--vp-c-brand-1); border-color: var(--vp-c-brand-1); }
 
 /* 折り返しオン: 行番号は CSS カウンタで各行の先頭に出し、続きの行はぶら下げインデント */
