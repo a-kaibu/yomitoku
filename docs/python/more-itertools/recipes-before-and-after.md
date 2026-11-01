@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [752, 768]
 function: before_and_after
 difficulty: 3
+format: 2
 tags: [イテレータ, ハック, 遅延評価]
 ---
+
 ## ひとことで
 
 `before_and_after(predicate, it)` は、データを **条件を満たし続ける先頭部分** と **それ以降の残り** の 2 つに分ける関数です。
@@ -21,7 +23,29 @@ tags: [イテレータ, ハック, 遅延評価]
 
 ## コード
 
-```python:line-numbers=752
+::: code-group
+
+```python:line-numbers=752 [日本語訳]
+def before_and_after(predicate, it):
+    """:func:`takewhile` の変種で、イテレータの残り全体に完全にアクセスできる。
+    remainder of the iterator.
+
+         >>> it = iter('ABCdEfGhI')
+         >>> all_upper, remainder = before_and_after(str.isupper, it)
+         >>> ''.join(all_upper)
+         'ABC'
+         >>> ''.join(remainder) # takewhile() would lose the 'd'
+         'dEfGhI'
+
+    Note that the first iterator must be fully consumed before the second
+    iterator can generate valid results.
+    """
+    trues, after = tee(it)
+    trues = compress(takewhile(predicate, trues), zip(after))
+    return trues, after
+```
+
+```python:line-numbers=752 [原文]
 def before_and_after(predicate, it):
     """A variant of :func:`takewhile` that allows complete access to the
     remainder of the iterator.
@@ -41,6 +65,8 @@ def before_and_after(predicate, it):
     return trues, after
 ```
 
+:::
+
 `tee`、`compress`、`takewhile` は `itertools` の関数です。
 
 ## 前提知識
@@ -55,11 +81,19 @@ def before_and_after(predicate, it):
 
 `it = iter('ABCdEfGhI')`、条件は「大文字か」で追います。
 
-### 1. 2 本に複製する（766 行目）
+### 1. 2 本に複製する
+
+```python:line-numbers=766
+    trues, after = tee(it)
+```
 
 `trues` と `after` は、どちらも `'ABCdEfGhI'` を最初から出す 2 本のイテレータです。
 
-### 2. 先頭部分を作る（767 行目）
+### 2. 先頭部分を作る
+
+```python:line-numbers=767
+    trues = compress(takewhile(predicate, trues), zip(after))
+```
 
 `compress(takewhile(predicate, trues), zip(after))` が 1 つ値を出すたびに、
 
@@ -87,7 +121,7 @@ def before_and_after(predicate, it):
 
 ### 使うときの約束
 
-763〜764 行目の説明の通り、先頭部分を最後まで読んでから残りを読む必要があります。先に `after` を読んでしまうと、歩調がずれるからです。この約束と引き換えに、ループや状態変数を一切書かずに実現しています。
+docstring にあるとおり、先頭部分を最後まで読んでから残りを読む必要があります。先に `after` を読んでしまうと、歩調がずれるからです。この約束と引き換えに、ループや状態変数を一切書かずに実現しています。
 
 ## まとめ
 

@@ -11,17 +11,42 @@ file: more_itertools/more.py
 lines: [3883, 3900]
 function: _sample_unweighted
 difficulty: 3
+format: 2
 tags: [乱数, アルゴリズム, イテレータ, 最適化]
 ---
+
 ## ひとことで
 
 `_sample_unweighted(iterator, k, strict)` は、**長さのわからないデータの流れから、どの要素も同じ確率で選ばれるように k 個を選ぶ** 関数です（リザーバサンプリング）。
 巨大なログファイルからランダムに 100 行選ぶ、といった処理を、ファイルを 1 回読むだけで、しかも 100 行分のメモリだけで行えます。
-3884〜3885 行目のコメントにある通り、Kim-Hung Li の 1994 年の論文の **Algorithm L** を実装しています。
+コメントにある通り、Kim-Hung Li の 1994 年の論文の **Algorithm L** を実装しています。
 
 ## コード
 
-```python:line-numbers=3883
+::: code-group
+
+```python:line-numbers=3883 [日本語訳]
+def _sample_unweighted(iterator, k, strict):
+    # Kim-Hung Li の 1994 年の論文にある Algorithm L:
+    # "Reservoir-Sampling Algorithms of Time Complexity O(n(1+log(N/n)))"。
+
+    reservoir = list(islice(iterator, k))
+    if strict and len(reservoir) < k:
+        raise ValueError('Sample larger than population')
+    W = 1.0
+
+    with suppress(StopIteration):
+        while True:
+            W *= random() ** (1 / k)
+            skip = floor(log(random()) / log1p(-W))
+            element = next(islice(iterator, skip, None))
+            reservoir[randrange(k)] = element
+
+    shuffle(reservoir)
+    return reservoir
+```
+
+```python:line-numbers=3883 [原文]
 def _sample_unweighted(iterator, k, strict):
     # Algorithm L in the 1994 paper by Kim-Hung Li:
     # "Reservoir-Sampling Algorithms of Time Complexity O(n(1+log(N/n)))".
@@ -42,6 +67,8 @@ def _sample_unweighted(iterator, k, strict):
     return reservoir
 ```
 
+:::
+
 `random`、`randrange`、`shuffle` は `random` モジュールの関数、`floor`、`log`、`log1p` は `math` モジュールの関数です。
 
 ## 前提知識
@@ -55,11 +82,26 @@ def _sample_unweighted(iterator, k, strict):
 
 ## 何をしているか
 
-### 1. 最初の k 個をそのまま入れる（3887〜3890 行目）
+### 1. 最初の k 個をそのまま入れる
+
+```python:line-numbers=3887
+    reservoir = list(islice(iterator, k))
+    if strict and len(reservoir) < k:
+        raise ValueError('Sample larger than population')
+    W = 1.0
+```
 
 k 個に満たなければ、`strict` のときはエラーにします。`W` は「今のリザーバに入る確率に関係する値」で、1 から始めます。
 
-### 2. 次に入れ替える要素まで読み飛ばす（3893〜3897 行目）
+### 2. 次に入れ替える要素まで読み飛ばす
+
+```python:line-numbers=3893
+        while True:
+            W *= random() ** (1 / k)
+            skip = floor(log(random()) / log1p(-W))
+            element = next(islice(iterator, skip, None))
+            reservoir[randrange(k)] = element
+```
 
 基本の考え方（Algorithm R）は、「i 番目の要素は確率 k/i でリザーバに入り、入るならランダムな位置を置き換える」です。こうすると、最後まで読んだときにどの要素も確率 k/N で残っています。
 ただし、i が大きくなると入れ替えはめったに起きないので、1 つずつ乱数を引くのは無駄です。Algorithm L は、
@@ -69,7 +111,12 @@ k 個に満たなければ、`strict` のときはエラーにします。`W` �
 
 そして `islice` でその数だけ一気に読み飛ばし、次の要素でリザーバのランダムな位置を置き換えます。
 
-### 3. 並びをシャッフルして返す（3899〜3900 行目）
+### 3. 並びをシャッフルして返す
+
+```python:line-numbers=3899
+    shuffle(reservoir)
+    return reservoir
+```
 
 リザーバの最初の部分は入力の順番のままなので、最後にシャッフルして順番の偏りもなくします。
 
