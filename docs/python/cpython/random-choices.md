@@ -1,6 +1,6 @@
 ---
-title: 重み付きの抽選を「累積和 + 二分探索」で高速に
-description: random.choices は、重みに応じた確率で要素を k 個選ぶ。重みの累積和を作っておき、0〜合計の乱数がどの区間に落ちるかを bisect で探している。
+title: 重みを付けて、重複を許しながら要素を選ぶ
+description: random.choices は、母集団から重複を許して k 個の要素を選んで、リストとして返す。重みがなければ等確率で選び、重みがあれば累積の重みを作って、乱数の位置を二分探索で当てはめる。
 language: python
 project: CPython
 repo: https://github.com/python/cpython
@@ -10,16 +10,15 @@ commit: "2f2051287f0c24c7bb99a7f570e5a6178ba1f8de"
 file: Lib/random.py
 lines: [460, 495]
 function: Random.choices
-difficulty: 2
+difficulty: 3
 format: 2
-tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
+tags: [乱数, アルゴリズム, 数値計算]
 ---
 
 ## ひとことで
 
-`choices(population, weights, k=...)` は、**重み（当たりやすさ）を付けて、要素を k 個選ぶ**（同じものを何度選んでもよい）メソッドです。
-`choices(["A", "B", "C"], weights=[5, 3, 2], k=10)` なら、A が 50%、B が 30%、C が 20% の確率で選ばれます。
-重みの「累積和」を作り、乱数がどこに落ちるかを二分探索で探すことで、1 回の抽選を高速にしています。
+`choices(population, weights=None, *, cum_weights=None, k=1)` は、**母集団から重複を許して `k` 個の要素を選び、リストで返す** メソッドです。
+`choices(['赤', '青'], weights=[3, 1], k=4)` のように書くと、赤が出やすい結果になります。
 
 ## コード
 
@@ -27,10 +26,10 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 
 ```python:line-numbers=460 [日本語訳]
     def choices(self, population, weights=None, *, cum_weights=None, k=1):
-        """重複を許して、母集団の要素を k 個選んだリストを返す。
+        """重複を許して、母集団の要素から k 個のリストを選んで返す。
 
         相対的な重みも累積の重みも指定されていなければ、
-        各要素は等しい確率で選ばれる。
+        すべての要素が同じ確率で選ばれる。
 
         """
         random = self.random
@@ -38,7 +37,7 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
         if cum_weights is None:
             if weights is None:
                 floor = _floor
-                n += 0.0    # 小さな高速化のため float にする
+                n += 0.0    # 速くするため、float に変換しておく
                 return [population[floor(random() * n)] for i in _repeat(None, k)]
             try:
                 cum_weights = list(_accumulate(weights))
@@ -105,101 +104,84 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 
 :::
 
-`_floor`、`_accumulate`、`_bisect`、`_isfinite`、`_repeat` は、それぞれ `math.floor`、`itertools.accumulate`、`bisect.bisect`、`math.isfinite`、`itertools.repeat` を、ファイルの冒頭で別名で読み込んだものです。
-
 ## 前提知識
 
-- **`random()`**: 0 以上 1 未満の小数をランダムに返します。
-- **累積和（`accumulate`）**: `[5, 3, 2]` の累積和は `[5, 8, 10]` です。先頭から順に足していった途中の合計の並びです。
-- **`bisect(a, x, lo, hi)`**: ソート済みのリスト `a` で、`x` を入れるべき位置（`x` より大きい最初の要素の位置）を二分探索で返します。
-- **リスト内包表記**: `[式 for i in 何か]` は、繰り返しながら式の値を集めたリストを作ります。
-- **`repeat(None, k)`**: `None` を k 回出すイテレータです。「k 回繰り返す」ためだけに使っています。
-- **`f'{k=}'`**: f 文字列の書き方で、`k=3` のように「変数名=値」を埋め込みます。
+- **重複を許す（復元抽出）**: 一度選んだ要素を戻してから、次を選ぶ方法です。同じ要素が何度も出ます。
+- **重み**: 要素ごとに付けた、選ばれやすさの比率です。`[3, 1]` なら、前者は後者の 3 倍選ばれやすくなります。
+- **累積の重み**: 重みを先頭から足し合わせた列です。`[3, 1]` の累積は `[3, 4]` です。
+- **二分探索（bisect）**: 整列された列の中で、ある値が入る位置を素早く見つける方法です。
 
 ## 何をしているか
 
-### 1. 重みがない場合
+### 1. 重みがなければ、等確率で選ぶ
 
 ```python:line-numbers=469
         if cum_weights is None:
             if weights is None:
                 floor = _floor
-                n += 0.0    # 小さな高速化のため float にする
+```
+
+重みも累積の重みもなければ、母集団の長さを掛けた乱数の位置を、添字として使います。どの位置も同じ確率になるので、等しく選ばれます。
+
+```python:line-numbers=473
                 return [population[floor(random() * n)] for i in _repeat(None, k)]
 ```
 
-すべて等確率なら、`floor(random() * n)` で 0〜n-1 の位置を選ぶだけです。`n += 0.0` で `n` を小数にしておくのは、ループの中で毎回「整数 × 小数」の型変換が起きないようにするための、小さな高速化です。
+この 1 行で、`k` 個の要素を選んでリストにしています。
 
-### 2. 重みから累積和を作る
+### 2. 重みから累積の重みを作る
 
 ```python:line-numbers=474
             try:
                 cum_weights = list(_accumulate(weights))
-            except TypeError:
-                if not isinstance(weights, int):
-                    raise
-                k = weights
-                raise TypeError(
-                    f'The number of choices must be a keyword argument: {k=}'
-                ) from None
 ```
 
-`weights = [5, 3, 2]` なら `cum_weights = [5, 8, 10]` です。
-`choices(pop, 3)` のように回数をうっかり位置引数で渡すと、`3` を重みとして累積和を作ろうとして失敗します。このときは「回数はキーワード引数で」というわかりやすいメッセージに置き換えています。
+重みが渡されていれば、先頭からの合計を `cum_weights` に作ります。`_accumulate` は、`itertools.accumulate` の内部名です。
 
-### 3. 入力を確認する
+### 3. 合計で割って、乱数の位置を決める
 
-```python:line-numbers=483
-        elif weights is not None:
-            raise TypeError('Cannot specify both weights and cumulative weights')
-        if len(cum_weights) != n:
-            raise ValueError('The number of weights does not match the population')
-        total = cum_weights[-1] + 0.0   # float に変換する
+```python:line-numbers=488
         if total <= 0.0:
             raise ValueError('Total of weights must be greater than zero')
-        if not _isfinite(total):
-            raise ValueError('Total of weights must be finite')
 ```
 
-重みの数が要素数と違う、合計が 0 以下、合計が無限大、といった場合はエラーにします。
-
-### 4. 乱数がどの区間に落ちるか探す
+合計が 0 以下なら、選べる要素がないので例外にします。
 
 ```python:line-numbers=492
         bisect = _bisect
+```
+
+二分探索の関数 `bisect` を、ローカル変数に入れて速く呼べるようにします。
+
+```python:line-numbers=493
         hi = n - 1
+```
+
+探索する範囲の上限を、母集団の最後の位置にします。
+
+```python:line-numbers=494
         return [population[bisect(cum_weights, random() * total, 0, hi)]
                 for i in _repeat(None, k)]
 ```
 
-合計 `total = 10` に対して `random() * 10` は 0〜10 未満の小数です。
-
-- 0 以上 5 未満 → `bisect` は 0 → A
-- 5 以上 8 未満 → 1 → B
-- 8 以上 10 未満 → 2 → C
-
-区間の長さが重みそのものなので、重みに比例した確率で選ばれます。
+`random() * total` は、0 から合計の間の乱数です。`bisect` は、その値が累積のどこに入るかを探し、対応する要素を返します。
 
 ## ここがすごい
 
-### 1 回の抽選は O(log n)
+### 重みを 1 回の二分探索で当てはめる
 
-素直に書くと「重みを順に引いていき、0 を下回ったところで止める」という線形探索になり、1 回の抽選で最大 n 回の計算がかかります。累積和は最初に 1 回作るだけで、あとは二分探索なので、要素が 100 万個あっても 1 回の抽選は約 20 回の比較で済みます。k 回抽選するときに大きな差が出ます。
+一つずつ重みを引いていく方法より、要素が多いときも速く選べます。累積の重みを一度作れば、何個選ぶときも同じ列を使えます。
 
-### `hi = n - 1` で端の誤差を防ぐ
+### 大きい重みほど、広い範囲を占める
 
-小数の計算誤差で `random() * total` がちょうど `total` に一致するような極端な場合でも、探索範囲の上限を `n - 1` にしておけば、存在しない位置（n 番目）を返すことはありません。
+累積の重みの中で、重みが大きい要素は、乱数が当たる区間が広くなります。だから、重みの比率どおりに選ばれます。
 
-### cum_weights を直接渡せる
+### 入力の不整合を先に見つける
 
-同じ重みで何度も `choices` を呼ぶなら、累積和を一度作って `cum_weights=` で渡せば、毎回の累積和の計算すら省けます。API がそのような使い方を想定しています。
-
-### ありがちなミスに親切
-
-位置引数で回数を渡すミスを、`TypeError` を捕まえて具体的なメッセージに変えています。しかも `weights` が整数だったときだけ置き換え、それ以外のエラーはそのまま投げ直しているので、本当の原因を隠しません。
+累積の重みの数と母集団の数が違う、合計が 0 以下、無限大を含む、などのときは、例外で止めます。間違った結果を黙って返さない作りです。
 
 ## まとめ
 
-- 重み付き抽選は、累積和を作って二分探索すると速い。
-- 前処理（累積和）と本処理（探索）を分けると、前処理の結果を使い回せる。
-- よくある使い方の間違いには、エラーメッセージで道案内をするとよい。
+- 重みを累積の列にすると、乱数を当てはめる区間が作れる。
+- 二分探索を使うと、重みが多くても素早く要素を選べる。
+- 重みの不整合は例外で止めると、誤った結果を防げる。
