@@ -12,6 +12,7 @@ lines: [56, 59]
 function: "Flow.mapNotNull"
 difficulty: 1
 tags: [非同期, イディオム, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -33,7 +34,7 @@ public inline fun <T, R: Any> Flow<T>.mapNotNull(crossinline transform: suspend 
 ## 前提知識
 
 - **Flow**: 値を順番に流す仕組みです。
-- **`transform { value -> ... }`**: Flow の値を受け取り、好きな回数だけ `emit` できる汎用の変換です。このファイルでは 12 行目で、チェックを省いた軽量版 `unsafeTransform` を `transform` という名前でインポートしています。
+- **`transform { value -> ... }`**: Flow の値を受け取り、好きな回数だけ `emit` できる汎用の変換です。このファイルでは先頭の別名インポートで、チェックを省いた軽量版 `unsafeTransform` を `transform` という名前で使っています。
 - **`R?` と `R : Any`**: `R?` は「`R` か `null`」です。`R : Any` という制約は「`R` 自体は `null` を含まない型」という意味で、結果の Flow が `null` を流さないことを型で保証します。
 - **`?:`（エルビス演算子）**: `a ?: b` は「`a` が `null` でなければ `a`、`null` なら `b`」です。右側に `return` を書くと、「`null` ならここで抜ける」という意味になります。
 - **`return@transform`**: ラムダの中から、そのラムダだけを抜けるラベル付きの return です。
@@ -41,11 +42,19 @@ public inline fun <T, R: Any> Flow<T>.mapNotNull(crossinline transform: suspend 
 
 ## 何をしているか
 
-### 1. 変換して、null なら抜ける（57 行目）
+### 1. 変換して、null なら抜ける
+
+```kotlin:line-numbers=57
+    val transformed = transform(value) ?: return@transform
+```
 
 `transform(value)` を呼び、結果が `null` なら `return@transform` でこの値の処理を終えます。何も `emit` しないので、値は捨てられたことになります。
 
-### 2. null でなければ流す（58 行目）
+### 2. null でなければ流す
+
+```kotlin:line-numbers=58
+    return@transform emit(transformed)
+```
 
 ここに来た時点で `transformed` は `null` ではないと分かっているので、コンパイラは型を `R`（`null` なし）として扱います（スマートキャスト）。それを `emit` します。
 

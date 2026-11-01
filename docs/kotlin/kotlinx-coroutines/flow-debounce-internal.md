@@ -12,6 +12,7 @@ lines: [200, 242]
 function: "Flow.debounceInternal"
 difficulty: 3
 tags: [非同期, 並行処理, 状態機械]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,56 @@ tags: [非同期, 並行処理, 状態機械]
 
 ## コード
 
-```kotlin:line-numbers=200
+
+::: code-group
+
+```kotlin:line-numbers=200 [日本語訳]
+private fun <T> Flow<T>.debounceInternal(timeoutMillisSelector: (T) -> Long): Flow<T> =
+    scopedFlow { downstream ->
+        // デフォルトの（ランデブーの）チャネルを使って値を作る
+        val values = produce {
+            collect { value -> send(value ?: NULL) }
+        }
+        // 次に、値を取り出す
+        var lastValue: Any? = null
+        while (lastValue !== DONE) {
+            var timeoutMillis = 0L // lastValue != null のときに、必ず計算される
+            // この値の待ち時間を計算する
+            if (lastValue != null) {
+                timeoutMillis = timeoutMillisSelector(NULL.unbox(lastValue))
+                require(timeoutMillis >= 0L) { "Debounce timeout should not be negative" }
+                if (timeoutMillis == 0L) {
+                    downstream.emit(NULL.unbox(lastValue))
+                    lastValue = null // 値を消費する
+                }
+            }
+            // 不変条件: lastValue != null なら timeoutMillis > 0
+            assert { lastValue == null || timeoutMillis > 0 }
+            // タイムアウト付きで、次の値を待つ
+            select<Unit> {
+                // lastValue があり、まだ消費していなければタイムアウトを設定する
+                if (lastValue != null) {
+                    onTimeout(timeoutMillis) {
+                        downstream.emit(NULL.unbox(lastValue))
+                        lastValue = null // 値を消費する
+                    }
+                }
+                values.onReceiveCatching { value ->
+                    value
+                        .onSuccess { lastValue = it }
+                        .onFailure {
+                            it?.let { throw it }
+                            // 正常に閉じられたら、最新の値を流す
+                            if (lastValue != null) downstream.emit(NULL.unbox(lastValue))
+                            lastValue = DONE
+                        }
+                }
+            }
+        }
+    }
+```
+
+```kotlin:line-numbers=200 [原文]
 private fun <T> Flow<T>.debounceInternal(timeoutMillisSelector: (T) -> Long): Flow<T> =
     scopedFlow { downstream ->
         // Produce the values using the default (rendezvous) channel
@@ -69,6 +119,8 @@ private fun <T> Flow<T>.debounceInternal(timeoutMillisSelector: (T) -> Long): Fl
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **Flow**: 値を順番に流す仕組みです。`downstream.emit(値)` で下流へ値を渡します。
@@ -80,19 +132,46 @@ private fun <T> Flow<T>.debounceInternal(timeoutMillisSelector: (T) -> Long): Fl
 
 ## 何をしているか
 
-### 1. 上流を別コルーチンでチャネルに流す（203〜205 行目）
+### 1. 上流を別コルーチンでチャネルに流す
+
+```kotlin:line-numbers=203
+        val values = produce {
+            collect { value -> send(value ?: NULL) }
+        }
+```
 
 上流の値を `send` します。`null` はチャネル上で「値なし」と混ざらないように `NULL` に置き換えます。
 
-### 2. 「保留中の値」を 1 つ持つ（207〜208 行目）
+### 2. 「保留中の値」を 1 つ持つ
+
+```kotlin:line-numbers=207
+        var lastValue: Any? = null
+```
 
 `lastValue` が「まだ流していない最新の値」です。`null` なら保留なし、`DONE` なら終了です。
 
-### 3. 待ち時間を計算する（209〜220 行目）
+### 3. 待ち時間を計算する
+
+```kotlin:line-numbers=211
+            if (lastValue != null) {
+                timeoutMillis = timeoutMillisSelector(NULL.unbox(lastValue))
+                require(timeoutMillis >= 0L) { "Debounce timeout should not be negative" }
+```
 
 保留中の値があれば、その値に応じた待ち時間を求めます（値ごとに時間を変えられる版があるため）。0 ミリ秒ならすぐ流して保留を消します。
 
-### 4. 次の値か時間切れか、早いほうを処理する（222〜240 行目）
+### 4. 次の値か時間切れか、早いほうを処理する
+
+```kotlin:line-numbers=224
+                if (lastValue != null) {
+                    onTimeout(timeoutMillis) {
+```
+
+```kotlin:line-numbers=230
+                values.onReceiveCatching { value ->
+                    value
+                        .onSuccess { lastValue = it }
+```
 
 300 ミリ秒の debounce で、`a`（0ms）、`b`（100ms）、`c`（500ms）が来る場合:
 
@@ -100,14 +179,14 @@ private fun <T> Flow<T>.debounceInternal(timeoutMillisSelector: (T) -> Long): Fl
 - 100ms: 300ms 経つ前に `b` を受信 → 保留が `b` に置き換わる（`a` は流れない）
 - 400ms: `b` の受信から 300ms、時間切れ → `b` を流す
 - 500ms: `c` を受信 → 保留 `c`
-- 上流が終了 → 233〜237 行目で保留の `c` を流して `DONE`
+- 上流が終了 → 保留の `c` を流して `DONE`
 
 ## ここがすごい
 
 - **`select` で「どちらか早いほう」を素直に書ける**: タイマーを別に動かしてキャンセルし直す、といった複雑な管理をしなくても、ループのたびに「受信」と「時間切れ」を並べて待つだけで済みます。新しい値が来れば前の時間切れは自然に無効になります。
-- **時間切れの待ちは保留があるときだけ**: 224 行目の `if` で、保留がないときは `onTimeout` を登録しません。何も来ていないのにタイマーが動き続ける無駄がありません。
+- **時間切れの待ちは保留があるときだけ**: `if (lastValue != null)` で、保留がないときは `onTimeout` を登録しません。何も来ていないのにタイマーが動き続ける無駄がありません。
 - **番兵で 3 種類の状態を区別**: `lastValue` 1 つで「保留なし（`null`）」「保留あり（値か `NULL`）」「終了（`DONE`）」を表しています。利用者の値が `null` でも正しく保留できます。
-- **終了時の取りこぼしがない**: 上流が終わった瞬間に保留中の値があれば、待たずに流します（236 行目）。上流がエラーで終わったときは、それを投げ直します（234 行目）。
+- **終了時の取りこぼしがない**: 上流が終わった瞬間に保留中の値があれば、待たずに流します。上流がエラーで終わったときは、それを投げ直します（`it?.let { throw it }`）。
 
 ## まとめ
 
