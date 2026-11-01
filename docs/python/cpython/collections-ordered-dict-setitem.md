@@ -11,8 +11,10 @@ file: Lib/collections/__init__.py
 lines: [119, 131]
 function: OrderedDict.__setitem__
 difficulty: 3
+format: 2
 tags: [データ構造, メモリ管理, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `OrderedDict` は「キーを入れた順番を覚えている辞書」です。`__setitem__` は `od[key] = value` と書いたときに呼ばれるメソッドで、**新しいキーなら、順番を記録するリストの末尾にそのキーを追加** します。
@@ -20,7 +22,25 @@ tags: [データ構造, メモリ管理, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=119
+::: code-group
+
+```python:line-numbers=119 [日本語訳]
+    def __setitem__(self, key, value,
+                    dict_setitem=dict.__setitem__, proxy=_proxy, Link=_Link):
+        'od.__setitem__(i, y) <==> od[i]=y'
+        # 新しい要素を入れると、連結リストの末尾に新しいリンクを作る。
+        # そして、継承した辞書に新しいキーと値の組を書き込む。
+        if key not in self:
+            self.__map[key] = link = Link()
+            root = self.__root
+            last = root.prev
+            link.prev, link.next, link.key = last, root, key
+            last.next = link
+            root.prev = proxy(link)
+        dict_setitem(self, key, value)
+```
+
+```python:line-numbers=119 [原文]
     def __setitem__(self, key, value,
                     dict_setitem=dict.__setitem__, proxy=_proxy, Link=_Link):
         'od.__setitem__(i, y) <==> od[i]=y'
@@ -36,7 +56,9 @@ tags: [データ構造, メモリ管理, 標準ライブラリ]
         dict_setitem(self, key, value)
 ```
 
-`_Link` は同じファイルの 86 行目で定義されている小さなクラスで、`prev`（前）、`next`（次）、`key`（キー）の 3 つの属性だけを持ちます。`self.__root` はリストの端を表す番兵（ダミーの要素）です。
+:::
+
+`_Link` は同じファイルで定義されている小さなクラスで、`prev`（前）、`next`（次）、`key`（キー）の 3 つの属性だけを持ちます。`self.__root` はリストの端を表す番兵（ダミーの要素）です。
 
 ## 前提知識
 
@@ -51,19 +73,39 @@ tags: [データ構造, メモリ管理, 標準ライブラリ]
 
 キー `a`, `b` が入っている状態で `od["c"] = 3` を実行するとします。リストは `root ⇄ a ⇄ b ⇄ (root に戻る)` という輪になっています。
 
-### 1. 新しいキーか確認（124 行目）
+### 1. 新しいキーか確認する
+
+```python:line-numbers=124
+        if key not in self:
+```
 
 `"c" not in self` なので、リストへの追加に進みます。すでにあるキーなら、順番は変えずに値だけを更新します。
 
-### 2. リンクを作って対応表に登録（125 行目）
+### 2. リンクを作って対応表に登録する
+
+```python:line-numbers=125
+            self.__map[key] = link = Link()
+```
 
 `Link()` で新しい要素を作り、`self.__map["c"]` に登録します。この対応表のおかげで、あとで「キー c のリンクはどれか」を一瞬で探せます。
 
-### 3. 末尾につなぐ（126〜130 行目）
+### 3. 末尾につなぐ
+
+```python:line-numbers=126
+            root = self.__root
+            last = root.prev
+            link.prev, link.next, link.key = last, root, key
+            last.next = link
+            root.prev = proxy(link)
+```
 
 番兵の `root.prev` が今の末尾 `b` です。新しいリンクの前を `b`、次を `root` にし、`b.next` と `root.prev` を新しいリンクに付け替えます。結果は `root ⇄ a ⇄ b ⇄ c ⇄ (root)` です。
 
-### 4. 値は親の辞書に保存（131 行目）
+### 4. 値は親の辞書に保存する
+
+```python:line-numbers=131
+        dict_setitem(self, key, value)
+```
 
 最後に `dict.__setitem__` で、値をふつうの辞書として保存します。
 
@@ -79,7 +121,7 @@ tags: [データ構造, メモリ管理, 標準ライブラリ]
 
 ### 弱参照で循環参照を避ける
 
-130 行目では `root.prev` に、リンクそのものではなく `proxy(link)` を入れています。双方向リストは「前 → 次」「次 → 前」とお互いを参照し合うため、ふつうに作ると参照が輪になり、Python の参照カウントだけでは片付けられなくなります。後ろ向きの参照を弱参照にしておけば、不要になったリンクがすぐに解放されます（96〜100 行目のコメント参照）。
+`root.prev = proxy(link)` では、リンクそのものではなく弱参照を入れています。双方向リストは「前 → 次」「次 → 前」とお互いを参照し合うため、ふつうに作ると参照が輪になり、Python の参照カウントだけでは片付けられなくなります。後ろ向きの参照を弱参照にしておけば、不要になったリンクがすぐに解放されます（クラス冒頭のコメントを参照）。
 
 ### デフォルト引数で高速化
 
