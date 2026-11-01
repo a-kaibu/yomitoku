@@ -11,6 +11,7 @@ file: "src/strings/strings.go"
 lines: [597, 665]
 function: "Repeat"
 difficulty: 2
+format: 2
 tags: [文字列処理, 最適化, キャッシュ, 標準ライブラリ]
 ---
 
@@ -22,7 +23,81 @@ tags: [文字列処理, 最適化, キャッシュ, 標準ライブラリ]
 
 ## コード
 
-```go:line-numbers=597
+::: code-group
+
+```go:line-numbers=597 [日本語訳]
+func Repeat(s string, count int) string {
+	switch count {
+	case 0:
+		return ""
+	case 1:
+		return s
+	}
+
+	// エラーを返せないので、
+	// 繰り返しの結果があふれる場合は panic にする。
+	// golang.org/issue/16237 を参照。
+	if count < 0 {
+		panic("strings: negative Repeat count")
+	}
+	hi, lo := bits.Mul(uint(len(s)), uint(count))
+	if hi > 0 || lo > uint(maxInt) {
+		panic("strings: Repeat output length overflow")
+	}
+	n := int(lo) // lo = len(s) * count
+
+	if len(s) == 0 {
+		return ""
+	}
+
+	// 比較的短い文字列がよく繰り返される場合のための最適化。
+	switch s[0] {
+	case ' ', '-', '0', '=', '\t':
+		switch {
+		case n <= len(repeatedSpaces) && HasPrefix(repeatedSpaces, s):
+			return repeatedSpaces[:n]
+		case n <= len(repeatedDashes) && HasPrefix(repeatedDashes, s):
+			return repeatedDashes[:n]
+		case n <= len(repeatedZeroes) && HasPrefix(repeatedZeroes, s):
+			return repeatedZeroes[:n]
+		case n <= len(repeatedEquals) && HasPrefix(repeatedEquals, s):
+			return repeatedEquals[:n]
+		case n <= len(repeatedTabs) && HasPrefix(repeatedTabs, s):
+			return repeatedTabs[:n]
+		}
+	}
+
+	// 大きな塊をコピー元にすると、
+	// コピー元が大きすぎると CPU の D キャッシュを使い潰すだけになる。
+	// そこで、結果の長さが上限（8KB）を超えたら、
+	// コピー元を大きくするのをやめ、
+	// 結果ができるまで同じコピー元を使い続ける。
+	// このコピー元は常に L1 キャッシュに載っている。
+	// この方法で、L1 キャッシュの中の同じデータを使い続ける。
+	// 結果を作り終えるまで、この方法で書き続ける。
+	// この工夫で、結果が大きい場合（L2 キャッシュより大きい場合）に
+	// 大きな高速化（最大 +100%）が得られる。
+	const chunkLimit = 8 * 1024
+	chunkMax := n
+	if n > chunkLimit {
+		chunkMax = chunkLimit / len(s) * len(s)
+		if chunkMax == 0 {
+			chunkMax = len(s)
+		}
+	}
+
+	var b Builder
+	b.Grow(n)
+	b.WriteString(s)
+	for b.Len() < n {
+		chunk := min(n-b.Len(), b.Len(), chunkMax)
+		b.WriteString(b.String()[:chunk])
+	}
+	return b.String()
+}
+```
+
+```go:line-numbers=597 [原文]
 func Repeat(s string, count int) string {
 	switch count {
 	case 0:
@@ -94,6 +169,8 @@ func Repeat(s string, count int) string {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`switch`**: Go の `switch` は、一致した `case` だけを実行し、次の `case` へは自動で進みません（C のような `break` は不要です）。
@@ -105,16 +182,69 @@ func Repeat(s string, count int) string {
 
 ## 何をしているか
 
-### 1. 簡単な場合と異常の処理（598〜619 行目）
+### 1. 簡単な場合と異常の処理
+
+```go:line-numbers=598
+	switch count {
+	case 0:
+		return ""
+	case 1:
+		return s
+	}
+
+	// エラーを返せないので、
+	// 繰り返しの結果があふれる場合は panic にする。
+	// golang.org/issue/16237 を参照。
+	if count < 0 {
+		panic("strings: negative Repeat count")
+	}
+	hi, lo := bits.Mul(uint(len(s)), uint(count))
+	if hi > 0 || lo > uint(maxInt) {
+		panic("strings: Repeat output length overflow")
+	}
+	n := int(lo) // lo = len(s) * count
+
+	if len(s) == 0 {
+		return ""
+	}
+```
 
 `count` が 0 なら空文字列、1 なら `s` をそのまま返します。負の数なら `panic` します。
-611 行目では `len(s) * count` を `bits.Mul` で計算し、結果が `int` の最大値を超えるなら `panic` します。ふつうの掛け算だと、あふれて小さな値になったことに気づけないからです。
+ `len(s) * count` を `bits.Mul` で計算し、結果が `int` の最大値を超えるなら `panic` します。ふつうの掛け算だと、あふれて小さな値になったことに気づけないからです。
 
-### 2. よくある文字はあらかじめ用意した文字列を切り出す（622〜636 行目）
+### 2. よくある文字はあらかじめ用意した文字列を切り出す
+
+```go:line-numbers=622
+	switch s[0] {
+	case ' ', '-', '0', '=', '\t':
+		switch {
+		case n <= len(repeatedSpaces) && HasPrefix(repeatedSpaces, s):
+			return repeatedSpaces[:n]
+		case n <= len(repeatedDashes) && HasPrefix(repeatedDashes, s):
+			return repeatedDashes[:n]
+		case n <= len(repeatedZeroes) && HasPrefix(repeatedZeroes, s):
+			return repeatedZeroes[:n]
+		case n <= len(repeatedEquals) && HasPrefix(repeatedEquals, s):
+			return repeatedEquals[:n]
+		case n <= len(repeatedTabs) && HasPrefix(repeatedTabs, s):
+			return repeatedTabs[:n]
+		}
+	}
+```
 
 スペース、`-`、`0`、`=`、タブの繰り返しは、表の区切りやインデントでとてもよく使われます。そこで、これらを長く並べた文字列（`repeatedSpaces` など）をあらかじめ用意しておき、**先頭から必要な長さを切り出すだけ** で返します。新しいメモリ確保すら起きません。
 
-### 3. 倍々にコピーする（657〜663 行目）
+### 3. 倍々にコピーする
+
+```go:line-numbers=657
+	var b Builder
+	b.Grow(n)
+	b.WriteString(s)
+	for b.Len() < n {
+		chunk := min(n-b.Len(), b.Len(), chunkMax)
+		b.WriteString(b.String()[:chunk])
+	}
+```
 
 `s = "ab"`、`count = 5`（`n = 10`）で追います。
 
@@ -125,14 +255,25 @@ func Repeat(s string, count int) string {
 
 `min(n-b.Len(), b.Len(), chunkMax)` で、「残りの長さ」「今ある長さ」「上限」のうち小さいほうだけコピーしています。
 
-### 4. コピー元の大きさを 8KB で止める（648〜655 行目）
+### 4. コピー元の大きさを 8KB で止める
+
+```go:line-numbers=648
+	const chunkLimit = 8 * 1024
+	chunkMax := n
+	if n > chunkLimit {
+		chunkMax = chunkLimit / len(s) * len(s)
+		if chunkMax == 0 {
+			chunkMax = len(s)
+		}
+	}
+```
 
 結果がとても長いとき、コピー元も倍々に大きくなると CPU のキャッシュ（CPU のそばにある小さく速いメモリ）からはみ出してしまいます。そこで、コピーする塊を 8KB（`s` の長さの倍数）までに抑えます。
 
 ## ここがすごい
 
 - **倍々コピー**: 1 回ずつ書くと `count` 回の書き込みが必要ですが、倍々ならおよそ log2(count) 回です。1 回のコピー自体は CPU の得意な一括コピー（`memmove`）になるので、とても速く動きます。
-- **キャッシュまで考えた上限**: 641〜647 行目のコメントによると、8KB という値は実験で見つけたもので、結果が大きい場合に最大 2 倍速くなったそうです。「理屈では倍々が最善」でも、実際のハードウェアに合わせて調整しているのがポイントです。
+- **キャッシュまで考えた上限**:コメントによると、8KB という値は実験で見つけたもので、結果が大きい場合に最大 2 倍速くなったそうです。「理屈では倍々が最善」でも、実際のハードウェアに合わせて調整しているのがポイントです。
 - **よくある入力を特別扱い**: スペースやダッシュの繰り返しという「よくある使い方」だけは、計算せずに既存の文字列を切り出して返します。
 - **あふれを確実に検出**: `bits.Mul` で上位の桁まで求めることで、巨大な `count` による桁あふれを見逃しません。
 

@@ -11,6 +11,7 @@ file: "src/unicode/utf8/utf8.go"
 lines: [522, 566]
 function: "ValidString"
 difficulty: 3
+format: 2
 tags: [Unicode, 最適化, ビット演算, 文字列処理, 標準ライブラリ]
 ---
 
@@ -23,7 +24,57 @@ tags: [Unicode, 最適化, ビット演算, 文字列処理, 標準ライブラ�
 
 ## コード
 
-```go:line-numbers=522
+::: code-group
+
+```go:line-numbers=522 [日本語訳]
+func ValidString(s string) bool {
+	for len(s) > 0 {
+		s0 := s[0]
+		if s0 < RuneSelf {
+			s = s[1:]
+			// ASCII のバイトが 1 つあれば、たぶん後ろにも続く。
+			// ASCII だけのデータを素早く読み進める。
+			// 注意: ここで >= ではなく > を使っているのは意図的。
+			// スライス操作の「末尾を越えたポインタ」の補正が
+			if len(s) > ptrSize && word(s)&hiBits == 0 {
+				s = s[ptrSize:]
+				if len(s) > 2*ptrSize && (word(s)|word(s[ptrSize:]))&hiBits == 0 {
+					s = s[2*ptrSize:]
+					for len(s) > 4*ptrSize && ((word(s)|word(s[ptrSize:]))|(word(s[2*ptrSize:])|word(s[3*ptrSize:])))&hiBits == 0 {
+						s = s[4*ptrSize:]
+					}
+				}
+			}
+			continue
+		}
+		x := first[s0]
+		size := int(x & 7)
+		accept := acceptRanges[x>>4]
+		switch size {
+		case 2:
+			if len(s) < 2 || s[1] < accept.lo || accept.hi < s[1] {
+				return false
+			}
+			s = s[2:]
+		case 3:
+			if len(s) < 3 || s[1] < accept.lo || accept.hi < s[1] || s[2] < locb || hicb < s[2] {
+				return false
+			}
+			s = s[3:]
+		case 4:
+			if len(s) < 4 || s[1] < accept.lo || accept.hi < s[1] || s[2] < locb || hicb < s[2] || s[3] < locb || hicb < s[3] {
+				return false
+			}
+			s = s[4:]
+		default:
+			return false // 不正な先頭バイト
+		}
+	}
+	return true
+}
+```
+
+```go:line-numbers=522 [原文]
 func ValidString(s string) bool {
 	for len(s) > 0 {
 		s0 := s[0]
@@ -71,7 +122,9 @@ func ValidString(s string) bool {
 }
 ```
 
-`ptrSize` は 64 ビット環境で 8、`hiBits` は `0x8080808080808080`（各バイトの最上位ビットだけ 1）、`word(s)` は `s` の先頭 8 バイトを 1 つの整数として読む関数です（459〜462 行目）。
+:::
+
+`ptrSize` は 64 ビット環境で 8、`hiBits` は `0x8080808080808080`（各バイトの最上位ビットだけ 1）、`word(s)` は `s` の先頭 8 バイトを 1 つの整数として読む関数です。
 
 ## 前提知識
 
@@ -83,25 +136,75 @@ func ValidString(s string) bool {
 
 ## 何をしているか
 
-### 1. ASCII の高速道（524〜541 行目）
+### 1. ASCII の高速道
 
-先頭が ASCII なら 1 バイト進めます。「1 つ ASCII があれば、たぶん続く」（527 行目）ので、次の 8 バイトをまとめて検査し、すべて ASCII なら 8 バイト飛ばします。さらに 16 バイト（533 行目）、そして 32 バイトずつ（535〜537 行目）と、まとめる量を増やしていきます。
+```go:line-numbers=524
+		s0 := s[0]
+		if s0 < RuneSelf {
+			s = s[1:]
+			// ASCII のバイトが 1 つあれば、たぶん後ろにも続く。
+			// ASCII だけのデータを素早く読み進める。
+			// 注意: ここで >= ではなく > を使っているのは意図的。
+			// スライス操作の「末尾を越えたポインタ」の補正が
+			if len(s) > ptrSize && word(s)&hiBits == 0 {
+				s = s[ptrSize:]
+				if len(s) > 2*ptrSize && (word(s)|word(s[ptrSize:]))&hiBits == 0 {
+					s = s[2*ptrSize:]
+					for len(s) > 4*ptrSize && ((word(s)|word(s[ptrSize:]))|(word(s[2*ptrSize:])|word(s[3*ptrSize:])))&hiBits == 0 {
+						s = s[4*ptrSize:]
+					}
+				}
+			}
+			continue
+		}
+```
+
+先頭が ASCII なら 1 バイト進めます。「1 つ ASCII があれば、たぶん続く」ので、次の 8 バイトをまとめて検査し、すべて ASCII なら 8 バイト飛ばします。さらに 16 バイト、そして 32 バイトずつと、まとめる量を増やしていきます。
 
 たとえば英文 100 バイトなら、1 バイトずつ調べると 100 回の比較が要りますが、この方法なら 1 + 8 + 16 + 32 + 32... と大きく飛ばせるので、10 回程度の検査で終わります。
 
-### 2. ASCII 以外の文字（542〜563 行目）
+### 2. ASCII 以外の文字
+
+```go:line-numbers=542
+		x := first[s0]
+		size := int(x & 7)
+		accept := acceptRanges[x>>4]
+		switch size {
+		case 2:
+			if len(s) < 2 || s[1] < accept.lo || accept.hi < s[1] {
+				return false
+			}
+			s = s[2:]
+		case 3:
+			if len(s) < 3 || s[1] < accept.lo || accept.hi < s[1] || s[2] < locb || hicb < s[2] {
+				return false
+			}
+			s = s[3:]
+		case 4:
+			if len(s) < 4 || s[1] < accept.lo || accept.hi < s[1] || s[2] < locb || hicb < s[2] || s[3] < locb || hicb < s[3] {
+				return false
+			}
+			s = s[4:]
+		default:
+			return false // 不正な先頭バイト
+		}
+```
 
 先頭バイトを `first` 表で引き、文字の長さ（`size`）と 2 バイト目の許容範囲（`accept`）を得ます。
 長さに応じて、2 バイト目が許容範囲内か、3・4 バイト目が `0x80〜0xBF`（`locb`〜`hicb`）の範囲か確かめます。外れていれば `false` です。
 `size` が 2〜4 以外（不正な先頭バイト）なら `default` で `false` を返します。
 
-### 3. 最後まで行けば正しい（565 行目）
+### 3. 最後まで行けば正しい
+
+```go:line-numbers=565
+	return true
+```
 
 ## ここがすごい
 
 - **SWAR（1 つのレジスタで複数データを処理）**: 64 ビット整数 1 つを「8 個のバイト」とみなし、その最上位ビットを 1 回の AND で検査しています。専用の命令（SIMD）を使わずに、並列処理と同じ効果を出しています。
 - **だんだん大きく飛ばす**: いきなり 32 バイト単位にすると、短い ASCII の区間では無駄になります。8 → 16 → 32 と段階的に増やすことで、短い区間でも長い区間でも効率がよくなります。
-- **`>` と `>=` の使い分け**: 529〜530 行目のコメントの通り、`len(s) > ptrSize` と「より大きい」で比べることで、飛ばした後のスライスが必ず 1 バイト以上残るようにしています。これにより、スライスの終端を越えた位置を指すポインタの補正処理が不要になります。細部まで機械語レベルで考えられています。
+- **`>` と `>=` の使い分け**:コメントの通り、`len(s) > ptrSize` と「より大きい」で比べることで、飛ばした後のスライスが必ず 1 バイト以上残るようにしています。これにより、スライスの終端を越えた位置を指すポインタの補正処理が不要になります。細部まで機械語レベルで考えられています。
 
 ## まとめ
 

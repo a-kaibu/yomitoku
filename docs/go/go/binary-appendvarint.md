@@ -11,6 +11,7 @@ file: "src/encoding/binary/varint.go"
 lines: [91, 97]
 function: "AppendVarint"
 difficulty: 2
+format: 2
 tags: [ビット演算, 入出力, 標準ライブラリ]
 ---
 
@@ -51,11 +52,21 @@ func AppendVarint(buf []byte, x int64) []byte {
 
 ## 何をしているか
 
-### 1. 左に 1 ずらす（92 行目）
+### 1. 左に 1 ずらす
+
+```go:line-numbers=92
+	ux := uint64(x) << 1
+```
 
 `ux := uint64(x) << 1` で、数を 2 倍にします。これで最下位ビットが空きます。
 
-### 2. 負なら全ビットを反転（93〜95 行目）
+### 2. 負なら全ビットを反転
+
+```go:line-numbers=93
+	if x < 0 {
+		ux = ^ux
+	}
+```
 
 負の数なら `^ux` で全ビットを反転します。
 
@@ -69,7 +80,11 @@ func AppendVarint(buf []byte, x int64) []byte {
 
 負の数 `x` では、2 の補数の性質から `^(x << 1)` は `-2x - 1` になります。-1 → 1、-2 → 3、-3 → 5 と、奇数に並びます。正の数は `2x` で偶数に並びます。こうして正と負が交互（ジグザグ）に並ぶのです。
 
-### 3. 符号なし varint として書く（96 行目）
+### 3. 符号なし varint として書く
+
+```go:line-numbers=96
+	return AppendUvarint(buf, ux)
+```
 
 変換後の値は小さな正の数なので、`AppendUvarint` で書けば短いバイト列になります。-1 は 1 バイトで済みます（変換しないと 10 バイトになります）。
 

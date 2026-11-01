@@ -11,6 +11,7 @@ file: "src/slices/zsortordered.go"
 lines: [466, 481]
 function: "rotateOrdered"
 difficulty: 3
+format: 2
 tags: [アルゴリズム, ソート, メモリ管理, 標準ライブラリ]
 ---
 
@@ -42,7 +43,7 @@ func rotateOrdered[E cmp.Ordered](data []E, a, m, b int) {
 }
 ```
 
-`swapRange(data, a, b, n)` は、`data[a:a+n]` と `data[b:b+n]` の要素を 1 つずつ入れ替える関数です（331 行目）。
+`swapRange(data, a, b, n)` は、`data[a:a+n]` と `data[b:b+n]` の要素を 1 つずつ入れ替える関数です。
 
 ## 前提知識
 
@@ -77,7 +78,11 @@ B の末尾 2 つと A を入れ替えたので、`1, 2`（A）が最終位置�
 
 `3` が先頭に着きました。`i = 2 - 1 = 1`。
 
-### 3. 長さがそろったら最後の入れ替え（480 行目）
+### 3. 長さがそろったら最後の入れ替え
+
+```go:line-numbers=480
+	swapRangeOrdered(data, m-i, m, i)
+```
 
 `i == j == 1` なので、`swapRange(data, m-1=1, m=2, 1)` で `data[1]` と `data[2]` を入れ替えて `[3, 4, 5, 1, 2]`。完成です。
 

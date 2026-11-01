@@ -11,6 +11,7 @@ file: "src/slices/zsortordered.go"
 lines: [242, 256]
 function: "breakPatternsOrdered"
 difficulty: 3
+format: 2
 tags: [ソート, アルゴリズム, 乱数, 標準ライブラリ]
 ---
 
@@ -55,18 +56,37 @@ func breakPatternsOrdered[E cmp.Ordered](data []E, a, b int) {
 
 長さ 20 の範囲（`a = 0`, `b = 20`）で考えます。
 
-### 1. 短い配列は何もしない（244 行目）
+### 1. 短い配列は何もしない
+
+```go:line-numbers=244
+	if length >= 8 {
+```
 
 8 要素未満なら放っておきます。短い範囲はどうせ挿入ソートで速く並べられるからです。
 
-### 2. 乱数の準備（245〜246 行目）
+### 2. 乱数の準備
+
+```go:line-numbers=245
+		random := xorshift(length)
+		modulus := nextPowerOfTwo(length)
+```
 
 乱数の種には **長さそのもの**（20）を使います。`modulus = nextPowerOfTwo(20) = 32` です。
 
-### 3. 中央付近の 3 要素を入れ替える（248〜254 行目）
+### 3. 中央付近の 3 要素を入れ替える
+
+```go:line-numbers=248
+		for idx := a + (length/4)*2 - 1; idx <= a+(length/4)*2+1; idx++ {
+			other := int(uint(random.Next()) & (modulus - 1))
+			if other >= length {
+				other -= length
+			}
+			data[idx], data[a+other] = data[a+other], data[idx]
+		}
+```
 
 `(20/4)*2 = 10` なので、位置 9, 10, 11 の 3 つが対象です。
-それぞれ、乱数を `& 31` で 0〜31 にし、20 以上なら 20 を引いて 0〜19 に収め（250〜252 行目）、その位置の要素と入れ替えます。
+それぞれ、乱数を `& 31` で 0〜31 にし、20 以上なら 20 を引いて 0〜19 に収め、その位置の要素と入れ替えます。
 
 ## ここがすごい
 
