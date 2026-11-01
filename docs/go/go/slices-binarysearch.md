@@ -84,11 +84,12 @@ func BinarySearch[S ~[]E, E cmp.Ordered](x S, target E) (int, bool) {
 
 ```go:line-numbers=132
 	for i < j {
-		h := int(uint(i+j) >> 1) // avoid overflow when computing h
+		h := int(uint(i+j) >> 1) // h を計算するときに溢れないようにする。
+		// i ≤ h < j
 		if cmp.Less(x[h], target) {
-			i = h + 1 // preserves x[i-1] < target
+			i = h + 1 // x[i-1] < target を保つ
 		} else {
-			j = h // preserves x[j] >= target
+			j = h // x[j] >= target を保つ
 		}
 	}
 ```
