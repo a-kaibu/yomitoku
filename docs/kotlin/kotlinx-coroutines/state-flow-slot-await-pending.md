@@ -12,6 +12,7 @@ lines: [298, 309]
 function: "StateFlowSlot.takePending / awaitPending"
 difficulty: 3
 tags: [並行処理, ロック不要, 非同期]
+format: 2
 ---
 
 ## ひとことで
@@ -25,7 +26,25 @@ StateFlow の購読者は、新しい値が来るまで眠って待ちます。`
 
 ## コード
 
-```kotlin:line-numbers=298
+
+::: code-group
+
+```kotlin:line-numbers=298 [日本語訳]
+    fun takePending(): Boolean = _state.getAndSet(NONE)!!.let { state ->
+        assert { state !is CancellableContinuationImpl<*> }
+        return state === PENDING
+    }
+
+    suspend fun awaitPending(): Unit = suspendCancellableCoroutine sc@ { cont ->
+        assert { _state.value !is CancellableContinuationImpl<*> } // NONE か PENDING のどちらかのはず
+        if (_state.compareAndSet(NONE, cont)) return@sc // 継続を設置し、通知を待つ
+        // CAS に失敗した理由は、その間に通知が来て PENDING になったことだけ
+        assert { _state.value === PENDING }
+        cont.resume(Unit)
+    }
+```
+
+```kotlin:line-numbers=298 [原文]
     fun takePending(): Boolean = _state.getAndSet(NONE)!!.let { state ->
         assert { state !is CancellableContinuationImpl<*> }
         return state === PENDING
@@ -39,6 +58,8 @@ StateFlow の購読者は、新しい値が来るまで眠って待ちます。`
         cont.resume(Unit)
     }
 ```
+
+:::
 
 `_state` は、`null`（空き）、`NONE`（通知なし）、`PENDING`（通知あり）、継続オブジェクト（眠っている）のどれかを持つ原子変数です。
 
@@ -54,16 +75,29 @@ StateFlow の購読者は、新しい値が来るまで眠って待ちます。`
 
 ## 何をしているか
 
-### takePending（298〜301 行目）
+### takePending: 印を消して、前の状態を見る
+
+```kotlin:line-numbers=298
+    fun takePending(): Boolean = _state.getAndSet(NONE)!!.let { state ->
+        assert { state !is CancellableContinuationImpl<*> }
+        return state === PENDING
+    }
+```
 
 状態を `NONE` にしつつ、前の状態を受け取ります。前が `PENDING` なら「通知があった」ので `true` を返します。
-購読ループ（386〜412 行目の `collect`）は、まずこれを呼んで、`true` なら眠らずにすぐ最新の値を読みに行きます。
+購読ループは、まずこれを呼んで、`true` なら眠らずにすぐ最新の値を読みに行きます。
 
-### awaitPending（303〜309 行目）
+### awaitPending: 印がなければ眠る
+
+```kotlin:line-numbers=303
+    suspend fun awaitPending(): Unit = suspendCancellableCoroutine sc@ { cont ->
+        assert { _state.value !is CancellableContinuationImpl<*> } // NONE か PENDING のどちらかのはず
+        if (_state.compareAndSet(NONE, cont)) return@sc // 継続を設置し、通知を待つ
+```
 
 1. 中断して継続 `cont` を受け取る。
-2. 状態が `NONE` のままなら、`cont` に置き換える（305 行目）。これで「眠っている」状態になり、あとで `makePending` が起こしてくれます。
-3. CAS が失敗した場合、理由は「その間に通知が来て `PENDING` になった」しかありません（306 行目のコメント）。だから眠らずに、その場で `cont.resume(Unit)` して続行します。
+2. 状態が `NONE` のままなら、`cont` に置き換える（`compareAndSet(NONE, cont)`）。これで「眠っている」状態になり、あとで `makePending` が起こしてくれます。
+3. CAS が失敗した場合、理由は「その間に通知が来て `PENDING` になった」しかありません。だから眠らずに、その場で `cont.resume(Unit)` して続行します。
 
 ### 行き違いの例
 
@@ -78,7 +112,7 @@ StateFlow の購読者は、新しい値が来るまで眠って待ちます。`
 
 - **まず眠らずに確かめる（ファストパス）**: 値が頻繁に変わるときは、ほとんどの場合 `takePending` が `true` を返し、中断のコストを払わずに済みます。眠るのは本当に何もないときだけです。
 - **「確かめる」と「眠る」の隙間を CAS で埋める**: 並行処理でよくあるバグが、確認と待機の間に通知が来て取りこぼすことです。CAS の失敗を「通知が来た合図」として扱うことで、隙間がなくなっています。
-- **失敗の理由が 1 つしかない設計**: 状態遷移が限られているので、CAS が失敗したら `PENDING` しかありえません。307 行目の `assert` でそれを確認しています。状態の種類を絞ると、こうした推論ができるようになります。
+- **失敗の理由が 1 つしかない設計**: 状態遷移が限られているので、CAS が失敗したら `PENDING` しかありえません。`assert { _state.value === PENDING }` でそれを確認しています。状態の種類を絞ると、こうした推論ができるようになります。
 
 ## まとめ
 
