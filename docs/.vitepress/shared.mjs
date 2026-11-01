@@ -46,7 +46,7 @@ export const LICENSES = [
   'LGPL-2.1-only', 'LGPL-2.1-or-later', 'LGPL-3.0-only', 'LGPL-3.0-or-later',
   'AGPL-3.0-only', 'AGPL-3.0-or-later',
   'PSF-2.0', 'Python-2.0', 'Ruby', 'BSD-2-Clause OR Ruby', 'Artistic-2.0', 'PostgreSQL',
-  'curl', 'OpenSSL', 'Apache-2.0 WITH LLVM-exception', 'MIT OR Apache-2.0', 'Apache-2.0 OR MIT',
+  'curl', 'OpenSSL', 'Apache-2.0 WITH LLVM-exception', 'Apache-2.0 WITH Swift-exception', 'MIT OR Apache-2.0', 'Apache-2.0 OR MIT',
 ]
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
