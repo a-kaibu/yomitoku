@@ -11,6 +11,7 @@ file: library/alloc/src/rcs/arc.rs
 lines: [2514, 2549]
 function: <Arc<T> as Clone>::clone
 difficulty: 3
+format: 2
 tags: [並行処理, 防御的プログラミング, メモリ管理, 標準ライブラリ]
 ---
 
@@ -22,7 +23,48 @@ tags: [並行処理, 防御的プログラミング, メモリ管理, 標準ラ�
 
 ## コード
 
-```rust:line-numbers=2514
+::: code-group
+
+```rust:line-numbers=2514 [日本語訳]
+    fn clone(&self) -> Arc<T, A> {
+        // ここでは Relaxed で問題ない。元の参照があることで、
+        // 他のスレッドが誤ってオブジェクトを削除することがないから。
+        //
+        //
+        // [Boost のドキュメント][1] に書かれているとおり、参照カウントの増加は
+        // 常に memory_order_relaxed で行える。新しい参照は既存の参照からしか作れず、
+        //
+        // 参照を別のスレッドへ渡すこと自体が、必要な同期を済ませているから。
+        //
+        //
+        // [1]: (www.boost.org/doc/libs/1_55_0/doc/html/atomic/usage_examples.html)
+        let old_size = self.inner().strong.fetch_add(1, Relaxed);
+
+        // ただし、誰かが `mem::forget` で Arc を大量に捨てる場合に備えて、巨大な参照カウントを防ぐ必要がある。
+        // そうしないと、カウントがあふれて解放済みのメモリを使うことになる。この
+        // 分岐は現実的なプログラムでは決して通らない。そのようなプログラムは
+        // 極端に異常なので、対応する必要はないと判断して abort する。
+        //
+        // このチェックは完全ではない。参照カウントが `isize::MAX` を超えたらエラーにする。
+        // ただしチェックは加算の *後* に行うので、
+        // 最悪の事態が起きて `usize` のカウンタがあふれる可能性はある。ただし、
+        // そのためには加算と下の `abort` の間に、カウンタが `isize::MAX` から
+        // `usize::MAX` まで増えないといけず、ほぼありえない。
+        //
+        // これは全体で成り立つ不変条件で、他のメソッドで CAS ループを使ってカウントを増やす場合にも当てはまる。
+        //
+        // そうでないと、CAS ループでカウンタをほぼあふれる寸前まで持っていき、
+        // そのあと数回の `fetch_add` であふれさせられてしまう。
+        if old_size > MAX_REFCOUNT {
+            intrinsics::abort_immediate();
+        }
+
+        // SAFETY: ポインタは有効で、アロケータは確保に使ったものと一致する。
+        unsafe { Self::from_inner_in(self.ptr, self.alloc.clone()) }
+    }
+```
+
+```rust:line-numbers=2514 [原文]
     fn clone(&self) -> Arc<T, A> {
         // Using a relaxed ordering is alright here, as knowledge of the
         // original reference prevents other threads from erroneously deleting
@@ -61,6 +103,8 @@ tags: [並行処理, 防御的プログラミング, メモリ管理, 標準ラ�
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Clone` トレイト**: `x.clone()` で値を複製できるようにする仕組みです。`Arc` の場合は「同じデータを指す新しい `Arc`」を作ります。
@@ -71,26 +115,58 @@ tags: [並行処理, 防御的プログラミング, メモリ管理, 標準ラ�
 
 ## 何をしているか
 
-### 1. カウントを増やす（2526 行目）
+### 1. カウントを増やす
+
+```rust:line-numbers=2526
+        let old_size = self.inner().strong.fetch_add(1, Relaxed);
+```
+
 
 `strong.fetch_add(1, Relaxed)` で参照カウントを 1 増やします。
 
-`Relaxed` で十分な理由は 2515〜2525 行目のコメントにあります。新しい `Arc` は **既存の `Arc` からしか作れません**。`clone` を呼んでいる時点で、呼び出し元は有効な `Arc` を持っているので、カウントが 0 になって中身が解放されることはありません。また、作った `Arc` を別のスレッドに渡すときには、渡す操作（チャネルなど）がすでに必要な同期をしてくれます。
+`Relaxed` で十分な理由はのコメントにあります。新しい `Arc` は **既存の `Arc` からしか作れません**。`clone` を呼んでいる時点で、呼び出し元は有効な `Arc` を持っているので、カウントが 0 になって中身が解放されることはありません。また、作った `Arc` を別のスレッドに渡すときには、渡す操作（チャネルなど）がすでに必要な同期をしてくれます。
 
-### 2. あふれを防ぐ（2543〜2545 行目）
+```rust:line-numbers=2515
+        // Using a relaxed ordering is alright here, as knowledge of the
+        // original reference prevents other threads from erroneously deleting
+        // the object.
+        //
+        // As explained in the [Boost documentation][1], Increasing the
+        // reference counter can always be done with memory_order_relaxed: New
+        // references to an object can only be formed from an existing
+        // reference, and passing an existing reference from one thread to
+        // another must already provide any required synchronization.
+        //
+        // [1]: (www.boost.org/doc/libs/1_55_0/doc/html/atomic/usage_examples.html)
+```
+
+
+### 2. あふれを防ぐ
+
+```rust:line-numbers=2543
+        if old_size > MAX_REFCOUNT {
+            intrinsics::abort_immediate();
+        }
+```
+
 
 `mem::forget` で `Arc` を大量に捨てると、カウントは増える一方になります。もしカウントが一周して 0 に戻れば、まだ使っている中身が解放され、解放済みメモリの使用（use-after-free）という深刻なバグになります。
 
 そこで、増やす前の値が `isize::MAX` を超えていたら即座に `abort` します。`usize::MAX` ではなく、その半分の `isize::MAX` を上限にしているのがポイントです。
 
-### 3. 新しい `Arc` を作る（2548 行目）
+### 3. 新しい `Arc` を作る
+
+```rust:line-numbers=2548
+        unsafe { Self::from_inner_in(self.ptr, self.alloc.clone()) }
+```
+
 
 同じポインタとアロケータ（メモリの確保役）の複製から、新しい `Arc` を組み立てて返します。
 
 ## ここがすごい
 
 - **同期のコストを最小に**: `clone` は非常に頻繁に呼ばれます。「既存の参照があるから安全」という論理に基づいて `Relaxed` を選ぶことで、重い同期命令を避けています。
-- **余裕を持った上限**: チェックは加算の **後** にしか行えないので、チェックの前に他のスレッドがさらに足す可能性があります。上限を `usize::MAX` の半分にしておけば、`isize::MAX` から `usize::MAX` まで、さらに約 922 京回足されない限り一周しません。2533〜2537 行目で、この「完全ではないが現実的に十分」な理由を説明しています。
+- **余裕を持った上限**: チェックは加算の **後** にしか行えないので、チェックの前に他のスレッドがさらに足す可能性があります。上限を `usize::MAX` の半分にしておけば、`isize::MAX` から `usize::MAX` まで、さらに約 922 京回足されない限り一周しません。コメントで、この「完全ではないが現実的に十分」な理由を説明しています。
 - **パニックではなく abort**: これほど異常な状況では、後片付けのコードを走らせること自体が危険です。即座に止めるのが最も安全です。
 - **ほぼ起きない分岐は予測でタダ同然**: この `if` はまず真になりません。CPU の分岐予測は必ず当たるので、安全のためのチェックが性能にほとんど影響しません。
 
