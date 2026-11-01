@@ -11,8 +11,10 @@ file: Lib/functools.py
 lines: [188, 199]
 function: total_ordering
 difficulty: 2
+format: 2
 tags: [メタプログラミング, 設計パターン, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `@total_ordering` をクラスに付けると、`__lt__`（`<`）など比較メソッドを **1 つ定義するだけで、残りの `<=`・`>`・`>=` を自動で追加** してくれます。
@@ -20,7 +22,24 @@ tags: [メタプログラミング, 設計パターン, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=188
+::: code-group
+
+```python:line-numbers=188 [日本語訳]
+def total_ordering(cls):
+    """不足している比較メソッドを補うクラスデコレータ"""
+    # 利用者が定義した比較を探す（object から継承したものは除く）。
+    roots = {op for op in _convert if getattr(cls, op, None) is not getattr(object, op, None)}
+    if not roots:
+        raise ValueError('must define at least one ordering operation: < > <= >=')
+    root = max(roots)       # __lt__ → __le__ → __gt__ → __ge__ の順に優先する
+    for opname, opfunc in _convert[root]:
+        if opname not in roots:
+            opfunc.__name__ = opname
+            setattr(cls, opname, opfunc)
+    return cls
+```
+
+```python:line-numbers=188 [原文]
 def total_ordering(cls):
     """Class decorator that fills in missing ordering methods"""
     # Find user-defined comparisons (not those inherited from object).
@@ -35,18 +54,9 @@ def total_ordering(cls):
     return cls
 ```
 
-`_convert` は同じファイルの 173 行目にある辞書（`frozendict` は書き換えできない辞書）で、「基準にする演算子」ごとに「残りの演算子の作り方」が登録されています。
+:::
 
-```python
-_convert = frozendict({
-    '__lt__': [('__gt__', _gt_from_lt),
-               ('__le__', _le_from_lt),
-               ('__ge__', _ge_from_lt)],
-    '__le__': [...],
-    '__gt__': [...],
-    '__ge__': [...]
-})
-```
+`_convert` は同じファイルにある辞書（`frozendict`）で、「基準にする演算子」ごとに「残りの演算子の作り方」が登録されています。`__lt__` を基準にする場合は `_gt_from_lt`、`_le_from_lt`、`_ge_from_lt` の 3 つが対応します。
 
 たとえば `_le_from_lt` は「`a <= b` は `a < b or a == b`」として `<=` を作る関数です。
 
@@ -70,17 +80,38 @@ class Version:
     def __lt__(self, o): return self.n < o.n
 ```
 
-### 1. 自分で定義した比較を探す（191 行目）
+### 1. 自分で定義した比較を探す
+
+```python:line-numbers=191
+    roots = {op for op in _convert if getattr(cls, op, None) is not getattr(object, op, None)}
+```
 
 `_convert` のキー（4 つの演算子名）それぞれについて、`getattr(cls, op)` が `object` の同名メソッドと **別物** なら「利用者が定義した」と判断します。`Version` では `roots = {'__lt__'}` です。
 
-### 2. 1 つもなければエラー（192〜193 行目）
+### 2. 1 つもなければエラー
 
-### 3. 基準を 1 つ選ぶ（194 行目）
+```python:line-numbers=192
+    if not roots:
+        raise ValueError('must define at least one ordering operation: < > <= >=')
+```
+
+### 3. 基準を 1 つ選ぶ
+
+```python:line-numbers=194
+    root = max(roots)       # __lt__ → __le__ → __gt__ → __ge__ の順に優先する
+```
 
 `max(roots)` で 1 つ選びます。4 つの名前を辞書順に並べると `__ge__ < __gt__ < __le__ < __lt__` なので、`max` は `__lt__ → __le__ → __gt__ → __ge__` の優先順になります。
 
-### 4. 足りないものだけ追加する（195〜198 行目）
+### 4. 足りないものだけ追加する
+
+```python:line-numbers=195
+    for opname, opfunc in _convert[root]:
+        if opname not in roots:
+            opfunc.__name__ = opname
+            setattr(cls, opname, opfunc)
+    return cls
+```
 
 基準 `__lt__` に対応する作り方の一覧から、まだ定義されていない `__gt__`, `__le__`, `__ge__` を `setattr` でクラスに追加します。すでに定義されているものは上書きしません。
 
@@ -89,11 +120,11 @@ class Version:
 ### 「object と同じかどうか」で自作を見分ける
 
 Python のクラスはすべて `object` を継承していて、`object` も `__lt__` などを持っています（中身は「比較できない」を返すだけ）。そのため「`__lt__` を持っているか」では判定できません。
-191 行目は「`object` のものと **同一か**」を `is` で比べることで、利用者（や親クラス）が実際に定義したものだけを見つけています。
+`getattr(cls, op) is not getattr(object, op)` は、`object` のものと **同一か** を `is` で比べることで、利用者（や親クラス）が実際に定義したものだけを見つけています。
 
 ### `max()` に優先順位を任せる
 
-「`__lt__` があればそれ、なければ `__le__`……」という if の連鎖を書く代わりに、名前の辞書順がちょうど望む優先順になることを利用して `max()` 1 回で済ませています。194 行目のコメントがその意図を説明しています。
+「`__lt__` があればそれ、なければ `__le__`……」という if の連鎖を書く代わりに、名前の辞書順がちょうど望む優先順になることを利用して `max()` 1 回で済ませています。コメントがその意図を説明しています。
 
 ### 表で振る舞いを決める（テーブル駆動）
 
@@ -101,7 +132,7 @@ Python のクラスはすべて `object` を継承していて、`object` も `_
 
 ### `__name__` を付け直す
 
-197 行目で、追加する関数の `__name__` を `__gt__` などに設定しています。エラー表示やデバッグのときに、正しいメソッド名が出るようにするための気配りです。
+追加する関数の `__name__` を `__gt__` などに設定しています。エラー表示やデバッグのときに、正しいメソッド名が出るようにするための気配りです。
 
 ## まとめ
 

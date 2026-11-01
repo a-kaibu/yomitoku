@@ -11,8 +11,10 @@ file: Lib/random.py
 lines: [460, 495]
 function: Random.choices
 difficulty: 2
+format: 2
 tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `choices(population, weights, k=...)` は、**重み（当たりやすさ）を付けて、要素を k 個選ぶ**（同じものを何度選んでもよい）メソッドです。
@@ -21,7 +23,48 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=460
+::: code-group
+
+```python:line-numbers=460 [日本語訳]
+    def choices(self, population, weights=None, *, cum_weights=None, k=1):
+        """重複を許して、母集団の要素を k 個選んだリストを返す。
+
+        相対的な重みも累積の重みも指定されていなければ、
+        各要素は等しい確率で選ばれる。
+
+        """
+        random = self.random
+        n = len(population)
+        if cum_weights is None:
+            if weights is None:
+                floor = _floor
+                n += 0.0    # 小さな高速化のため float にする
+                return [population[floor(random() * n)] for i in _repeat(None, k)]
+            try:
+                cum_weights = list(_accumulate(weights))
+            except TypeError:
+                if not isinstance(weights, int):
+                    raise
+                k = weights
+                raise TypeError(
+                    f'The number of choices must be a keyword argument: {k=}'
+                ) from None
+        elif weights is not None:
+            raise TypeError('Cannot specify both weights and cumulative weights')
+        if len(cum_weights) != n:
+            raise ValueError('The number of weights does not match the population')
+        total = cum_weights[-1] + 0.0   # float に変換する
+        if total <= 0.0:
+            raise ValueError('Total of weights must be greater than zero')
+        if not _isfinite(total):
+            raise ValueError('Total of weights must be finite')
+        bisect = _bisect
+        hi = n - 1
+        return [population[bisect(cum_weights, random() * total, 0, hi)]
+                for i in _repeat(None, k)]
+```
+
+```python:line-numbers=460 [原文]
     def choices(self, population, weights=None, *, cum_weights=None, k=1):
         """Return a k sized list of population elements chosen with replacement.
 
@@ -60,6 +103,8 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
                 for i in _repeat(None, k)]
 ```
 
+:::
+
 `_floor`、`_accumulate`、`_bisect`、`_isfinite`、`_repeat` は、それぞれ `math.floor`、`itertools.accumulate`、`bisect.bisect`、`math.isfinite`、`itertools.repeat` を、ファイルの冒頭で別名で読み込んだものです。
 
 ## 前提知識
@@ -73,20 +118,59 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 重みがない場合（470〜473 行目）
+### 1. 重みがない場合
 
-すべて等確率なら、`floor(random() * n)` で 0〜n-1 の位置を選ぶだけです。472 行目で `n` に `0.0` を足して小数にしておくのは、ループの中で毎回「整数 × 小数」の型変換が起きないようにするための、小さな高速化です。
+```python:line-numbers=469
+        if cum_weights is None:
+            if weights is None:
+                floor = _floor
+                n += 0.0    # 小さな高速化のため float にする
+                return [population[floor(random() * n)] for i in _repeat(None, k)]
+```
 
-### 2. 重みから累積和を作る（474〜482 行目）
+すべて等確率なら、`floor(random() * n)` で 0〜n-1 の位置を選ぶだけです。`n += 0.0` で `n` を小数にしておくのは、ループの中で毎回「整数 × 小数」の型変換が起きないようにするための、小さな高速化です。
+
+### 2. 重みから累積和を作る
+
+```python:line-numbers=474
+            try:
+                cum_weights = list(_accumulate(weights))
+            except TypeError:
+                if not isinstance(weights, int):
+                    raise
+                k = weights
+                raise TypeError(
+                    f'The number of choices must be a keyword argument: {k=}'
+                ) from None
+```
 
 `weights = [5, 3, 2]` なら `cum_weights = [5, 8, 10]` です。
 `choices(pop, 3)` のように回数をうっかり位置引数で渡すと、`3` を重みとして累積和を作ろうとして失敗します。このときは「回数はキーワード引数で」というわかりやすいメッセージに置き換えています。
 
-### 3. 入力の確認（483〜491 行目）
+### 3. 入力を確認する
+
+```python:line-numbers=483
+        elif weights is not None:
+            raise TypeError('Cannot specify both weights and cumulative weights')
+        if len(cum_weights) != n:
+            raise ValueError('The number of weights does not match the population')
+        total = cum_weights[-1] + 0.0   # float に変換する
+        if total <= 0.0:
+            raise ValueError('Total of weights must be greater than zero')
+        if not _isfinite(total):
+            raise ValueError('Total of weights must be finite')
+```
 
 重みの数が要素数と違う、合計が 0 以下、合計が無限大、といった場合はエラーにします。
 
-### 4. 乱数がどの区間に落ちるか探す（492〜495 行目）
+### 4. 乱数がどの区間に落ちるか探す
+
+```python:line-numbers=492
+        bisect = _bisect
+        hi = n - 1
+        return [population[bisect(cum_weights, random() * total, 0, hi)]
+                for i in _repeat(None, k)]
+```
 
 合計 `total = 10` に対して `random() * 10` は 0〜10 未満の小数です。
 
@@ -112,7 +196,7 @@ tags: [乱数, 探索, アルゴリズム, 標準ライブラリ]
 
 ### ありがちなミスに親切
 
-位置引数で回数を渡すミスを、`TypeError` を捕まえて具体的なメッセージに変えています（477〜482 行目）。しかも `weights` が整数だったときだけ置き換え、それ以外のエラーはそのまま投げ直しているので、本当の原因を隠しません。
+位置引数で回数を渡すミスを、`TypeError` を捕まえて具体的なメッセージに変えています。しかも `weights` が整数だったときだけ置き換え、それ以外のエラーはそのまま投げ直しているので、本当の原因を隠しません。
 
 ## まとめ
 
