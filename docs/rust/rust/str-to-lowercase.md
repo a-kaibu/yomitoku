@@ -11,6 +11,7 @@ file: library/alloc/src/str.rs
 lines: [457, 489]
 function: str::to_lowercase
 difficulty: 2
+format: 2
 tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
 ---
 
@@ -22,7 +23,45 @@ tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
 
 ## コード
 
-```rust:line-numbers=457
+::: code-group
+
+```rust:line-numbers=457 [日本語訳]
+    pub fn to_lowercase(&self) -> String {
+        // SAFETY: `to_ascii_lowercase` は ASCII のバイトを ASCII のまま保つので、変換済みの
+        // 先頭部分は有効な UTF-8 のまま。
+        let (mut s, rest) = unsafe { convert_while_ascii(self, u8::to_ascii_lowercase) };
+
+        let prefix_len = s.len();
+
+        for (i, c) in rest.char_indices() {
+            if c == 'Σ' {
+                // Σ は通常 σ に変換されるが、単語の末尾では ς になる。
+                // これは、言語に依存せず文脈で条件が変わる唯一の変換であり、
+                // `SpecialCasing.txt` にある。
+                // 汎用の「条件」の仕組みを作らず、ここに直接書いている。
+                // 参照: https://github.com/rust-lang/rust/issues/26035
+                let sigma_lowercase = map_uppercase_sigma(self, prefix_len + i);
+                s.push(sigma_lowercase);
+            } else {
+                match conversions::to_lower(c) {
+                    [a, '\0', _] => s.push(a),
+                    [a, b, '\0'] => {
+                        s.push(a);
+                        s.push(b);
+                    }
+                    [a, b, c] => {
+                        s.push(a);
+                        s.push(b);
+                        s.push(c);
+                    }
+                }
+            }
+        }
+        s
+    }
+```
+
+```rust:line-numbers=457 [原文]
     pub fn to_lowercase(&self) -> String {
         // SAFETY: `to_ascii_lowercase` preserves ASCII bytes, so the converted
         // prefix remains valid UTF-8.
@@ -58,6 +97,8 @@ tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`&self` と `-> String`**: 文字列 `&str` を借りて読み、新しく作った `String`（所有権を持つ文字列）を返します。元の文字列は変わりません。
@@ -68,11 +109,46 @@ tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. ASCII の部分をまとめて変換（460〜462 行目）
+### 1. ASCII の部分をまとめて変換
+
+```rust:line-numbers=460
+        let (mut s, rest) = unsafe { convert_while_ascii(self, u8::to_ascii_lowercase) };
+
+        let prefix_len = s.len();
+```
+
 
 `"Hello, ΣΟΦΙΑ"` なら、`"Hello, "` までが ASCII です。この部分は `u8::to_ascii_lowercase` で 1 バイトずつ（実際には 16 バイトずつまとめて）変換され、`s = "hello, "`、`rest = "ΣΟΦΙΑ"` になります。
 
-### 2. 残りを 1 文字ずつ変換（464〜487 行目）
+### 2. 残りを 1 文字ずつ変換
+
+```rust:line-numbers=464
+        for (i, c) in rest.char_indices() {
+            if c == 'Σ' {
+                // Σ maps to σ, except at the end of a word where it maps to ς.
+                // This is the only conditional (contextual) but language-independent mapping
+                // in `SpecialCasing.txt`,
+                // so hard-code it rather than have a generic "condition" mechanism.
+                // See https://github.com/rust-lang/rust/issues/26035
+                let sigma_lowercase = map_uppercase_sigma(self, prefix_len + i);
+                s.push(sigma_lowercase);
+            } else {
+                match conversions::to_lower(c) {
+                    [a, '\0', _] => s.push(a),
+                    [a, b, '\0'] => {
+                        s.push(a);
+                        s.push(b);
+                    }
+                    [a, b, c] => {
+                        s.push(a);
+                        s.push(b);
+                        s.push(c);
+                    }
+                }
+            }
+        }
+```
+
 
 `conversions::to_lower(c)` は、小文字を最大 3 文字の配列で返します。使わない部分は `'\0'` で埋められています。
 
@@ -82,7 +158,19 @@ tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
 
 `match` で配列の形を見て、必要な数だけ `push` します。
 
-### 3. Σ だけは特別（465〜472 行目）
+### 3. Σ だけは特別
+
+```rust:line-numbers=465
+            if c == 'Σ' {
+                // Σ maps to σ, except at the end of a word where it maps to ς.
+                // This is the only conditional (contextual) but language-independent mapping
+                // in `SpecialCasing.txt`,
+                // so hard-code it rather than have a generic "condition" mechanism.
+                // See https://github.com/rust-lang/rust/issues/26035
+                let sigma_lowercase = map_uppercase_sigma(self, prefix_len + i);
+                s.push(sigma_lowercase);
+```
+
 
 ギリシャ文字の大文字 Σ は、単語の途中なら σ、単語の最後なら ς という別の小文字になります。前後の文字を見ないと決められないので、`map_uppercase_sigma` に元の文字列全体と位置を渡して判定させます。
 
@@ -90,7 +178,7 @@ tags: [Unicode, 文字列処理, 最適化, 標準ライブラリ]
 
 - **よくあるケースを最速に**: 多くの文字列は ASCII だけ、または ASCII で始まります。その部分は Unicode の表を引かずに、SIMD 命令が使える形でまとめて変換されます。
 - **配列とパターンマッチで「可変長の結果」を表す**: 小文字化の結果は 1〜3 文字ですが、`Vec` を作るとメモリ確保が必要になります。固定長 3 の配列を `'\0'` で埋めて返し、パターンマッチで長さを判定することで、メモリ確保なしに扱っています。
-- **例外は 1 つだけハードコード**: 466〜470 行目のコメントのとおり、Unicode の特殊な大文字・小文字規則のうち、言語に依存せず文脈で変わるのは Σ だけです。汎用的な「条件」の仕組みを作る代わりに、この 1 つだけを直接書いています。仕様を調べたうえで、最もシンプルな実装を選んだ例です。
+- **例外は 1 つだけハードコード**: コメントのとおり、Unicode の特殊な大文字・小文字規則のうち、言語に依存せず文脈で変わるのは Σ だけです。汎用的な「条件」の仕組みを作る代わりに、この 1 つだけを直接書いています。仕様を調べたうえで、最もシンプルな実装を選んだ例です。
 - **ロケール非依存**: トルコ語の i/İ のような言語ごとの規則は扱わない、と割り切っています。どの環境でも同じ結果になります。
 
 ## まとめ

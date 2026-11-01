@@ -11,6 +11,7 @@ file: library/core/src/num/imp/int_sqrt.rs
 lines: [47, 101]
 function: unsigned_fn!
 difficulty: 3
+format: 2
 tags: [マクロ, 数値計算, アルゴリズム, ビット演算]
 ---
 
@@ -23,7 +24,67 @@ tags: [マクロ, 数値計算, アルゴリズム, ビット演算]
 
 ## コード
 
-```rust:line-numbers=47
+::: code-group
+
+```rust:line-numbers=47 [日本語訳]
+macro_rules! unsigned_fn {
+    ($UnsignedT:ident, $HalfBitsT:ident, $stages:ident) => {
+        /// [整数の平方根](
+        /// https://en.wikipedia.org/wiki/Integer_square_root) を返す（任意の
+        #[doc = concat!("[`", stringify!($UnsignedT), "`](prim@", stringify!($UnsignedT), ")")]
+        /// 入力について）。
+        #[must_use = "this returns the result of the operation, \
+                      without modifying the original"]
+        #[inline]
+        pub(in crate::num) const fn $UnsignedT(mut n: $UnsignedT) -> $UnsignedT {
+            if n <= <$HalfBitsT>::MAX as $UnsignedT {
+                $HalfBitsT(n as $HalfBitsT) as $UnsignedT
+            } else {
+                // 正規化のシフトは、カラツバ平方根の前提条件
+                // 「a₃ ≥ b/4」を満たす（a₃ は n のビットの最上位 4 分の 1）。
+                // b は、その 4 分の 1 のビットで表せる値の個数。
+                //
+                //
+                // b/4 は、2 番目に上位のビットだけが 1 で、ほかは 0 の値になる。
+                // a₃ は b/4 以上なので、a₃ の最上位ビットか、その隣が 1 になる。
+                // a₃ の最上位ビットは n の最上位ビットと同じなので、
+                // 同じことが n にも言える。
+                //
+                //
+                // シフト量を偶数にする理由は、偶数ビットだと
+                // 平方根が正規化シフトの半分だけ左にずれた値になるから。
+                //
+                //
+                // sqrt(n << (2 * p))
+                // sqrt(2.pow(2 * p) * n)
+                // sqrt(2.pow(2 * p)) * sqrt(n)
+                // 2.pow(p) * sqrt(n)
+                // sqrt(n) << p
+                //
+                // 奇数ビットだと、厄介な sqrt(2) が掛かってしまう。
+                //
+                //
+                // sqrt(n << (2 * p + 1))
+                // sqrt(2.pow(2 * p + 1) * n)
+                // sqrt(2 * 2.pow(2 * p) * n)
+                // sqrt(2) * sqrt(2.pow(2 * p)) * sqrt(n)
+                // sqrt(2) * 2.pow(p) * sqrt(n)
+                // sqrt(2) * (sqrt(n) << p)
+                const EVEN_MAKING_BITMASK: u32 = !1;
+                let normalization_shift = n.leading_zeros() & EVEN_MAKING_BITMASK;
+                n <<= normalization_shift;
+
+                let s = $stages(n);
+
+                let denormalization_shift = normalization_shift >> 1;
+                s >> denormalization_shift
+            }
+        }
+    };
+}
+```
+
+```rust:line-numbers=47 [原文]
 macro_rules! unsigned_fn {
     ($UnsignedT:ident, $HalfBitsT:ident, $stages:ident) => {
         /// Returns the [integer square root](
@@ -81,6 +142,8 @@ macro_rules! unsigned_fn {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`macro_rules!`**: Rust のマクロ（コードを生成するしくみ）の定義です。`$UnsignedT:ident` のような部分は「呼び出し時に識別子を受け取る引数」で、本体中の `$UnsignedT` がその名前に置き換わります。たとえば `unsigned_fn!(u32, u16, u32_stages)` と呼ぶと、`u32` 用の関数ができます。
@@ -92,17 +155,38 @@ macro_rules! unsigned_fn {
 
 ## 何をしているか
 
-### 1. 小さい数は半分の型に任せる（57〜58 行目）
+### 1. 小さい数は半分の型に任せる
+
+```rust:line-numbers=57
+            if n <= <$HalfBitsT>::MAX as $UnsignedT {
+                $HalfBitsT(n as $HalfBitsT) as $UnsignedT
+```
+
 
 `n` が半分のビット数の型（`u32` 版なら `u16`）に収まるなら、その型の平方根関数を呼びます。小さい型の計算のほうが速く、`u16` → `u8` のように再帰的に小さい問題へ落とせます（`u8` は表引きです）。
 
-### 2. 正規化シフト（90〜92 行目）
+### 2. 正規化シフト
+
+```rust:line-numbers=90
+                const EVEN_MAKING_BITMASK: u32 = !1;
+                let normalization_shift = n.leading_zeros() & EVEN_MAKING_BITMASK;
+                n <<= normalization_shift;
+```
+
 
 カラツバ平方根は「入力の最上位の 2 ビットのどちらかが 1」でないと正しく動きません。そこで `n` を左にずらして上位の 0 を詰めます。
 
 ポイントは **ずらす量を必ず偶数にする** ことです。`n.leading_zeros()` に `!1` を AND すると最下位ビットが消えて偶数になります。たとえば上位の 0 が 7 個なら、ずらすのは 6 ビットです（最上位ビットは 0 のままでも、その隣が 1 なので条件を満たします）。
 
-### 3. 計算して、半分だけ戻す（94〜97 行目）
+### 3. 計算して、半分だけ戻す
+
+```rust:line-numbers=94
+                let s = $stages(n);
+
+                let denormalization_shift = normalization_shift >> 1;
+                s >> denormalization_shift
+```
+
 
 `n` を `2p` ビット左にずらすのは、`n` に `4^p` を掛けるのと同じです。すると
 
@@ -111,7 +195,30 @@ sqrt(n × 4^p) = sqrt(n) × 2^p
 ```
 
 となり、**結果は `p` ビットだけ左にずれた値** になります。なので最後に `s >> (normalization_shift >> 1)`、つまりシフト量の半分だけ右に戻せば元の答えです。
-もし奇数ビットずらすと `sqrt(2)` が掛かってしまい、シフトでは戻せません。コメント（71〜89 行目）はこの式変形を丁寧に示しています。
+もし奇数ビットずらすと `sqrt(2)` が掛かってしまい、シフトでは戻せません。コメントはこの式変形を丁寧に示しています。
+
+```rust:line-numbers=71
+                // The reason to shift by an even number of bits is because an
+                // even number of bits produces the square root shifted to the
+                // left by half of the normalization shift:
+                //
+                // sqrt(n << (2 * p))
+                // sqrt(2.pow(2 * p) * n)
+                // sqrt(2.pow(2 * p)) * sqrt(n)
+                // 2.pow(p) * sqrt(n)
+                // sqrt(n) << p
+                //
+                // Shifting by an odd number of bits leaves an ugly sqrt(2)
+                // multiplied in:
+                //
+                // sqrt(n << (2 * p + 1))
+                // sqrt(2.pow(2 * p + 1) * n)
+                // sqrt(2 * 2.pow(2 * p) * n)
+                // sqrt(2) * sqrt(2.pow(2 * p)) * sqrt(n)
+                // sqrt(2) * 2.pow(p) * sqrt(n)
+                // sqrt(2) * (sqrt(n) << p)
+```
+
 
 ## ここがすごい
 

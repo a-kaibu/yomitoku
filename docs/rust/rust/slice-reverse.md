@@ -11,6 +11,7 @@ file: library/core/src/slice/mod.rs
 lines: [979, 1020]
 function: <[T]>::reverse
 difficulty: 2
+format: 2
 tags: [最適化, メモリ管理, 標準ライブラリ]
 ---
 
@@ -22,7 +23,54 @@ tags: [最適化, メモリ管理, 標準ライブラリ]
 
 ## コード
 
-```rust:line-numbers=979
+::: code-group
+
+```rust:line-numbers=979 [日本語訳]
+    pub const fn reverse(&mut self) {
+        let half_len = self.len() / 2;
+        let Range { start, end } = self.as_mut_ptr_range();
+
+        // 長さが奇数のとき、これらのスライスは真ん中の要素を飛ばす。
+        // その要素は動かす必要がないから。
+        let (front_half, back_half) =
+            // SAFETY: どちらも元のスライスの一部なので、メモリ範囲は有効で、
+            // 2 つは重ならない（それぞれ元の半分以下だから）。
+            //
+            unsafe {
+                (
+                    slice::from_raw_parts_mut(start, half_len),
+                    slice::from_raw_parts_mut(end.sub(half_len), half_len),
+                )
+            };
+
+        // ここで関数の境界を作ると、2 つの半分に `noalias` の印が付き、
+        // LLVM が互いに別物だと分かるので、よりよく最適化できる。
+        // 元のスライスでは、それができない。
+        revswap(front_half, back_half, half_len);
+
+        #[inline]
+        const fn revswap<T>(a: &mut [T], b: &mut [T], n: usize) {
+            debug_assert!(a.len() == n);
+            debug_assert!(b.len() == n);
+
+            // この関数は最初は単独でコンパイルされるので、
+            // このチェックで、下の添字が
+            // 範囲内であることを LLVM に伝える。インライン化のあと、
+            // スライスの実際の長さが分かると、このチェックは消える。
+            // FIXME(const_trait_impl) let (a, b) = (&mut a[..n], &mut b[..n]); に置き換える
+            let (a, _) = a.split_at_mut(n);
+            let (b, _) = b.split_at_mut(n);
+
+            let mut i = 0;
+            while i < n {
+                mem::swap(&mut a[i], &mut b[n - 1 - i]);
+                i += 1;
+            }
+        }
+    }
+```
+
+```rust:line-numbers=979 [原文]
     pub const fn reverse(&mut self) {
         let half_len = self.len() / 2;
         let Range { start, end } = self.as_mut_ptr_range();
@@ -67,6 +115,8 @@ tags: [最適化, メモリ管理, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`&mut self`**: スライス自身を「書き換え可能な参照」で受け取ります。Rust では、書き換え可能な参照 `&mut` は同時に 1 つしか存在できないという規則があります。
@@ -78,16 +128,52 @@ tags: [最適化, メモリ管理, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 前半と後半を切り出す（980〜994 行目）
+### 1. 前半と後半を切り出す
+
+```rust:line-numbers=980
+        let half_len = self.len() / 2;
+        let Range { start, end } = self.as_mut_ptr_range();
+
+        // These slices will skip the middle item for an odd length,
+        // since that one doesn't need to move.
+        let (front_half, back_half) =
+            // SAFETY: Both are subparts of the original slice, so the memory
+            // range is valid, and they don't overlap because they're each only
+            // half (or less) of the original slice.
+            unsafe {
+                (
+                    slice::from_raw_parts_mut(start, half_len),
+                    slice::from_raw_parts_mut(end.sub(half_len), half_len),
+                )
+            };
+```
+
 
 長さの半分 `half_len` を求め、先頭から `half_len` 個のスライス `front_half` と、末尾から `half_len` 個のスライス `back_half` を作ります。
 `[1, 2, 3, 4, 5]` なら `half_len = 2` で、`front_half = [1, 2]`、`back_half = [4, 5]` です。真ん中の `3` は動かす必要がないので、どちらにも含まれません。
 
-### 2. 別の関数に渡す（999 行目）
+### 2. 別の関数に渡す
+
+```rust:line-numbers=999
+        revswap(front_half, back_half, half_len);
+```
+
 
 2 つのスライスを `revswap` に渡します。
 
-### 3. 入れ替える（1011〜1018 行目）
+### 3. 入れ替える
+
+```rust:line-numbers=1011
+            let (a, _) = a.split_at_mut(n);
+            let (b, _) = b.split_at_mut(n);
+
+            let mut i = 0;
+            while i < n {
+                mem::swap(&mut a[i], &mut b[n - 1 - i]);
+                i += 1;
+            }
+```
+
 
 `a[i]` と `b[n - 1 - i]` を入れ替えます。
 
@@ -96,11 +182,17 @@ i=0: a[0]=1 と b[1]=5 を入れ替え → [5, 2, 3, 4, 1]
 i=1: a[1]=2 と b[0]=4 を入れ替え → [5, 4, 3, 2, 1]
 ```
 
-1011〜1012 行目の `split_at_mut(n)` は、一見何もしていないように見えますが、「`a` と `b` の長さは少なくとも `n`」とコンパイラに伝える役割があります。これでループ中の範囲チェック（添字が範囲内かの確認）が消えます。
+の `split_at_mut(n)` は、一見何もしていないように見えますが、「`a` と `b` の長さは少なくとも `n`」とコンパイラに伝える役割があります。これでループ中の範囲チェック（添字が範囲内かの確認）が消えます。
+
+```rust:line-numbers=1011
+            let (a, _) = a.split_at_mut(n);
+            let (b, _) = b.split_at_mut(n);
+```
+
 
 ## ここがすごい
 
-- **関数の境界で「重ならない」を伝える**: 996〜998 行目のコメントのとおり、Rust では `&mut` の引数は互いに重ならないことが保証されるので、コンパイラ（LLVM）に `noalias`（別名なし）という情報が渡ります。1 つのスライスの前と後ろを触るだけでは、コンパイラは「前に書いた値が後ろの読み出しに影響するかも」と疑い、まとめて処理する最適化（SIMD 化など）をためらいます。2 つのスライスに分けることで、その疑いが消えます。
+- **関数の境界で「重ならない」を伝える**: コメントのとおり、Rust では `&mut` の引数は互いに重ならないことが保証されるので、コンパイラ（LLVM）に `noalias`（別名なし）という情報が渡ります。1 つのスライスの前と後ろを触るだけでは、コンパイラは「前に書いた値が後ろの読み出しに影響するかも」と疑い、まとめて処理する最適化（SIMD 化など）をためらいます。2 つのスライスに分けることで、その疑いが消えます。
 - **Rust の借用規則が最適化の材料になる**: 「`&mut` は同時に 1 つ」という安全のための規則が、そのまま性能向上の根拠として使われています。C では `restrict` キーワードを付けないと得られない情報です。
 - **範囲チェックを消す小技**: `split_at_mut` で長さをはっきりさせると、ループ内の添字アクセスが安全だとコンパイラが証明でき、チェックが不要になります。インライン展開後にはこの `split_at_mut` 自体も消えるので、実行時のコストはありません。
 - **真ん中を扱わない**: 奇数長でも偶数長でも、`half_len` 個ずつ取れば中央の要素は自然に除外されます。特別扱いの `if` が要りません。

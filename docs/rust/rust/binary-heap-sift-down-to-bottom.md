@@ -11,6 +11,7 @@ file: library/alloc/src/collections/binary_heap/mod.rs
 lines: [887, 930]
 function: BinaryHeap::sift_down_to_bottom
 difficulty: 3
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,56 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## コード
 
-```rust:line-numbers=887
+::: code-group
+
+```rust:line-numbers=887 [日本語訳]
+    /// `pos` の要素を、ヒープの一番下まで移動させる。
+    /// そのあと、正しい位置まで浮かせる。
+    ///
+    /// 注: 要素が大きい、または底の近くに置くべきだとわかっているときに速い。
+    ///
+    ///
+    /// # 安全性
+    ///
+    /// 呼び出し側は `pos < self.len()` を保証すること。
+    unsafe fn sift_down_to_bottom(&mut self, mut pos: usize) {
+        let end = self.len();
+        let start = pos;
+
+        // SAFETY: 呼び出し側が pos < self.len() を保証する。
+        let mut hole = unsafe { Hole::new(&mut self.data, pos) };
+        let mut child = 2 * hole.pos() + 1;
+
+        // ループの不変条件: child == 2 * hole.pos() + 1。
+        while child <= end.saturating_sub(2) {
+            // SAFETY: child < end - 1 < self.len() かつ
+            //  child + 1 < end <= self.len() なので、どちらも有効な添字。
+            //  child == 2 * hole.pos() + 1 != hole.pos() かつ
+            //  child + 1 == 2 * hole.pos() + 2 != hole.pos()。
+            // FIXME: 2 * hole.pos() + 1 や 2 * hole.pos() + 2 は ZST だとオーバーフローしうる
+            //  （T が ZST の場合）
+            child += unsafe { hole.get(child) <= hole.get(child + 1) } as usize;
+
+            // SAFETY: 上と同じ
+            unsafe { hole.move_to(child) };
+            child = 2 * hole.pos() + 1;
+        }
+
+        if child == end - 1 {
+            // SAFETY: child == end - 1 < self.len() なので、有効な添字
+            //  かつ child == 2 * hole.pos() + 1 != hole.pos() である。
+            unsafe { hole.move_to(child) };
+        }
+        pos = hole.pos();
+        drop(hole);
+
+        // SAFETY: pos は穴の位置で、有効な添字だと証明済み
+        //
+        unsafe { self.sift_up(start, pos) };
+    }
+```
+
+```rust:line-numbers=887 [原文]
     /// Take an element at `pos` and move it all the way down the heap,
     /// then sift it up to its position.
     ///
@@ -69,6 +119,8 @@ tags: [データ構造, アルゴリズム, 最適化]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **二分ヒープ**: 配列を木として見るデータ構造で、位置 `i` の子は `2i+1` と `2i+2` です。`BinaryHeap` は「親は子以上」の最大ヒープです。
@@ -79,13 +131,49 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## 何をしているか
 
-### 1. 大きいほうの子をたどって底まで沈める（905〜917 行目）
+### 1. 大きいほうの子をたどって底まで沈める
+
+```rust:line-numbers=905
+        while child <= end.saturating_sub(2) {
+            // SAFETY: child < end - 1 < self.len() and
+            //  child + 1 < end <= self.len(), so they're valid indexes.
+            //  child == 2 * hole.pos() + 1 != hole.pos() and
+            //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
+            // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
+            //  if T is a ZST
+            child += unsafe { hole.get(child) <= hole.get(child + 1) } as usize;
+
+            // SAFETY: Same as above
+            unsafe { hole.move_to(child) };
+            child = 2 * hole.pos() + 1;
+        }
+```
+
 
 自分と子を比べずに、とにかく大きいほうの子を穴に引き上げて穴を下へ進めます。`child += (左 <= 右) as usize` で大きいほうの子を選ぶ比較 1 回だけです。
 
-### 2. 子が 1 つだけなら、それも引き上げる（919〜923 行目）
+### 2. 子が 1 つだけなら、それも引き上げる
 
-### 3. 書き戻して、少し浮かせる（924〜929 行目）
+```rust:line-numbers=919
+        if child == end - 1 {
+            // SAFETY: child == end - 1 < self.len(), so it's a valid index
+            //  and child == 2 * hole.pos() + 1 != hole.pos().
+            unsafe { hole.move_to(child) };
+        }
+```
+
+
+### 3. 書き戻して、少し浮かせる
+
+```rust:line-numbers=924
+        pos = hole.pos();
+        drop(hole);
+
+        // SAFETY: pos is the position in the hole and was already proven
+        //  to be a valid index.
+        unsafe { self.sift_up(start, pos) };
+```
+
 
 穴の位置を記録し、`drop(hole)` で要素を底に書き戻します。そのあと `sift_up` で、親より大きければ上へ戻します。
 
@@ -103,7 +191,7 @@ sift_up: 親の 7 より小さいので動かない
 - **「どうせ底まで行く」という観察**: `pop` で先頭に来るのは末尾の要素、つまりヒープの中で小さい部類の値です。だから、ほとんどの場合は底近くまで沈みます。途中で毎回「もう止まるか」を確かめても、ほぼ無駄になるのです。
 - **比較の回数がほぼ半分**: ふつうの方法は 1 段につき 2 回比べます。この方法は 1 段につき 1 回で底まで行き、浮かせる段階でも数回比べるだけです。比較がユーザー定義の重い処理（文字列の比較など）のとき、とくに効果があります。
 - **既存の部品の組み合わせ**: 浮かせる処理は `push` で使う `sift_up` をそのまま使っています。`start` を指定できるようにしてあるので、沈め始めた位置より上には行きません。
-- **使い分け**: 890〜891 行目のコメントのとおり、これは「要素が小さく底に近いと分かっている」ときに速い方法です。そうでない場面では通常の `sift_down_range` が使われます。
+- **使い分け**: コメントのとおり、これは「要素が小さく底に近いと分かっている」ときに速い方法です。そうでない場面では通常の `sift_down_range` が使われます。
 
 ## まとめ
 
