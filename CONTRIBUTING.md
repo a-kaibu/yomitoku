@@ -81,7 +81,7 @@ tags: [データ構造, アルゴリズム, 最適化]
 | `language` | 言語 ID | ディレクトリ名と同じ |
 | `project` | プロジェクトの表示名 | 同じプロジェクトディレクトリ内で **完全に統一** |
 | `repo` | リポジトリ URL | `https://github.com/<owner>/<repo>`（末尾 `/`・`.git` なし）。同じディレクトリ内で統一。GitHub 以外が本家なら公式の GitHub ミラーを使う（例: `torvalds/linux`, `git/git`） |
-| `license` | ライセンス | SPDX 識別子。許可リスト（`docs/.vitepress/shared.mjs` の `LICENSES`）にあるもののみ |
+| `license` | ライセンス | SPDX 式。`MIT`、`GPL-2.0-only WITH Classpath-exception-2.0`、`MIT OR Apache-2.0` など。使える ID と例外は `docs/.vitepress/shared.mjs` の `LICENSES` / `LICENSE_EXCEPTIONS` |
 | `copyright` | 著作権表示 | 元ファイルのヘッダか LICENSE の表記をそのまま |
 | `commit` | 固定するコミット | **40 桁の SHA を必ずクォート**して書く。ブランチ名・タグは不可 |
 | `file` | ファイルパス | リポジトリルートからの相対パス |
@@ -140,7 +140,7 @@ tags: [データ構造, アルゴリズム, 最適化]
 ## 4. ライセンスと引用
 
 - 掲載できるのは **OSI 承認の OSS ライセンス**（許可リスト参照）のコードのみ。SSPL、BUSL（Business Source License）、Elastic License、Commons Clause 付きなど「ソースは公開されているが OSS ではない」ものは使いません。
-- ライセンスは **リポジトリの LICENSE と、引用するファイルのヘッダ** の両方を確認します。ファイル単位で別ライセンスのことがあります。デュアルライセンスは SPDX の `OR` で書きます（許可リストにない組み合わせは依頼してください）。
+- ライセンスは **リポジトリの LICENSE と、引用するファイルのヘッダ** の両方を確認します。ファイル単位で別ライセンスのことがあります。デュアルライセンスは `OR`、例外付きは `WITH` で書きます（許可リストにない ID・例外は依頼してください）。
 - 引用は解説に必要な最小限（1 関数・80 行以内）とし、解説が主・コードが従になるようにします。出典（固定リンク）・ライセンス名・著作権表示はテーマが自動で表示します。
 - 解説文は CC BY 4.0 で公開されます。
 

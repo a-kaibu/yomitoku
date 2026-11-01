@@ -12,7 +12,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
-  LANGUAGES, LANGUAGE_IDS, TAGS, LICENSES, DIFFICULTIES, SLUG_RE, SHA_RE,
+  LANGUAGES, LANGUAGE_IDS, TAGS, checkLicense, DIFFICULTIES, SLUG_RE, SHA_RE,
   REQUIRED_HEADINGS, MAX_EXCERPT_LINES, loadEntries,
 } from '../docs/.vitepress/meta.mjs'
 
@@ -98,7 +98,8 @@ for (const e of entries) {
   if (typeof fm.commit !== 'string') err(f, 'commit は 40 桁の SHA を "クォートした文字列" で書いてください')
   else if (!SHA_RE.test(fm.commit) || /^0+$/.test(fm.commit)) err(f, 'commit は 40 桁の小文字 16 進 SHA（ブランチ名やタグは不可）')
   if (typeof fm.file === 'string' && (fm.file.startsWith('/') || fm.file.includes('..'))) err(f, 'file はリポジトリルートからの相対パス')
-  if (!LICENSES.includes(fm.license)) err(f, `license "${fm.license}" は許可リストにありません（docs/.vitepress/shared.mjs の LICENSES）`)
+  const licenseProblem = checkLicense(fm.license)
+  if (licenseProblem) err(f, `license: ${licenseProblem}（docs/.vitepress/shared.mjs の LICENSES / LICENSE_EXCEPTIONS）`)
   if (!(fm.difficulty in DIFFICULTIES)) err(f, 'difficulty は 1（入門）/ 2（中級）/ 3（上級）')
   if (!Array.isArray(fm.tags) || fm.tags.length < 1 || fm.tags.length > 5) err(f, 'tags は 1〜5 個の配列')
   else for (const t of fm.tags) if (!TAGS.includes(t)) err(f, `タグ "${t}" は語彙にありません（docs/.vitepress/shared.mjs の TAGS）`)

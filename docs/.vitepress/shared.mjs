@@ -35,19 +35,47 @@ export const TAGS = [
 ]
 
 /**
- * 掲載を許可するライセンス（SPDX 識別子）。
- * OSI 承認の OSS ライセンスに限ります。SSPL / BUSL / Elastic License など
+ * 掲載を許可するライセンス（SPDX ライセンス ID）。
+ * OSS ライセンスに限ります。SSPL / BUSL / Elastic License / Commons Clause など
  * ソースは見られても OSS ではないものは掲載しません。
+ * frontmatter の license には SPDX 式を書けます: `ID`、`ID WITH 例外`、それらを OR / AND でつないだもの。
+ * 例: `MIT OR Apache-2.0`, `GPL-2.0-only WITH Classpath-exception-2.0`, `(MIT OR Apache-2.0) AND BSD-3-Clause`
  */
 export const LICENSES = [
-  'MIT', 'MIT-0', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', '0BSD',
-  'MPL-2.0', 'EPL-2.0', 'Zlib', 'BSL-1.0', 'Unlicense', 'CC0-1.0',
+  // パーミッシブ
+  'MIT', 'MIT-0', 'X11', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'BSD-2-Clause-Patent',
+  'ISC', '0BSD', 'Zlib', 'BSL-1.0', 'Unlicense', 'CC0-1.0', 'NCSA', 'UPL-1.0', 'BlueOak-1.0.0',
+  'Unicode-3.0', 'Unicode-DFS-2016', 'PostgreSQL', 'curl', 'OpenSSL', 'SSLeay', 'libpng-2.0', 'bzip2-1.0.6',
+  'PSF-2.0', 'Python-2.0', 'Ruby', 'Artistic-2.0', 'MS-PL', 'W3C', 'AFL-3.0', 'Vim', 'TCL',
+  // 弱いコピーレフト
+  'MPL-2.0', 'EPL-1.0', 'EPL-2.0', 'CDDL-1.0', 'CDDL-1.1', 'MS-RL',
+  'LGPL-2.0-only', 'LGPL-2.0-or-later', 'LGPL-2.1-only', 'LGPL-2.1-or-later', 'LGPL-3.0-only', 'LGPL-3.0-or-later',
+  // コピーレフト
   'GPL-2.0-only', 'GPL-2.0-or-later', 'GPL-3.0-only', 'GPL-3.0-or-later',
-  'LGPL-2.1-only', 'LGPL-2.1-or-later', 'LGPL-3.0-only', 'LGPL-3.0-or-later',
   'AGPL-3.0-only', 'AGPL-3.0-or-later',
-  'PSF-2.0', 'Python-2.0', 'Ruby', 'BSD-2-Clause OR Ruby', 'Artistic-2.0', 'PostgreSQL',
-  'curl', 'OpenSSL', 'Apache-2.0 WITH LLVM-exception', 'Apache-2.0 WITH Swift-exception', 'MIT OR Apache-2.0', 'Apache-2.0 OR MIT',
 ]
+
+/** 許可する SPDX 例外（`WITH` の後ろ） */
+export const LICENSE_EXCEPTIONS = [
+  'LLVM-exception', 'Swift-exception', 'Classpath-exception-2.0', 'GCC-exception-3.1', 'GCC-exception-2.0',
+  'Linux-syscall-note', 'Autoconf-exception-3.0', 'Bison-exception-2.2', 'Font-exception-2.0',
+  'OpenJDK-assembly-exception-1.0', 'Qt-LGPL-exception-1.1', 'LGPL-3.0-linking-exception',
+  'Universal-FOSS-exception-1.0', 'WxWindows-exception-3.1', 'u-boot-exception-2.0',
+]
+
+/** SPDX 式が許可リストの組み合わせだけでできているか。問題があればその理由、なければ null を返す */
+export function checkLicense(expr) {
+  if (typeof expr !== 'string' || !expr.trim()) return 'license は必須です'
+  const terms = expr.replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+/)
+  for (const raw of terms) {
+    const t = raw.trim()
+    const m = t.match(/^(\S+?)(?:\s+WITH\s+(\S+))?$/)
+    if (!m) return `"${t}" は SPDX の形式ではありません`
+    if (!LICENSES.includes(m[1])) return `"${m[1]}" は許可リストにありません（旧表記の GPL-2.0 / GPL-2.0+ などは GPL-2.0-only / GPL-2.0-or-later に）`
+    if (m[2] && !LICENSE_EXCEPTIONS.includes(m[2])) return `例外 "${m[2]}" は許可リストにありません`
+  }
+  return null
+}
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 export const SHA_RE = /^[0-9a-f]{40}$/
