@@ -12,6 +12,7 @@ lines: [172, 186]
 function: "StartedWhileSubscribed.command"
 difficulty: 3
 tags: [非同期, 設計パターン, 状態機械]
+format: 2
 ---
 
 ## ひとことで
@@ -22,7 +23,28 @@ tags: [非同期, 設計パターン, 状態機械]
 
 ## コード
 
-```kotlin:line-numbers=172
+
+::: code-group
+
+```kotlin:line-numbers=172 [日本語訳]
+    override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> = subscriptionCount
+        .transformLatest { count ->
+            if (count > 0) {
+                emit(SharingCommand.START)
+            } else {
+                delay(stopTimeout)
+                if (replayExpiration > 0) {
+                    emit(SharingCommand.STOP)
+                    delay(replayExpiration)
+                }
+                emit(SharingCommand.STOP_AND_RESET_REPLAY_CACHE)
+            }
+        }
+        .dropWhile { it != SharingCommand.START } // 最初は STOP や RESET を流さず、START から流す
+        .distinctUntilChanged() // 誰かが付け忘れても、START を重ねて送らないようにする
+```
+
+```kotlin:line-numbers=172 [原文]
     override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> = subscriptionCount
         .transformLatest { count ->
             if (count > 0) {
@@ -40,6 +62,8 @@ tags: [非同期, 設計パターン, 状態機械]
         .distinctUntilChanged() // just in case somebody forgets it, don't leak our multiple sending of START
 ```
 
+:::
+
 ## 前提知識
 
 - **`shareIn` / `stateIn`**: 1 つの Flow を複数の購読者で共有する仕組みです。上流をいつ動かし、いつ止めるかを `SharingStarted` で指定します。
@@ -52,7 +76,14 @@ tags: [非同期, 設計パターン, 状態機械]
 
 ## 何をしているか
 
-### 1. 購読者数ごとに命令を作る（173〜184 行目）
+### 1. 購読者数ごとに命令を作る
+
+```kotlin:line-numbers=174
+            if (count > 0) {
+                emit(SharingCommand.START)
+            } else {
+                delay(stopTimeout)
+```
 
 - 購読者が 1 人以上なら、すぐ `START`。
 - 0 人になったら、`stopTimeout` だけ待ってから `STOP`。さらに `replayExpiration` 待ってから、キャッシュも捨てる `STOP_AND_RESET_REPLAY_CACHE`。
@@ -64,20 +95,28 @@ tags: [非同期, 設計パターン, 状態機械]
 - 2 秒後に `1` → `transformLatest` が待ちをキャンセルして、`START` を流す
 - 待ちが取り消されたので `STOP` は一度も流れない
 
-### 2. 最初の STOP を捨てる（185 行目）
+### 2. 最初の STOP を捨てる
+
+```kotlin:line-numbers=185
+        .dropWhile { it != SharingCommand.START } // 最初は STOP や RESET を流さず、START から流す
+```
 
 最初は購読者数 0 から始まるので、そのままだと「始まってもいないのに `STOP`」が流れます。`START` が来るまでの値はすべて捨てます。
 
-### 3. 重複した START を消す（186 行目）
+### 3. 重複した START を消す
+
+```kotlin:line-numbers=186
+        .distinctUntilChanged() // 誰かが付け忘れても、START を重ねて送らないようにする
+```
 
 上の例では `START` が 2 回流れますが、`distinctUntilChanged` で 1 回にまとめます。
 
 ## ここがすごい
 
 - **キャンセルをタイマーのリセットに使う**: 「5 秒以内に戻ってきたら止めない」を普通に書くと、タイマーを作って、戻ってきたら取り消して…という管理が必要です。`transformLatest` は新しい値が来ると前の処理を自動でキャンセルするので、`delay` の途中で購読者が戻れば、それだけで停止が取り消されます。
-- **段階的な停止を上から順に書ける**: 「待つ → 止める → さらに待つ → キャッシュも捨てる」が、時間の流れどおりに 4 行で並んでいます。`replayExpiration` が 0 なら途中の `STOP` を飛ばして、すぐ全部捨てます。
-- **ガードを後段にまとめる**: 「最初は START から」「START を重複させない」という約束を、`dropWhile` と `distinctUntilChanged` で後から保証しています。186 行目のコメントは「誰かが付け忘れても大丈夫なように」と、防御的な意図を明記しています。
-- **命令を Flow で表すので差し替えやすい**: `SharingStarted` は「購読者数の Flow → 命令の Flow」という関数 1 つのインターフェースです。`Eagerly` は `flowOf(START)` だけ、`Lazily` は最初の購読で 1 回 `START` するだけ（同じファイル 143〜161 行目）と、方針ごとに短く書けます。
+- **段階的な停止を上から順に書ける**: 「待つ → 止める → さらに待つ → キャッシュも捨てる」が、時間の流れどおりに並んでいます。`replayExpiration` が 0 なら途中の `STOP` を飛ばして、すぐ全部捨てます。
+- **ガードを後段にまとめる**: 「最初は START から」「START を重複させない」という約束を、`dropWhile` と `distinctUntilChanged` で後から保証しています。防御的な意図がコメントにも明記されています。
+- **命令を Flow で表すので差し替えやすい**: `SharingStarted` は「購読者数の Flow → 命令の Flow」という関数 1 つのインターフェースです。`Eagerly` は `flowOf(START)` だけ、`Lazily` は最初の購読で 1 回 `START` するだけと、方針ごとに短く書けます。
 
 ## まとめ
 

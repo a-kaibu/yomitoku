@@ -12,6 +12,7 @@ lines: [242, 262]
 function: "SemaphoreAndMutexImpl.release"
 difficulty: 3
 tags: [並行処理, ロック不要, データ構造]
+format: 2
 ---
 
 ## ひとことで
@@ -22,7 +23,34 @@ tags: [並行処理, ロック不要, データ構造]
 
 ## コード
 
-```kotlin:line-numbers=242
+
+::: code-group
+
+```kotlin:line-numbers=242 [日本語訳]
+    fun release() {
+        while (true) {
+            // 利用できる許可の数を 1 増やす
+            val p = _availablePermits.getAndIncrement()
+            // この release の呼び出しは正しいか？
+            // 許可の最大数を超えていないか？
+            if (p >= permits) {
+                // 許可の数を正しい値に戻し、
+                // エラーにする
+                coerceAvailablePermitsAtMaximum()
+                error("The number of released permits cannot be greater than $permits")
+            }
+            // 起こすべき待ち人がいるか？
+            if (p >= 0) return
+            // 待ち行列の先頭の待ち人を起こそうとする。
+            // 先頭の待ち人が取り消されていたり、
+            // 同期的な再開の仕組みが使われたりした場合は、
+            // 操作をやり直す。
+            if (tryResumeNextFromQueue()) return
+        }
+    }
+```
+
+```kotlin:line-numbers=242 [原文]
     fun release() {
         while (true) {
             // Increment the number of available permits.
@@ -46,27 +74,50 @@ tags: [並行処理, ロック不要, データ構造]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **セマフォ**: 同時に入れる数を許可で管理する仕組みです。上限は `permits` 個です。
 - **`_availablePermits` の意味**: 正の値なら残りの許可数、0 なら「許可なし、待ちなし」、負の値なら「待っている人数」です。たとえば `-2` は 2 人待ちです。待つ側（`acquire`）は、許可がなくても数を 1 減らしてから待ち行列に並びます。
 - **`getAndIncrement()`**: 原子変数を 1 増やし、**増やす前の値** を返す不可分な操作です。
-- **`tryResumeNextFromQueue()`**: 同じクラスの 313〜337 行目にある関数で、待ち行列の先頭のコルーチンに許可を渡して起こそうとします。相手がすでに取り消されていたなどで失敗すると `false` を返します。
+- **`tryResumeNextFromQueue()`**: 同じクラスにある関数で、待ち行列の先頭のコルーチンに許可を渡して起こそうとします。相手がすでに取り消されていたなどで失敗すると `false` を返します。
 - **`error(メッセージ)`**: `IllegalStateException` を投げる標準関数です。
 
 ## 何をしているか
 
-### 1. 数を 1 増やし、前の値を見る（245 行目）
+### 1. 数を 1 増やし、前の値を見る
 
-### 2. 上限を超えたら誤り（248〜253 行目）
+```kotlin:line-numbers=245
+            val p = _availablePermits.getAndIncrement()
+```
+
+### 2. 上限を超えたら誤り
+
+```kotlin:line-numbers=248
+            if (p >= permits) {
+                // 許可の数を正しい値に戻し、
+                // エラーにする
+                coerceAvailablePermitsAtMaximum()
+                error("The number of released permits cannot be greater than $permits")
+            }
+```
 
 前の値が上限以上だった（つまり誰にも貸していないのに返された）なら、数を上限に戻してから例外にします。
 
-### 3. 誰も待っていなければ終わり（255 行目）
+### 3. 誰も待っていなければ終わり
+
+```kotlin:line-numbers=255
+            if (p >= 0) return
+```
 
 前の値が 0 以上なら、待っている人はいません。数が増えただけで終わりです。
 
-### 4. 待っている人がいれば起こす（260 行目）
+### 4. 待っている人がいれば起こす
+
+```kotlin:line-numbers=260
+            if (tryResumeNextFromQueue()) return
+```
 
 前の値が負なら、待っている人がいます。先頭を起こし、成功すれば終わりです。失敗したら（相手が取り消されていたなど）ループの先頭に戻り、もう一度数を増やして次の人を試します。
 
