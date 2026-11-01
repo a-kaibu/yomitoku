@@ -11,8 +11,10 @@ file: Lib/random.py
 lines: [245, 252]
 function: Random._randbelow_with_getrandbits
 difficulty: 2
+format: 2
 tags: [乱数, ビット演算, アルゴリズム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `_randbelow_with_getrandbits(n)` は、**0 以上 n 未満の整数を、どれも同じ確率で 1 つ選ぶ** 関数です。`randrange()`、`randint()`、`shuffle()`、`choice()` など、整数の乱数を使う多くの関数の土台になっています。
@@ -43,15 +45,28 @@ tags: [乱数, ビット演算, アルゴリズム, 標準ライブラリ]
 
 `n = 5` で追います。
 
-### 1. 必要なビット数を求める（248 行目）
+### 1. 必要なビット数を求める
+
+```python:line-numbers=248
+        k = n.bit_length()
+```
 
 `5.bit_length()` は 3 です。3 ビットなら 0〜7 の 8 通りが表せて、0〜4 の 5 通りを含むことができます。
 
-### 2. ランダムな数を作る（249 行目）
+### 2. ランダムな数を作る
+
+```python:line-numbers=249
+        r = self.getrandbits(k)  # 0 <= r < 2**k
+```
 
 `getrandbits(3)` で 0〜7 のどれかが等確率で出ます。
 
-### 3. 範囲外なら作り直す（250〜251 行目）
+### 3. 範囲外なら作り直す
+
+```python:line-numbers=250
+        while r >= n:
+            r = self.getrandbits(k)
+```
 
 5, 6, 7 が出たら捨てて、もう一度 `getrandbits(3)` を呼びます。0〜4 が出たらそれを返します。
 

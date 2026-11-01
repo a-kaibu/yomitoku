@@ -11,8 +11,10 @@ file: Lib/collections/__init__.py
 lines: [642, 661]
 function: Counter.elements
 difficulty: 2
+format: 2
 tags: [イテレータ, 関数型, 遅延評価, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `Counter` は「要素ごとの個数」を数える辞書です。`elements()` は、その個数の回数だけ各要素を繰り返して取り出すイテレータを返します。
@@ -21,7 +23,32 @@ tags: [イテレータ, 関数型, 遅延評価, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=642
+::: code-group
+
+```python:line-numbers=642 [日本語訳]
+    def elements(self):
+        '''Iterator over elements repeating each as many times as its count.
+
+        >>> c = Counter('ABCABC')
+        >>> sorted(c.elements())
+        ['A', 'A', 'B', 'B', 'C', 'C']
+
+        Knuth's example for prime factors of 1836:  2**2 * 3**3 * 17**1
+
+        >>> import math
+        >>> prime_factors = Counter({2: 2, 3: 3, 17: 1})
+        >>> math.prod(prime_factors.elements())
+        1836
+
+        Note, if an element's count has been set to zero or is a negative
+        number, elements() will ignore it.
+
+        '''
+        # Smalltalk の Bag.do と C++ の Multiset.begin をまねている。
+        return _chain.from_iterable(_starmap(_repeat, self.items()))
+```
+
+```python:line-numbers=642 [原文]
     def elements(self):
         '''Iterator over elements repeating each as many times as its count.
 
@@ -44,7 +71,15 @@ tags: [イテレータ, 関数型, 遅延評価, 標準ライブラリ]
         return _chain.from_iterable(_starmap(_repeat, self.items()))
 ```
 
+:::
+
 `_chain`、`_starmap`、`_repeat` は、このファイルの冒頭で `itertools` から読み込んだ `chain`、`starmap`、`repeat` に別名を付けたものです。
+
+```python:line-numbers=37
+from itertools import chain as _chain
+from itertools import repeat as _repeat
+from itertools import starmap as _starmap
+```
 
 ## 前提知識
 
@@ -59,11 +94,15 @@ tags: [イテレータ, 関数型, 遅延評価, 標準ライブラリ]
 
 `c = Counter({"A": 2, "B": 1, "C": 0})` で、内側から順に見ていきます。
 
-### 1. `self.items()`
+### 1. `self.items()` で組を取り出す
 
-`("A", 2), ("B", 1), ("C", 0)` が出てきます。
+```python:line-numbers=661
+        return _chain.from_iterable(_starmap(_repeat, self.items()))
+```
 
-### 2. `_starmap(_repeat, self.items())`
+`self.items()` は `("A", 2), ("B", 1), ("C", 0)` を出します。
+
+### 2. `_starmap(_repeat, ...)` で組を展開する
 
 各組を `repeat` に展開して渡すので、
 
@@ -73,9 +112,10 @@ tags: [イテレータ, 関数型, 遅延評価, 標準ライブラリ]
 
 という 3 つのイテレータが順に作られます。
 
-### 3. `_chain.from_iterable(...)`
+### 3. `_chain.from_iterable(...)` でつなぐ
 
-それらをつないで、`A, A, B` を出す 1 本のイテレータにします。個数が 0 の `C` は自然に消えます。656〜657 行目の説明にある「0 や負の個数は無視する」は、`repeat` が 0 以下の回数で何も出さないことから、特別な処理なしに実現されています。
+それらをつないで、`A, A, B` を出す 1 本のイテレータにします。個数が 0 の `C` は自然に消えます。
+説明文にある「0 や負の個数は無視する」は、`repeat` が 0 以下の回数で何も出さないことから、特別な処理なしに実現されています。
 
 ## ここがすごい
 

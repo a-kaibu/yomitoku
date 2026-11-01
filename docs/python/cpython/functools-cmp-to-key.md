@@ -11,8 +11,10 @@ file: Lib/functools.py
 lines: [206, 223]
 function: cmp_to_key
 difficulty: 2
+format: 2
 tags: [ソート, クロージャ, 設計パターン, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `cmp_to_key` は、「2 つの値を比べて負・0・正を返す関数」（比較関数）を、`sorted()` の `key=` 引数に渡せる形に変換する関数です。
@@ -21,7 +23,30 @@ Python 3 では `sorted()` が比較関数を直接受け取らなくなった�
 
 ## コード
 
-```python:line-numbers=206
+::: code-group
+
+```python:line-numbers=206 [日本語訳]
+def cmp_to_key(mycmp):
+    """比較関数（cmp=）をキー関数（key=）に変換する"""
+    class K(object):
+        __slots__ = ['obj']
+        def __init__(self, obj):
+            self.obj = obj
+        def __lt__(self, other):
+            return mycmp(self.obj, other.obj) < 0
+        def __gt__(self, other):
+            return mycmp(self.obj, other.obj) > 0
+        def __eq__(self, other):
+            return mycmp(self.obj, other.obj) == 0
+        def __le__(self, other):
+            return mycmp(self.obj, other.obj) <= 0
+        def __ge__(self, other):
+            return mycmp(self.obj, other.obj) >= 0
+        __hash__ = None
+    return K
+```
+
+```python:line-numbers=206 [原文]
 def cmp_to_key(mycmp):
     """Convert a cmp= function into a key= function"""
     class K(object):
@@ -42,6 +67,8 @@ def cmp_to_key(mycmp):
     return K
 ```
 
+:::
+
 ## 前提知識
 
 - **関数の中でクラスを定義できる**: Python では `class` 文も実行時に動く「命令」です。関数の中に書けば、呼ぶたびに新しいクラスが作られます。
@@ -53,11 +80,23 @@ def cmp_to_key(mycmp):
 
 ## 何をしているか
 
-### 1. クラス K を作る（208〜222 行目）
+### 1. クラス K を作る
+
+```python:line-numbers=208
+    class K(object):
+        __slots__ = ['obj']
+        def __init__(self, obj):
+            self.obj = obj
+```
 
 `cmp_to_key(mycmp)` を呼ぶと、その場でクラス `K` が作られます。`K(x)` とすると、元の値 `x` を `self.obj` にしまった「包み紙」オブジェクトができます。
 
-### 2. 比較演算子を mycmp に読み替える（212〜221 行目）
+### 2. 比較演算子を mycmp に読み替える
+
+```python:line-numbers=212
+        def __lt__(self, other):
+            return mycmp(self.obj, other.obj) < 0
+```
 
 `K` の各比較メソッドは、どれも `mycmp(self.obj, other.obj)` を呼び、その結果を 0 と比べるだけです。
 たとえば長さで比べる比較関数 `mycmp = lambda a, b: len(a) - len(b)` を使った場合、
@@ -67,7 +106,11 @@ def cmp_to_key(mycmp):
 
 となり、「短い方が小さい」という順序がふつうの `<` で表現できるようになります。
 
-### 3. クラスそのものを返す（223 行目）
+### 3. クラスそのものを返す
+
+```python:line-numbers=223
+    return K
+```
 
 最後に返すのは **インスタンスではなくクラス `K`** です。クラスは「呼ぶと値を作る」ので、そのまま `key=` 関数として使えます。`sorted()` は各要素 `x` に対して `K(x)` を作り、それらを `<` で比べて並べ替えます。
 
