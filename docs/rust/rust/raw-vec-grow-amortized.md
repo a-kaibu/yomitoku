@@ -11,6 +11,7 @@ file: library/alloc/src/raw_vec/mod.rs
 lines: [519, 555]
 function: RawVecInner::grow_amortized
 difficulty: 2
+format: 2
 tags: [メモリ管理, データ構造, アルゴリズム, 標準ライブラリ]
 ---
 
@@ -22,7 +23,49 @@ tags: [メモリ管理, データ構造, アルゴリズム, 標準ライブラ�
 
 ## コード
 
-```rust:line-numbers=519
+::: code-group
+
+```rust:line-numbers=519 [日本語訳]
+    /// # 安全性
+    /// - `elem_layout` は `self` に対して有効でなければならない。つまり、
+    ///   `self` を作ったときと同じ `elem_layout` でなければならない
+    /// - `elem_layout` の大きさはアラインメントの倍数でなければならない
+    /// - `len` と `additional` の和は現在の容量より大きくなければならない
+    unsafe fn grow_amortized(
+        &mut self,
+        len: usize,
+        additional: usize,
+        elem_layout: Layout,
+    ) -> Result<(), TryReserveError> {
+        // これは呼び出し側で保証されている。
+        debug_assert!(additional > 0);
+
+        if elem_layout.size() == 0 {
+            // 要素の大きさが 0 のとき容量は `usize::MAX` を返すので、
+            // ここに来た時点で `RawVec` は必ず満杯になっている。
+            return Err(CapacityOverflow.into());
+        }
+
+        // これらのチェックは残念ながらどうしようもない。
+        let required_cap = len.checked_add(additional).ok_or(CapacityOverflow)?;
+
+        // これで容量は指数的に増える。2 倍してもあふれない
+        // のは、`cap <= isize::MAX` で型が `usize` だから。
+        let cap = cmp::max(self.cap.as_inner() * 2, required_cap);
+        let cap = cmp::max(min_non_zero_cap(elem_layout.size()), cap);
+
+        // SAFETY:
+        // - cap >= len + additional
+        // - ほかの前提条件は呼び出し側が満たしている
+        let ptr = unsafe { self.finish_grow(cap, elem_layout)? };
+
+        // SAFETY: `cap > isize::MAX` なら `finish_grow` が失敗しているはず
+        unsafe { self.set_ptr_and_cap(ptr, cap) };
+        Ok(())
+    }
+```
+
+```rust:line-numbers=519 [原文]
     /// # Safety
     /// - `elem_layout` must be valid for `self`, i.e. it must be the same `elem_layout` used to
     ///   initially construct `self`
@@ -62,6 +105,8 @@ tags: [メモリ管理, データ構造, アルゴリズム, 標準ライブラ�
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Vec` と容量**: `Vec` は要素数 `len` とは別に、何個まで入る領域を確保しているか（容量 `cap`）を持っています。`len` が `cap` に達すると、より大きな領域を確保して中身を移す必要があります。
@@ -73,28 +118,57 @@ tags: [メモリ管理, データ構造, アルゴリズム, 標準ライブラ�
 
 ## 何をしているか
 
-### 1. 大きさ 0 の型は別扱い（533〜537 行目）
+### 1. 大きさ 0 の型は別扱い
+
+```rust:line-numbers=533
+        if elem_layout.size() == 0 {
+            // Since we return a capacity of `usize::MAX` when `elem_size` is
+            // 0, getting to here necessarily means the `RawVec` is overfull.
+            return Err(CapacityOverflow.into());
+        }
+```
+
 
 大きさ 0 の型（中身のない構造体など）の `Vec` は、容量を最初から `usize::MAX` としているので、ここに来たら本当に満杯です。エラーを返します。
 
-### 2. 必要な容量を計算（540 行目）
+### 2. 必要な容量を計算
+
+```rust:line-numbers=540
+        let required_cap = len.checked_add(additional).ok_or(CapacityOverflow)?;
+```
+
 
 `len + additional`（今の要素数 + 追加したい数）を、あふれに注意して計算します。
 
-### 3. 新しい容量を決める（544〜545 行目）
+### 3. 新しい容量を決める
+
+```rust:line-numbers=544
+        let cap = cmp::max(self.cap.as_inner() * 2, required_cap);
+        let cap = cmp::max(min_non_zero_cap(elem_layout.size()), cap);
+```
+
 
 `max(今の容量 × 2, 必要な容量)` を新しい容量にします。さらに、小さすぎる容量にならないよう `min_non_zero_cap` で最低値（要素が 1 バイトなら 8、1 KiB 以下なら 4、それより大きければ 1）を下回らないようにします。
 
 空の `Vec<i32>` に 1 個ずつ `push` すると、容量は `0 → 4 → 8 → 16 → 32 → ...` と増えます。
 
-### 4. 領域を確保して記録（550〜554 行目）
+### 4. 領域を確保して記録
+
+```rust:line-numbers=550
+        let ptr = unsafe { self.finish_grow(cap, elem_layout)? };
+
+        // SAFETY: `finish_grow` would have failed if `cap > isize::MAX`
+        unsafe { self.set_ptr_and_cap(ptr, cap) };
+        Ok(())
+```
+
 
 `finish_grow` で実際にメモリを確保（または拡張）し、新しいポインタと容量を記録します。
 
 ## ここがすごい
 
 - **2 倍にすると平均 O(1)**: 容量を 1 ずつ増やすと、n 個追加するまでに作り直しが n 回、コピーの合計は約 n²/2 回になります。2 倍ずつなら作り直しは約 log₂ n 回で、コピーの合計は `1 + 2 + 4 + ... ≈ 2n` 回に収まります。1 回の `push` あたりにならすと定数時間です。
-- **オーバーフローしない理由を書いている**: 542〜543 行目のとおり、`Vec` の容量はバイト数で `isize::MAX` 以下に制限されているので、`usize` で 2 倍してもあふれません。不要なチェックを省ける根拠になっています。
+- **オーバーフローしない理由を書いている**: コメントのとおり、`Vec` の容量はバイト数で `isize::MAX` 以下に制限されているので、`usize` で 2 倍してもあふれません。不要なチェックを省ける根拠になっています。
 - **小さな Vec をスキップ**: 容量 1 や 2 の `Vec` を作っても、メモリ確保の手間ばかりかかります。最初から 4 や 8 にすることで、無駄な作り直しを減らしています。
 - **大量追加にも対応**: `extend` などで一度にたくさん追加するときは、2 倍より必要量が大きくなることがあります。`max` を取ることで、その場合は必要量ぴったりの 1 回の確保で済みます。
 

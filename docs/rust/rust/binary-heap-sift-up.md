@@ -11,6 +11,7 @@ file: library/alloc/src/collections/binary_heap/mod.rs
 lines: [802, 828]
 function: BinaryHeap::sift_up
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,39 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## コード
 
-```rust:line-numbers=802
+::: code-group
+
+```rust:line-numbers=802 [日本語訳]
+    /// # 安全性
+    ///
+    /// 呼び出し側は `pos < self.len()` を保証すること。
+    ///
+    /// 要素の新しい位置を返す。
+    unsafe fn sift_up(&mut self, start: usize, pos: usize) -> usize {
+        // `pos` の値を取り出して穴を作る。
+        // SAFETY: 呼び出し側が pos < self.len() を保証する
+        let mut hole = unsafe { Hole::new(&mut self.data, pos) };
+
+        while hole.pos() > start {
+            let parent = (hole.pos() - 1) / 2;
+
+            // SAFETY: hole.pos() > start >= 0 なので hole.pos() > 0
+            //  よって hole.pos() - 1 はアンダーフローしない。
+            //  これで親の位置は hole.pos() より小さく、
+            //  有効な添字で、かつ hole.pos() と等しくもない。
+            if hole.element() <= unsafe { hole.get(parent) } {
+                break;
+            }
+
+            // SAFETY: 上と同じ
+            unsafe { hole.move_to(parent) };
+        }
+
+        hole.pos()
+    }
+```
+
+```rust:line-numbers=802 [原文]
     /// # Safety
     ///
     /// The caller must guarantee that `pos < self.len()`.
@@ -52,6 +85,8 @@ tags: [データ構造, アルゴリズム, 最適化]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **二分ヒープ**: 配列を木として見るデータ構造です。位置 `i` の要素の子は `2i+1` と `2i+2`、親は `(i-1)/2` です。Rust の `BinaryHeap` は「親は子以上」という規則を守る **最大ヒープ** で、先頭がいちばん大きい値になります。
@@ -63,11 +98,34 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ヒープ `[9, 7, 8, 3, 5]` に `10` を `push` した場合で追います。`10` は末尾の位置 5 に置かれ、`sift_up(0, 5)` が呼ばれます。
 
-### 1. 穴を作る（810 行目）
+### 1. 穴を作る
+
+```rust:line-numbers=810
+        let mut hole = unsafe { Hole::new(&mut self.data, pos) };
+```
+
 
 位置 5 の `10` を取り出し、位置 5 を穴にします。
 
-### 2. 親と比べて、親を下ろす（812〜825 行目）
+### 2. 親と比べて、親を下ろす
+
+```rust:line-numbers=812
+        while hole.pos() > start {
+            let parent = (hole.pos() - 1) / 2;
+
+            // SAFETY: hole.pos() > start >= 0, which means hole.pos() > 0
+            //  and so hole.pos() - 1 can't underflow.
+            //  This guarantees that parent < hole.pos() so
+            //  it's a valid index and also != hole.pos().
+            if hole.element() <= unsafe { hole.get(parent) } {
+                break;
+            }
+
+            // SAFETY: Same as above
+            unsafe { hole.move_to(parent) };
+        }
+```
+
 
 ```
 穴=5: 親 (5-1)/2=2 の 8。10 > 8 なので 8 を位置 5 へ。穴=2
@@ -75,17 +133,29 @@ tags: [データ構造, アルゴリズム, 最適化]
 穴=0: start に着いたので終了
 ```
 
-手元の要素が親以下なら、そこで止まります（819〜821 行目）。
+手元の要素が親以下なら、そこで止まります。
 
-### 3. 書き戻す（827 行目のあと）
+```rust:line-numbers=819
+            if hole.element() <= unsafe { hole.get(parent) } {
+                break;
+            }
+```
+
+
+### 3. 書き戻すのあと）
+
+```rust:line-numbers=827
+        hole.pos()
+```
+
 
 関数を抜けるときに `hole` が破棄され、手元の `10` が最後の穴（位置 0）に書き込まれます。結果は `[10, 7, 9, 3, 5, 8]` です。戻り値は最終位置の `0` です。
 
 ## ここがすごい
 
-- **コピーが半分**: 交換（swap）は 1 回で 3 回のコピーが必要です（一時変数を使って 2 つを入れ替えるため）。穴を動かす方法なら、1 段上がるたびにコピーは 1 回で済み、最後に 1 回書き込むだけです。796〜800 行目のコメントにも「交換は 2 倍の移動を伴う」とあります。
+- **コピーが半分**: 交換（swap）は 1 回で 3 回のコピーが必要です（一時変数を使って 2 つを入れ替えるため）。穴を動かす方法なら、1 段上がるたびにコピーは 1 回で済み、最後に 1 回書き込むだけです。コメントにも「交換は 2 倍の移動を伴う」とあります。
 - **パニックしても壊れない**: 比較 `<=` はユーザーが実装したコードなので、途中でパニックすることがあります。穴を残したまま関数を抜けると、配列に「抜け殻」が残ってしまいます。`Hole` は破棄時に必ず要素を書き戻すので、パニックで関数を抜けてもヒープは有効な状態に戻ります。
-- **安全性の根拠が明示されている**: `hole.pos() > start` なので `hole.pos() - 1` はアンダーフローせず、親の位置は穴とは別の有効な位置になります。これが 815〜818 行目の `SAFETY` コメントです。
+- **安全性の根拠が明示されている**: `hole.pos() > start` なので `hole.pos() - 1` はアンダーフローせず、親の位置は穴とは別の有効な位置になります。これが `SAFETY` コメントです。
 - **途中から始められる**: 引数 `start` より上には上がらないので、ヒープの一部だけを扱う処理（`sift_down_to_bottom` など）からも使えます。
 
 ## まとめ

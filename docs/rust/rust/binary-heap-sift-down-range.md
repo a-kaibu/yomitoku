@@ -11,6 +11,7 @@ file: library/alloc/src/collections/binary_heap/mod.rs
 lines: [830, 875]
 function: BinaryHeap::sift_down_range
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,58 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## コード
 
-```rust:line-numbers=830
+::: code-group
+
+```rust:line-numbers=830 [日本語訳]
+    /// `pos` の要素を、子より大きくなくなるまでヒープの下へ移動させる。
+    /// （子のほうが大きい間）
+    ///
+    /// 要素の新しい位置を返す。
+    ///
+    /// # 安全性
+    ///
+    /// 呼び出し側は `pos < end <= self.len()` を保証すること。
+    unsafe fn sift_down_range(&mut self, pos: usize, end: usize) -> usize {
+        // SAFETY: 呼び出し側が pos < end <= self.len() を保証する。
+        let mut hole = unsafe { Hole::new(&mut self.data, pos) };
+        let mut child = 2 * hole.pos() + 1;
+
+        // ループの不変条件: child == 2 * hole.pos() + 1。
+        while child <= end.saturating_sub(2) {
+            // 2 つの子のうち大きいほうと比べる
+            // SAFETY: child < end - 1 < self.len() かつ
+            //  child + 1 < end <= self.len() なので、どちらも有効な添字。
+            //  child == 2 * hole.pos() + 1 != hole.pos() かつ
+            //  child + 1 == 2 * hole.pos() + 2 != hole.pos()。
+            // FIXME: 2 * hole.pos() + 1 や 2 * hole.pos() + 2 は ZST だとオーバーフローしうる
+            //  （T が ZST の場合）
+            child += unsafe { hole.get(child) <= hole.get(child + 1) } as usize;
+
+            // すでに正しい順序なら止まる。
+            // SAFETY: child は元の子か、元の child+1 のどちらか。
+            //  どちらも self.len() 未満で hole.pos() と等しくないことは証明済み。
+            if hole.element() >= unsafe { hole.get(child) } {
+                return hole.pos();
+            }
+
+            // SAFETY: 上と同じ。
+            unsafe { hole.move_to(child) };
+            child = 2 * hole.pos() + 1;
+        }
+
+        // SAFETY: && は短絡評価なので、
+        //  2 つ目の条件では child == end - 1 < self.len() がすでに成り立っている。
+        if child == end - 1 && hole.element() < unsafe { hole.get(child) } {
+            // SAFETY: child は有効な添字だと証明済みで、
+            //  child == 2 * hole.pos() + 1 != hole.pos() である。
+            unsafe { hole.move_to(child) };
+        }
+
+        hole.pos()
+    }
+```
+
+```rust:line-numbers=830 [原文]
     /// Take an element at `pos` and move it down the heap,
     /// while its children are larger.
     ///
@@ -71,6 +123,8 @@ tags: [データ構造, アルゴリズム, 最適化]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **二分ヒープ**: 配列を木として見るデータ構造で、位置 `i` の子は `2i+1`（左）と `2i+2`（右）です。Rust の `BinaryHeap` は「親は子以上」の最大ヒープです。
@@ -83,7 +137,32 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ヒープ `[2, 9, 8, 7, 5, 6]` の先頭 `2` を沈める（`pos = 0`、`end = 6`）例で追います。
 
-### 1. 子が 2 つある間のループ（844〜864 行目）
+### 1. 子が 2 つある間のループ
+
+```rust:line-numbers=844
+        while child <= end.saturating_sub(2) {
+            // compare with the greater of the two children
+            // SAFETY: child < end - 1 < self.len() and
+            //  child + 1 < end <= self.len(), so they're valid indexes.
+            //  child == 2 * hole.pos() + 1 != hole.pos() and
+            //  child + 1 == 2 * hole.pos() + 2 != hole.pos().
+            // FIXME: 2 * hole.pos() + 1 or 2 * hole.pos() + 2 could overflow
+            //  if T is a ZST
+            child += unsafe { hole.get(child) <= hole.get(child + 1) } as usize;
+
+            // if we are already in order, stop.
+            // SAFETY: child is now either the old child or the old child+1
+            //  We already proven that both are < self.len() and != hole.pos()
+            if hole.element() >= unsafe { hole.get(child) } {
+                return hole.pos();
+            }
+
+            // SAFETY: same as above.
+            unsafe { hole.move_to(child) };
+            child = 2 * hole.pos() + 1;
+        }
+```
+
 
 `child` は左の子の位置です。`child <= end - 2` は「右の子 `child + 1` も範囲内」という意味です。
 
@@ -95,9 +174,23 @@ tags: [データ構造, アルゴリズム, 最適化]
 穴=3: 左の子の位置は 2×3+1=7 で、end-2=4 を超えるのでループ終了
 ```
 
-852 行目の `child += (左 <= 右) as usize` が、大きいほうの子を選ぶ部分です。右のほうが大きい（または等しい）なら 1 を足して右の子に、そうでなければそのまま左の子になります。
+の `child += (左 <= 右) as usize` が、大きいほうの子を選ぶ部分です。右のほうが大きい（または等しい）なら 1 を足して右の子に、そうでなければそのまま左の子になります。
 
-### 2. 子が 1 つだけの場合（868〜872 行目）
+```rust:line-numbers=852
+            child += unsafe { hole.get(child) <= hole.get(child + 1) } as usize;
+```
+
+
+### 2. 子が 1 つだけの場合
+
+```rust:line-numbers=868
+        if child == end - 1 && hole.element() < unsafe { hole.get(child) } {
+            // SAFETY: child is already proven to be a valid index and
+            //  child == 2 * hole.pos() + 1 != hole.pos().
+            unsafe { hole.move_to(child) };
+        }
+```
+
 
 末尾に左の子だけがある場合（`child == end - 1`）は、その子とだけ比べます。
 

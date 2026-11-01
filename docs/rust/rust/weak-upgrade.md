@@ -11,6 +11,7 @@ file: library/alloc/src/rcs/arc.rs
 lines: [3434, 3466]
 function: Weak::upgrade
 difficulty: 3
+format: 2
 tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
 ---
 
@@ -22,7 +23,45 @@ tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
 
 ## コード
 
-```rust:line-numbers=3434
+::: code-group
+
+```rust:line-numbers=3434 [日本語訳]
+    #[stable(feature = "arc_weak", since = "1.4.0")]
+    pub fn upgrade(&self) -> Option<Arc<T, A>>
+    where
+        A: AllocatorClone,
+    {
+        #[inline]
+        fn checked_increment(n: usize) -> Option<usize> {
+            // 0 が一度でも観測されたら、そのフィールドは永久に 0 のまま。
+            if n == 0 {
+                return None;
+            }
+            // なぜこうするかは `Arc::clone` のコメントを参照（`mem::forget` 対策）。
+            if n > MAX_REFCOUNT {
+                panic_arc_overflow();
+            }
+            Some(n + 1)
+        }
+
+        // 強参照カウントを増やすのに fetch_add ではなく CAS ループを使う。
+        // この関数はカウントを 0 から 1 に戻してはいけないため。
+        //
+        //
+        // 失敗時は新しい状態について何も期待しないので Relaxed で十分。
+        // 成功時は、中身が後から初期化される `Arc::new_cyclic` と同期するため Acquire が必要。
+        // Weak が作られたあとに中身が初期化されることがあり、その場合は
+        // 初期化済みの値を見ることを期待する。
+        if self.inner()?.strong.try_update(Acquire, Relaxed, checked_increment).is_ok() {
+            // SAFETY: ポインタは null でない（checked_increment で確認済み）
+            unsafe { Some(Arc::from_inner_in(self.ptr, self.alloc.clone())) }
+        } else {
+            None
+        }
+    }
+```
+
+```rust:line-numbers=3434 [原文]
     #[stable(feature = "arc_weak", since = "1.4.0")]
     pub fn upgrade(&self) -> Option<Arc<T, A>>
     where
@@ -58,6 +97,8 @@ tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Arc` と `Weak`**: `Arc` は中身を生かし続ける強参照、`Weak` は中身を生かし続けない弱参照です。強参照の数が 0 になると中身は破棄されますが、`Weak` は残り続けられます。キャッシュや、親子が互いを指すデータ構造で循環参照を避けるために使います。
@@ -68,7 +109,22 @@ tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 増やしてよいかを判定する関数（3440〜3450 行目）
+### 1. 増やしてよいかを判定する関数
+
+```rust:line-numbers=3440
+        fn checked_increment(n: usize) -> Option<usize> {
+            // Any write of 0 we can observe leaves the field in permanently zero state.
+            if n == 0 {
+                return None;
+            }
+            // See comments in `Arc::clone` for why we do this (for `mem::forget`).
+            if n > MAX_REFCOUNT {
+                panic_arc_overflow();
+            }
+            Some(n + 1)
+        }
+```
+
 
 `checked_increment(n)` は、現在のカウント `n` を受け取って、
 
@@ -78,7 +134,12 @@ tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
 
 を返します。
 
-### 2. CAS ループで増やす（3460 行目）
+### 2. CAS ループで増やす
+
+```rust:line-numbers=3460
+        if self.inner()?.strong.try_update(Acquire, Relaxed, checked_increment).is_ok() {
+```
+
 
 `try_update` は、「`strong` を読む → `checked_increment` で新しい値を計算 → 値が変わっていなければ書き込む、変わっていたらやり直す」を繰り返します。
 たとえばスレッド A が `upgrade` を、スレッド B が最後の `Arc` の `drop` を同時に呼んだとします。
@@ -88,15 +149,20 @@ tags: [並行処理, ロック不要, メモリ管理, 標準ライブラリ]
 
 どちらでも矛盾は起きません。
 
-### 3. `Arc` を作る（3462 行目）
+### 3. `Arc` を作る
+
+```rust:line-numbers=3462
+            unsafe { Some(Arc::from_inner_in(self.ptr, self.alloc.clone())) }
+```
+
 
 成功したら、同じポインタから `Arc` を組み立てて返します。
 
 ## ここがすごい
 
-- **`fetch_add` を使わない理由**: 3452〜3454 行目のコメントのとおり、無条件に足すと、0（解放済み）のカウントを 1 にしてしまう可能性があります。すると解放済みのメモリを指す `Arc` ができてしまいます。CAS ループなら「0 でないこと」を確認してから足せます。
-- **0 は「永久に 0」**: 3441 行目のコメントのとおり、一度 0 になったカウントは二度と増えません。この不変条件があるので、`upgrade` は「0 を見たら即あきらめる」だけで済みます。
-- **成功時だけ `Acquire`**: 3456〜3459 行目のコメントのとおり、失敗したときは何も読まないので `Relaxed` で十分です。成功時は、`Arc::new_cyclic`（中身の初期化前に `Weak` を配る関数）で初期化された中身を正しく見るために `Acquire` が必要です。
+- **`fetch_add` を使わない理由**: コメントのとおり、無条件に足すと、0（解放済み）のカウントを 1 にしてしまう可能性があります。すると解放済みのメモリを指す `Arc` ができてしまいます。CAS ループなら「0 でないこと」を確認してから足せます。
+- **0 は「永久に 0」**: コメントのとおり、一度 0 になったカウントは二度と増えません。この不変条件があるので、`upgrade` は「0 を見たら即あきらめる」だけで済みます。
+- **成功時だけ `Acquire`**: コメントのとおり、失敗したときは何も読まないので `Relaxed` で十分です。成功時は、`Arc::new_cyclic`（中身の初期化前に `Weak` を配る関数）で初期化された中身を正しく見るために `Acquire` が必要です。
 - **あふれ対策を共有**: `Arc::clone` と同じ上限チェックを入れ、どの経路からでもカウントが一周しないようにしています。
 
 ## まとめ

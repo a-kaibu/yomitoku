@@ -11,6 +11,7 @@ file: library/alloc/src/vec/mod.rs
 lines: [2170, 2193]
 function: Vec::swap_remove
 difficulty: 2
+format: 2
 tags: [データ構造, メモリ管理, 最適化, 標準ライブラリ]
 ---
 
@@ -23,7 +24,36 @@ tags: [データ構造, メモリ管理, 最適化, 標準ライブラリ]
 
 ## コード
 
-```rust:line-numbers=2170
+::: code-group
+
+```rust:line-numbers=2170 [日本語訳]
+    pub fn swap_remove(&mut self, index: usize) -> T {
+        #[cold]
+        #[cfg_attr(not(panic = "immediate-abort"), inline(never))]
+        #[optimize(size)]
+        fn assert_failed(index: usize, len: usize) -> ! {
+            panic!("swap_remove index (is {index}) should be < len (is {len})");
+        }
+
+        let len = self.len();
+        if index >= len {
+            assert_failed(index, len);
+        }
+        // ignore-tidy-undocumented-unsafe
+        unsafe {
+            // self[index] を末尾の要素で置き換える。上の範囲チェックが通れば、
+            // 末尾の要素が必ず存在する（それが self[index] 自身の場合もある）。
+            //
+            let value = ptr::read(self.as_ptr().add(index));
+            let base_ptr = self.as_mut_ptr();
+            ptr::copy(base_ptr.add(len - 1), base_ptr.add(index), 1);
+            self.set_len(len - 1);
+            value
+        }
+    }
+```
+
+```rust:line-numbers=2170 [原文]
     pub fn swap_remove(&mut self, index: usize) -> T {
         #[cold]
         #[cfg_attr(not(panic = "immediate-abort"), inline(never))]
@@ -50,6 +80,8 @@ tags: [データ構造, メモリ管理, 最適化, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Vec<T>`**: 要素数を後から増減できる配列です。内部ではヒープ（実行時に確保するメモリ）上の連続した領域と、要素数 `len` と容量を持っています。
@@ -61,11 +93,28 @@ tags: [データ構造, メモリ管理, 最適化, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 範囲チェック（2178〜2181 行目）
+### 1. 範囲チェック
+
+```rust:line-numbers=2178
+        let len = self.len();
+        if index >= len {
+            assert_failed(index, len);
+        }
+```
+
 
 `index` が要素数以上なら、`assert_failed` でパニックします。
 
-### 2. 取り出して、末尾で埋める（2187〜2191 行目）
+### 2. 取り出して、末尾で埋める
+
+```rust:line-numbers=2187
+            let value = ptr::read(self.as_ptr().add(index));
+            let base_ptr = self.as_mut_ptr();
+            ptr::copy(base_ptr.add(len - 1), base_ptr.add(index), 1);
+            self.set_len(len - 1);
+            value
+```
+
 
 `['a', 'b', 'c', 'd']`、`index = 1` で追います。
 
@@ -77,7 +126,14 @@ set_len(3)                      → [a, d, c]
 
 4 番目に残った `'d'` は、`len` を減らしたことで「配列の外」になり、二度と使われません。値はすでに `v[1]` に移っているので、二重に破棄されることもありません。
 
-`index` が末尾（`index = 3`）の場合は、自分自身を自分にコピーすることになります。`ptr::copy` は重なったコピーにも対応しているので問題ありません（2184〜2186 行目のコメント）。
+`index` が末尾（`index = 3`）の場合は、自分自身を自分にコピーすることになります。`ptr::copy` は重なったコピーにも対応しているので問題ありませんのコメント）。
+
+```rust:line-numbers=2184
+            // We replace self[index] with the last element. Note that if the
+            // bounds check above succeeds there must be a last element (which
+            // can be self[index] itself).
+```
+
 
 ## ここがすごい
 

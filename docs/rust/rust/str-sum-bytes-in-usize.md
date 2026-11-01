@@ -11,6 +11,7 @@ file: library/core/src/str/count.rs
 lines: [120, 129]
 function: sum_bytes_in_usize
 difficulty: 3
+format: 2
 tags: [ビット演算, 最適化, 数値計算]
 ---
 
@@ -23,7 +24,22 @@ tags: [ビット演算, 最適化, 数値計算]
 
 ## コード
 
-```rust:line-numbers=120
+::: code-group
+
+```rust:line-numbers=120 [日本語訳]
+// 意味は `values.to_ne_bytes().into_iter().sum::<usize>()` と同じだが、
+// より効率がよい。
+#[inline]
+fn sum_bytes_in_usize(values: usize) -> usize {
+    const LSB_SHORTS: usize = usize::repeat_u16(0x0001);
+    const SKIP_BYTES: usize = usize::repeat_u16(0x00ff);
+
+    let pair_sum: usize = (values & SKIP_BYTES) + ((values >> 8) & SKIP_BYTES);
+    pair_sum.wrapping_mul(LSB_SHORTS) >> ((USIZE_SIZE - 2) * 8)
+}
+```
+
+```rust:line-numbers=120 [原文]
 // Morally equivalent to `values.to_ne_bytes().into_iter().sum::<usize>()`, but
 // more efficient.
 #[inline]
@@ -36,6 +52,8 @@ fn sum_bytes_in_usize(values: usize) -> usize {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`usize::repeat_u16(0x0001)`**: 2 バイトの値 `0x0001` を `usize` 全体に繰り返し並べた定数です。64 ビットなら `0x0001_0001_0001_0001` になります。同様に `repeat_u16(0x00ff)` は `0x00ff_00ff_00ff_00ff` です。
@@ -47,7 +65,12 @@ fn sum_bytes_in_usize(values: usize) -> usize {
 
 前提として、呼び出し元では各バイトの値は 192 以下になっています。
 
-### 1. 隣り合うバイトを足して 16 ビットの枠にする（127 行目）
+### 1. 隣り合うバイトを足して 16 ビットの枠にする
+
+```rust:line-numbers=127
+    let pair_sum: usize = (values & SKIP_BYTES) + ((values >> 8) & SKIP_BYTES);
+```
+
 
 ```
 values & SKIP_BYTES        → 各 16 ビット枠の下位バイト
@@ -58,7 +81,12 @@ values & SKIP_BYTES        → 各 16 ビット枠の下位バイト
 
 8 バイト `[1, 2, 3, 4, 5, 6, 7, 8]` なら、16 ビット枠は `[3, 7, 11, 15]` になります。
 
-### 2. 掛け算で 4 個の枠を合計する（128 行目）
+### 2. 掛け算で 4 個の枠を合計する
+
+```rust:line-numbers=128
+    pair_sum.wrapping_mul(LSB_SHORTS) >> ((USIZE_SIZE - 2) * 8)
+```
+
 
 ここが一番の工夫です。`x × 0x0001_0001_0001_0001` は、筆算で考えると
 
