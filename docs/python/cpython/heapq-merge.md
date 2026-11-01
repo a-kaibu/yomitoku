@@ -11,8 +11,10 @@ file: Lib/heapq.py
 lines: [330, 408]
 function: merge
 difficulty: 3
+format: 2
 tags: [データ構造, アルゴリズム, イテレータ, 遅延評価, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `heapq.merge` は、**それぞれ小さい順に並んだ複数のデータを、1 本の小さい順のデータに合流させる** 関数です。
@@ -21,7 +23,91 @@ tags: [データ構造, アルゴリズム, イテレータ, 遅延評価, 標�
 
 ## コード
 
-```python:line-numbers=330
+::: code-group
+
+```python:line-numbers=330 [日本語訳]
+def merge(*iterables, key=None, reverse=False):
+    '''複数のソート済みの入力を、1 つのソート済みの出力に合流させる。
+
+    Similar to sorted(itertools.chain(*iterables)) but returns a generator,
+    does not pull the data into memory all at once, and assumes that each of
+    the input streams is already sorted (smallest to largest).
+
+    >>> list(merge([1,3,5,7], [0,2,4,8], [5,10,15,20], [], [25]))
+    [0, 1, 2, 3, 4, 5, 5, 7, 8, 10, 15, 20, 25]
+
+    If *key* is not None, applies a key function to each element to determine
+    its sort order.
+
+    >>> list(merge(['dog', 'horse'], ['cat', 'fish', 'kangaroo'], key=len))
+    ['dog', 'cat', 'fish', 'horse', 'kangaroo']
+
+    '''
+
+    h = []
+    h_append = h.append
+
+    if reverse:
+        _heapify = heapify_max
+        _heappop = heappop_max
+        _heapreplace = heapreplace_max
+        direction = -1
+    else:
+        _heapify = heapify
+        _heappop = heappop
+        _heapreplace = heapreplace
+        direction = 1
+
+    if key is None:
+        for order, it in enumerate(map(iter, iterables)):
+            try:
+                next = it.__next__
+                h_append([next(), order * direction, next])
+            except StopIteration:
+                pass
+        _heapify(h)
+        while len(h) > 1:
+            try:
+                while True:
+                    value, order, next = s = h[0]
+                    yield value
+                    s[0] = next()           # 使い切ると StopIteration を送出する
+                    _heapreplace(h, s)      # ヒープの条件を元に戻す
+            except StopIteration:
+                _heappop(h)                 # 空になったイテレータを取り除く
+        if h:
+            # 残りのイテレータが 1 つだけのときの高速な経路
+            value, order, next = h[0]
+            yield value
+            yield from next.__self__
+        return
+
+    for order, it in enumerate(map(iter, iterables)):
+        try:
+            next = it.__next__
+            value = next()
+            h_append([key(value), order * direction, value, next])
+        except StopIteration:
+            pass
+    _heapify(h)
+    while len(h) > 1:
+        try:
+            while True:
+                key_value, order, value, next = s = h[0]
+                yield value
+                value = next()
+                s[0] = key(value)
+                s[2] = value
+                _heapreplace(h, s)
+        except StopIteration:
+            _heappop(h)
+    if h:
+        key_value, order, value, next = h[0]
+        yield value
+        yield from next.__self__
+```
+
+```python:line-numbers=330 [原文]
 def merge(*iterables, key=None, reverse=False):
     '''Merge multiple sorted inputs into a single sorted output.
 
@@ -103,6 +189,8 @@ def merge(*iterables, key=None, reverse=False):
         yield from next.__self__
 ```
 
+:::
+
 ## 前提知識
 
 - **ジェネレータと `yield`**: 関数の中に `yield` があると、その関数は値を 1 つずつ返す「ジェネレータ」になります。`yield value` で値を 1 つ渡して一時停止し、次の値を求められたら続きから動きます。
@@ -115,9 +203,18 @@ def merge(*iterables, key=None, reverse=False):
 
 ## 何をしているか
 
-ここでは `key` がない場合（362〜384 行目）を追います。`key` がある場合（386〜408 行目）は、比較用の値を別に持つだけで流れは同じです。
+ここでは `key` がない場合を追います。`key` がある場合は、比較用の値を別に持つだけで流れは同じです。
 
-### 1. 各入力の先頭をヒープに入れる（363〜369 行目）
+### 1. 各入力の先頭をヒープに入れる
+
+```python:line-numbers=363
+        for order, it in enumerate(map(iter, iterables)):
+            try:
+                next = it.__next__
+                h_append([next(), order * direction, next])
+            except StopIteration:
+                pass
+```
 
 入力 `A = [1, 3, 5]`、`B = [0, 2, 4]` とします。それぞれについて
 
@@ -125,7 +222,19 @@ def merge(*iterables, key=None, reverse=False):
 
 というリストを作ってヒープ `h` に入れます。`h = [[1, 0, A.next], [0, 1, B.next]]` を `heapify` すると、先頭は `[0, 1, B.next]` です。空の入力は `StopIteration` で飛ばします。
 
-### 2. 最小を出して、同じ入力から補充する（370〜378 行目）
+### 2. 最小を出して、同じ入力から補充する
+
+```python:line-numbers=370
+        while len(h) > 1:
+            try:
+                while True:
+                    value, order, next = s = h[0]
+                    yield value
+                    s[0] = next()           # 使い切ると StopIteration を送出する
+                    _heapreplace(h, s)      # ヒープの条件を元に戻す
+            except StopIteration:
+                _heappop(h)                 # 空になったイテレータを取り除く
+```
 
 1. `h[0]` から値 `0` を取り出して `yield` する
 2. その入力の `next()` で次の値 `2` を読み、`s[0] = 2` と書き換える
@@ -133,7 +242,15 @@ def merge(*iterables, key=None, reverse=False):
 
 これを繰り返すと `0, 1, 2, 3, 4` と出てきます。ある入力が尽きると `next()` が `StopIteration` を出すので、`heappop` でその入力をヒープから外します。
 
-### 3. 最後の 1 本は丸ごと流す（379〜383 行目）
+### 3. 最後の 1 本は丸ごと流す
+
+```python:line-numbers=379
+        if h:
+            # 残りのイテレータが 1 つだけのときの高速な経路
+            value, order, next = h[0]
+            yield value
+            yield from next.__self__
+```
 
 残りが 1 本になったら、もう比べる相手がいません。その値を出したあと、`next.__self__`（元のイテレータ）を `yield from` でそのまま流します。
 
@@ -150,7 +267,7 @@ def merge(*iterables, key=None, reverse=False):
 - 3 番目の要素（関数）どうしを比べてエラーになることがない
 - 同じ値なら先に渡した入力のものが先に出る（安定）
 
-という 2 つを同時に実現しています。`reverse=True` のときは `order * direction` で番号の符号を反転し、逆順でも安定になるようにしています。
+という 2 つを同時に実現しています。`reverse=True` のときは `order * direction` で番号の符号を反転し、逆順でも同じ値の並びが安定するようにしています。
 
 ### リストを使い回して書き換える
 
