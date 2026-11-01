@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/TimSort.java
 lines: [276, 320]
 function: "TimSort.binarySort"
 difficulty: 2
+format: 2
 tags: [ソート, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,57 @@ TimSort は、短い区間（32 個程度まで）を **挿入ソート** で並
 
 ## コード
 
-```java:line-numbers=276
+::: code-group
+
+```java:line-numbers=276 [日本語訳]
+    @SuppressWarnings("fallthrough")
+    private static <T> void binarySort(T[] a, int lo, int hi, int start,
+                                       Comparator<? super T> c) {
+        assert lo <= start && start <= hi;
+        if (start == lo)
+            start++;
+        for ( ; start < hi; start++) {
+            T pivot = a[start];
+
+            // left（と right）を、a[start]（pivot）が入るべき位置にする
+            int left = lo;
+            int right = start;
+            assert left <= right;
+            /*
+             * 不変条件:
+             * pivot は [lo, left) のすべて以上。
+             * pivot は [right, start) のすべてより小さい。
+             */
+            while (left < right) {
+                int mid = (left + right) >>> 1;
+                if (c.compare(pivot, a[mid]) < 0)
+                    right = mid;
+                else
+                    left = mid + 1;
+            }
+            assert left == right;
+
+            /*
+             * 不変条件はまだ成り立っている: pivot は [lo, left) のすべて以上で、
+             * [left, start) のすべてより小さい。だから pivot は left に入る。
+             * pivot と等しい要素があれば、left はそれらの直後を指す
+             * ことに注意。これがこのソートが安定である理由だ。
+             * 要素をずらして pivot の場所を空ける。
+             */
+            int n = start - left;  // 動かす要素の数
+            // switch は、default の場合の arraycopy を補う最適化にすぎない
+            switch (n) {
+                case 2:  a[left + 2] = a[left + 1];
+                case 1:  a[left + 1] = a[left];
+                         break;
+                default: System.arraycopy(a, left, a, left + 1, n);
+            }
+            a[left] = pivot;
+        }
+    }
+```
+
+```java:line-numbers=276 [原文]
     @SuppressWarnings("fallthrough")
     private static <T> void binarySort(T[] a, int lo, int hi, int start,
                                        Comparator<? super T> c) {
@@ -70,6 +121,8 @@ TimSort は、短い区間（32 個程度まで）を **挿入ソート** で並
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`T[] a`、`Comparator<? super T> c`**: 任意の型の配列と、要素を比べる道具です。`c.compare(x, y)` は `x < y` なら負を返します。
@@ -82,8 +135,25 @@ TimSort は、短い区間（32 個程度まで）を **挿入ソート** で並
 
 `[2, 5, 8, 3]`、`start = 3` で、`3` を差し込む場面を追います。
 
-### 1. 二分探索で位置を探す（286〜300 行目）
+### 1. 二分探索で位置を探す
 
+```java:line-numbers=286
+            int left = lo;
+            int right = start;
+            assert left <= right;
+            /*
+             * 不変条件:
+             * pivot は [lo, left) のすべて以上。
+             * pivot は [right, start) のすべてより小さい。
+             */
+            while (left < right) {
+                int mid = (left + right) >>> 1;
+                if (c.compare(pivot, a[mid]) < 0)
+                    right = mid;
+                else
+                    left = mid + 1;
+            }
+```
 `left = 0`、`right = 3` から始めます。
 
 - `mid = 1`、`3 < 5` なので `right = 1`
@@ -92,12 +162,30 @@ TimSort は、短い区間（32 個程度まで）を **挿入ソート** で並
 
 `3` は位置 1 に入ればよいとわかりました。比較は 2 回です。ふつうの挿入ソートなら、後ろから 1 つずつ比べるので 3 回かかります。区間が長くなるほど差は大きくなります。
 
-### 2. 安定性の確保（303〜307 行目のコメント）
+### 2. 安定性の確保
 
+```java:line-numbers=303
+            /*
+             * 不変条件はまだ成り立っている: pivot は [lo, left) のすべて以上で、
+             * [left, start) のすべてより小さい。だから pivot は left に入る。
+             * pivot と等しい要素があれば、left はそれらの直後を指す
+             * ことに注意。これがこのソートが安定である理由だ。
+```
 比較が `< 0` のときだけ `right` を動かすので、`pivot` と等しい要素があれば、その **後ろ** に入ります。等しい要素の元の順番が保たれる（安定ソート）のはこのためです。
 
-### 3. まとめてずらす（310〜318 行目）
+### 3. まとめてずらす
 
+```java:line-numbers=310
+            int n = start - left;  // 動かす要素の数
+            // switch は、default の場合の arraycopy を補う最適化にすぎない
+            switch (n) {
+                case 2:  a[left + 2] = a[left + 1];
+                case 1:  a[left + 1] = a[left];
+                         break;
+                default: System.arraycopy(a, left, a, left + 1, n);
+            }
+            a[left] = pivot;
+```
 `n = start - left = 2` 個（`5, 8`）を 1 つ後ろへずらし、空いた位置 1 に `3` を置いて `[2, 3, 5, 8]` になります。
 
 移動する数が 1 か 2 のときは、`switch` で直接代入しています。`n = 2` なら `case 2` の代入をしてから、`break` がないので `case 1` の代入も続けて行います。3 個以上なら `System.arraycopy` に任せます。

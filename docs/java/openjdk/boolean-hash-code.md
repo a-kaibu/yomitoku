@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Boolean.java
 lines: [263, 265]
 function: "Boolean.hashCode(boolean)"
 difficulty: 1
+format: 2
 tags: [ハッシュ, 標準ライブラリ, 設計パターン]
 ---
 
@@ -37,6 +38,12 @@ tags: [ハッシュ, 標準ライブラリ, 設計パターン]
 - **素数**: 2, 3, 5, 7, 11… のように、1 と自分自身でしか割り切れない数です。
 
 ## 何をしているか
+
+### true と false で値を選ぶ
+
+```java:line-numbers=264
+        return value ? 1231 : 1237;
+```
 
 コードは三項演算子 1 つだけです。`value` が `true` なら `1231`、`false` なら `1237` を返します。
 

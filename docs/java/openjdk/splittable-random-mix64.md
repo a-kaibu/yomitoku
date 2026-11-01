@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/SplittableRandom.java
 lines: [186, 190]
 function: "SplittableRandom.mix64"
 difficulty: 3
+format: 2
 tags: [乱数, ビット演算, ハッシュ]
 ---
 
@@ -42,9 +43,15 @@ tags: [乱数, ビット演算, ハッシュ]
 
 ### 3 つの段
 
-1. `z ^ (z >>> 30)` で上位 → 下位へ混ぜ、`* 0xbf58476d1ce4e5b9L` で下位 → 上位へ広げる（187 行目）
-2. `z ^ (z >>> 27)` で再び上位 → 下位へ混ぜ、`* 0x94d049bb133111ebL` で広げる（188 行目）
-3. 最後に `z ^ (z >>> 31)` で仕上げ（189 行目）
+```java:line-numbers=187
+        z = (z ^ (z >>> 30)) * 0xbf58476d1ce4e5b9L;
+        z = (z ^ (z >>> 27)) * 0x94d049bb133111ebL;
+        return z ^ (z >>> 31);
+```
+
+1. `z ^ (z >>> 30)` で上位 → 下位へ混ぜ、`* 0xbf58476d1ce4e5b9L` で下位 → 上位へ広げる
+2. `z ^ (z >>> 27)` で再び上位 → 下位へ混ぜ、`* 0x94d049bb133111ebL` で広げる
+3. 最後に `z ^ (z >>> 31)` で仕上げ
 
 ### なぜ 2 種類の操作を交互にするのか
 

@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/BitSet.java
 lines: [715, 734]
 function: "BitSet.nextSetBit"
 difficulty: 2
+format: 2
 tags: [ビット演算, データ構造, 探索]
 ---
 
@@ -47,14 +48,19 @@ tags: [ビット演算, データ構造, 探索]
 
 関連する定数とヘルパーは、同じファイルで次のように定義されています。
 
-```java
-private static final int ADDRESS_BITS_PER_WORD = 6;
-private static final int BITS_PER_WORD = 1 << ADDRESS_BITS_PER_WORD;
-private static final long WORD_MASK = 0xffffffffffffffffL;
+```java:line-numbers=74
+    private static final int ADDRESS_BITS_PER_WORD = 6;
+    private static final int BITS_PER_WORD = 1 << ADDRESS_BITS_PER_WORD;
+    private static final int BIT_INDEX_MASK = BITS_PER_WORD - 1;
 
-private static int wordIndex(int bitIndex) {
-    return bitIndex >> ADDRESS_BITS_PER_WORD;
-}
+    /* 部分的な word のマスクを作るための左右シフトに使う */
+    private static final long WORD_MASK = 0xffffffffffffffffL;
+```
+
+```java:line-numbers=116
+    private static int wordIndex(int bitIndex) {
+        return bitIndex >> ADDRESS_BITS_PER_WORD;
+    }
 ```
 
 ## 前提知識
@@ -70,18 +76,35 @@ private static int wordIndex(int bitIndex) {
 
 `from = 70` で、ビット 75 と 200 が 1 の BitSet を考えます。
 
-### 1. 開始位置の word を求める（721〜723 行目）
+### 1. 開始位置の word を求める
 
+```java:line-numbers=721
+        int u = wordIndex(fromIndex);
+        if (u >= wordsInUse)
+            return -1;
+```
 `wordIndex(70) = 70 >> 6 = 1` です。使っている word の範囲外なら、もう 1 はないので `-1` を返します。
 
-### 2. 手前のビットを消す（725 行目）
+### 2. 手前のビットを消す
 
+```java:line-numbers=725
+        long word = words[u] & (WORD_MASK << fromIndex);
+```
 `words[1]` はビット 64〜127 を表しています。そのうち 64〜69 は探す範囲の外なので、消さなければいけません。
 
 `WORD_MASK << 70` は、シフト量が `70 % 64 = 6` になるので、下位 6 ビットが 0、残りが 1 のマスクです。これと AND を取ると、ビット 64〜69 に当たる部分が消えます。
 
-### 3. 0 でない word を探す（727〜733 行目）
+### 3. 0 でない word を探す
 
+```java:line-numbers=727
+        while (true) {
+            if (word != 0)
+                return (u * BITS_PER_WORD) + Long.numberOfTrailingZeros(word);
+            if (++u == wordsInUse)
+                return -1;
+            word = words[u];
+        }
+```
 - `word` が 0 でなければ、その中にいちばん下の 1 があります。`words[1]` にはビット 75（下から 11 番目）が立っているので、`1 * 64 + 11 = 75` を返します。
 - もし 0 なら、次の word へ進みます。0 の word は **64 ビットまとめて一度の比較で飛ばせます**。
 

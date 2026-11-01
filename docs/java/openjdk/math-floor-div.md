@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Math.java
 lines: [1475, 1482]
 function: "Math.floorDiv(int, int)"
 difficulty: 1
+format: 2
 tags: [数値計算, 標準ライブラリ, 防御的プログラミング]
 ---
 
@@ -22,7 +23,20 @@ Java の整数の割り算 `/` は、答えの小数部分を **0 に向かっ�
 
 ## コード
 
-```java:line-numbers=1475
+::: code-group
+
+```java:line-numbers=1475 [日本語訳]
+    public static int floorDiv(int x, int y) {
+        final int q = x / y;
+        // 符号が異なり、余りが 0 でなければ、下に丸める
+        if ((x ^ y) < 0 && (q * y != x)) {
+            return q - 1;
+        }
+        return q;
+    }
+```
+
+```java:line-numbers=1475 [原文]
     public static int floorDiv(int x, int y) {
         final int q = x / y;
         // if the signs are different and modulo not zero, round down
@@ -33,6 +47,8 @@ Java の整数の割り算 `/` は、答えの小数部分を **0 に向かっ�
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`/`（整数の割り算）**: `int` 同士の割り算は整数の結果を返し、小数部分は 0 に向かって捨てられます（正なら切り下げ、負なら切り上げに見えます）。
@@ -42,12 +58,20 @@ Java の整数の割り算 `/` は、答えの小数部分を **0 に向かっ�
 
 ## 何をしているか
 
-### 1. まずふつうに割る（1476 行目）
+### 1. まずふつうに割る
 
+```java:line-numbers=1476
+        final int q = x / y;
+```
 `q = x / y` を計算します。
 
-### 2. 補正が必要な場合だけ 1 引く（1478〜1480 行目）
+### 2. 補正が必要な場合だけ 1 引く
 
+```java:line-numbers=1478
+        if ((x ^ y) < 0 && (q * y != x)) {
+            return q - 1;
+        }
+```
 0 に向かう切り捨てと、下に向かう切り捨てが **違う結果になるのは、答えが負で、しかも割り切れないとき** だけです。
 
 - 答えが負になるのは、`x` と `y` の符号が逆のとき → `(x ^ y) < 0`

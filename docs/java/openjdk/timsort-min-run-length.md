@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/TimSort.java
 lines: [400, 408]
 function: "TimSort.minRunLength"
 difficulty: 3
+format: 2
 tags: [ソート, アルゴリズム, ビット演算]
 ---
 
@@ -22,7 +23,21 @@ Java のオブジェクト配列のソート（`Arrays.sort(Object[])` など）
 
 ## コード
 
-```java:line-numbers=400
+::: code-group
+
+```java:line-numbers=400 [日本語訳]
+    private static int minRunLength(int n) {
+        assert n >= 0;
+        int r = 0;      // 1 のビットが 1 つでもこぼれたら 1 になる
+        while (n >= MIN_MERGE) {
+            r |= (n & 1);
+            n >>= 1;
+        }
+        return n + r;
+    }
+```
+
+```java:line-numbers=400 [原文]
     private static int minRunLength(int n) {
         assert n >= 0;
         int r = 0;      // Becomes 1 if any 1 bits are shifted off
@@ -34,7 +49,13 @@ Java のオブジェクト配列のソート（`Arrays.sort(Object[])` など）
     }
 ```
 
-`MIN_MERGE` は同じファイルの 80 行目で `32` と定義されています。
+:::
+
+`MIN_MERGE` は同じファイルで `32` と定義されています。
+
+```java:line-numbers=80
+    private static final int MIN_MERGE = 32;
+```
 
 ## 前提知識
 
@@ -47,8 +68,16 @@ Java のオブジェクト配列のソート（`Arrays.sort(Object[])` など）
 
 ## 何をしているか
 
-### 計算の手順（402〜407 行目）
+### 計算の手順
 
+```java:line-numbers=402
+        int r = 0;      // 1 のビットが 1 つでもこぼれたら 1 になる
+        while (n >= MIN_MERGE) {
+            r |= (n & 1);
+            n >>= 1;
+        }
+        return n + r;
+```
 `n` が 32 未満になるまで 2 で割り続けます。その途中で **切り捨てた 1 ビットが一度でもあったら `r = 1`** にし、最後に `n + r` を返します。
 
 言い換えると、`n` の上位 5 ビット（16〜31 の値）を取り出し、残りの下位ビットが 0 でなければ 1 を足す、という計算です。

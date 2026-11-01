@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Integer.java
 lines: [1549, 1551]
 function: "Integer.highestOneBit"
 difficulty: 2
+format: 2
 tags: [ビット演算, 標準ライブラリ, 可読性]
 ---
 
@@ -38,6 +39,10 @@ tags: [ビット演算, 標準ライブラリ, 可読性]
 ## 何をしているか
 
 ### 1. いちばん上の 1 の位置を知る
+
+```java:line-numbers=1550
+        return i & (MIN_VALUE >>> numberOfLeadingZeros(i));
+```
 
 `numberOfLeadingZeros(i)` は、上位の 0 の数です。これは「いちばん上の 1 が、最上位から何ビット下にあるか」と同じです。`i = 100` なら `25` です。
 

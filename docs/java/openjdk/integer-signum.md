@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/Integer.java
 lines: [1950, 1953]
 function: "Integer.signum"
 difficulty: 2
+format: 2
 tags: [ビット演算, ハック, 標準ライブラリ]
 ---
 
@@ -22,12 +23,23 @@ tags: [ビット演算, ハック, 標準ライブラリ]
 
 ## コード
 
-```java:line-numbers=1950
+::: code-group
+
+```java:line-numbers=1950 [日本語訳]
+    public static int signum(int i) {
+        // HD（Hacker's Delight）の 2-7 節
+        return (i >> 31) | (-i >>> 31);
+    }
+```
+
+```java:line-numbers=1950 [原文]
     public static int signum(int i) {
         // HD, Section 2-7
         return (i >> 31) | (-i >>> 31);
     }
 ```
+
+:::
 
 ## 前提知識
 
@@ -38,6 +50,12 @@ tags: [ビット演算, ハック, 標準ライブラリ]
 - **`-i`**: 符号を反転した値です。
 
 ## 何をしているか
+
+### 式を 2 つの部品に分ける
+
+```java:line-numbers=1952
+        return (i >> 31) | (-i >>> 31);
+```
 
 式は 2 つの部品からできています。
 

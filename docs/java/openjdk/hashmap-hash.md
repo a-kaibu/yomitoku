@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/util/HashMap.java
 lines: [336, 339]
 function: "HashMap.hash"
 difficulty: 2
+format: 2
 tags: [ハッシュ, データ構造, 標準ライブラリ]
 ---
 
@@ -40,12 +41,18 @@ HashMap は配列の何番目にデータを入れるかを、ハッシュ値の
 
 ## 何をしているか
 
-### 1. null は 0 番へ（338 行目の前半）
+### 1. null は 0 番へ
 
+```java:line-numbers=338
+        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+```
 HashMap は `null` をキーにできます。その場合はハッシュ値を `0` にして、0 番目の箱に入れます。
 
-### 2. 上位を下位に混ぜる（338 行目の後半）
+### 2. 上位を下位に混ぜる
 
+```java:line-numbers=338
+        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+```
 HashMap は箱の位置を `(配列の長さ - 1) & hash` で求めます。配列の長さは常に 2 のべき乗で、たとえば 16 なら `& 0b1111`、つまり **下位 4 ビットだけ** が使われます。
 
 ここで、ハッシュ値が次の 3 つのキーを考えます。

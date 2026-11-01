@@ -11,6 +11,7 @@ file: src/java.base/share/classes/java/lang/ThreadLocal.java
 lines: [93, 114]
 function: "ThreadLocal.nextHashCode"
 difficulty: 3
+format: 2
 tags: [ハッシュ, 数値計算, 並行処理]
 ---
 
@@ -22,7 +23,34 @@ tags: [ハッシュ, 数値計算, 並行処理]
 
 ## コード
 
-```java:line-numbers=93
+::: code-group
+
+```java:line-numbers=93 [日本語訳]
+    private final int threadLocalHashCode = nextHashCode();
+
+    /**
+     * 次に配るハッシュコード。アトミックに更新される。0 から
+     * 始まる。
+     */
+    private static final AtomicInteger nextHashCode =
+        new AtomicInteger();
+
+    /**
+     * 続けて生成されるハッシュコードの差。暗黙の連番の
+     * スレッドローカル ID を、2 のべき乗サイズの表でほぼ最適に散らばる
+     * 乗算ハッシュ値に変える。
+     */
+    private static final int HASH_INCREMENT = 0x61c88647;
+
+    /**
+     * 次のハッシュコードを返す。
+     */
+    private static int nextHashCode() {
+        return nextHashCode.getAndAdd(HASH_INCREMENT);
+    }
+```
+
+```java:line-numbers=93 [原文]
     private final int threadLocalHashCode = nextHashCode();
 
     /**
@@ -47,6 +75,8 @@ tags: [ハッシュ, 数値計算, 並行処理]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **スレッド**: 1 つのプログラムの中で同時に動く処理の流れです。
@@ -58,7 +88,13 @@ tags: [ハッシュ, 数値計算, 並行処理]
 
 ## 何をしているか
 
-### 1. 作るたびに定数を足す（93・112〜114 行目）
+### 1. 作るたびに定数を足す
+
+```java:line-numbers=112
+    private static int nextHashCode() {
+        return nextHashCode.getAndAdd(HASH_INCREMENT);
+    }
+```
 
 ThreadLocal を作ると `nextHashCode()` が呼ばれ、カウンタの今の値をもらい、カウンタは `0x61c88647` 増えます。`int` はあふれても回り続けるので、値は 32 ビットの範囲を何周もします。
 
