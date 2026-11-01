@@ -1,6 +1,6 @@
 ---
-title: "文字列が空白だけでできているかを、1 文字ずつ調べる"
-description: "Newtonsoft.Json の StringUtils.IsWhiteSpace。空の文字列は false とし、中身がすべて空白文字のときだけ true を返す。途中で 1 文字でも違えば、すぐ false を返す。"
+title: "文字列がすべて空白文字だけかを調べる"
+description: "Newtonsoft.Json の StringUtils.IsWhiteSpace。文字列の全部の文字が空白かを 1 文字ずつ調べ、1 つでも空白でなければ false を返す。空の文字列は false。"
 language: csharp
 project: "Newtonsoft.Json"
 repo: https://github.com/JamesNK/Newtonsoft.Json
@@ -8,19 +8,19 @@ license: MIT
 copyright: "Copyright (c) 2007 James Newton-King"
 commit: "52fa3aef1f2cadcd3a3f874251eddc98d3efbbaa"
 file: Src/Newtonsoft.Json/Utilities/StringUtils.cs
-lines: [90, 110]
+lines: [90, 111]
 function: "StringUtils.IsWhiteSpace(string)"
 difficulty: 1
 format: 2
-tags: [文字列処理, 防御的プログラミング, 可読性]
+tags: [文字列処理, Unicode, 防御的プログラミング]
 ---
 
 ## ひとことで
 
-`IsWhiteSpace(s)` は、文字列が **空白文字だけでできているか** を調べて、`true` か `false` を返す関数です。
-たとえば `"   \t "` は `true` です。`"  a  "` は途中に `a` があるので `false` です。空の文字列 `""` は `false` になります。
+`IsWhiteSpace` は、文字列が **すべて空白文字だけでできているか** を調べる関数です。
+たとえば `"   "`（空白 3 つ）は `true`、`"  a "` は `false` です。
 
-名前は似ていますが、標準の `string.IsNullOrWhiteSpace` とは、空の文字列の扱いが違います。
+空の文字列 `""` は、空白が 1 つもないので `false` になります。
 
 ## コード
 
@@ -46,41 +46,40 @@ tags: [文字列処理, 防御的プログラミング, 可読性]
             }
 
             return true;
+        }
 ```
 
 ## 前提知識
 
-- **空白文字**: スペース、タブ、改行など、画面に何も表示しない文字です。
-- **`null`**: 値が何もないことを表す特別な値です。文字列の場合、そもそも中身がありません。
-- **`ArgumentNullException`**: 引数に `null` が渡されたときに投げる例外です。呼び出し側の間違いを知らせます。
-- **`char.IsWhiteSpace`**: 1 文字が空白文字かどうかを調べる、標準の関数です。
-- **`bool` の戻り値**: 条件を満たすかどうかを `true` か `false` で返します。
+- **空白文字**: 半角スペース、タブ、改行などの、目に見えない区切りの文字です。`char.IsWhiteSpace` で判定できます。
+- **`char`**: 文字 1 つを表す型です。文字列は `char` の並びとして扱えます。
+- **`s.Length`**: 文字列の長さ（文字数）です。
+- **`ArgumentNullException`**: 引数に `null` が渡されたときに投げる例外です。
+- **`for` 文**: 番号を 0 から増やしながら、同じ処理を繰り返す書き方です。
 
 ## 何をしているか
 
-### 1. null を弾く
+### 1. `null` を受け付けない
 
 ```csharp:line-numbers=92
             if (s == null)
             {
                 throw new ArgumentNullException(nameof(s));
-            }
 ```
 
-`null` が渡されたら、例外で知らせます。空白かどうかを判断できないからです。
+`null` の文字列が来たら、例外を投げます。`null` は調べられないので、呼び出し側の誤りとして知らせます。
 
-### 2. 空の文字列を弾く
+### 2. 空の文字列は `false` にする
 
 ```csharp:line-numbers=97
             if (s.Length == 0)
             {
                 return false;
-            }
 ```
 
-長さが 0 の文字列は、空白だけでできているとは判断せず、`false` を返します。
+長さが 0 なら、空白文字が 1 つもないので `false` を返します。「すべてが空白」かどうかは、1 文字もない場合は言えないためです。
 
-### 3. 1 文字ずつ調べる
+### 3. 1 文字ずつ空白かを調べる
 
 ```csharp:line-numbers=102
             for (int i = 0; i < s.Length; i++)
@@ -89,27 +88,27 @@ tags: [文字列処理, 防御的プログラミング, 可読性]
                 {
                     return false;
                 }
+            }
 ```
 
-先頭から 1 文字ずつ `char.IsWhiteSpace` で調べます。空白でない文字を 1 つでも見つけたら、すぐ `false` を返します。
+先頭から順に `char.IsWhiteSpace` で調べます。空白でない文字が 1 つでも見つかったら、すぐに `false` を返します。
 
-### 4. すべて空白なら true
+### 4. すべて空白なら `true`
 
-```csharp:line-numbers=109
-
+```csharp:line-numbers=110
+            return true;
 ```
 
-すべての文字が空白だったときだけ、ここまで来ます。その場合に `true` を返します。
+ループを最後まで抜けたら、すべての文字が空白だったことになるので、`true` を返します。
 
 ## ここがすごい
 
-- **途中で打ち切る**: 空白でない文字が見つかった時点で終わるので、長い文字列でも無駄な確認をしません。
-- **空の文字列の扱いを明示**: 空の文字列を `false` にすることで、「空白だけの文字列」と「何もない文字列」を区別します。呼び出し側で意味を取り違えにくくなります。
-- **null は例外で知らせる**: 判断できない入力をごまかさず、早く気づけるようにしています。
-- **標準の関数を組み合わせる**: 空白の判定そのものは `char.IsWhiteSpace` に任せ、この関数は全体の判断だけを担当しています。
+- **早く抜ける**: 空白でない文字が見つかった時点で、残りを調べずに終わります。
+- **空の文字列の扱いを明確にしている**: 空の文字列を `false` にすることで、「空白だけの文字列」と「何もない文字列」を区別しています。
+- **`null` を明示的に拒否**: 例外を投げることで、呼び出し側の問題を隠さずに知らせます。
 
 ## まとめ
 
-- `IsWhiteSpace` は、文字列の全文字が空白かどうかを 1 文字ずつ調べる。
-- 空の文字列は `false`、`null` は例外で扱う。
-- 空白でない文字が 1 つでもあれば、すぐ `false` を返す。
+- `null` は例外、空の文字列は `false` とする。
+- 1 文字ずつ空白かを調べ、空白でない文字があれば `false`。
+- 全部が空白なら `true`。
