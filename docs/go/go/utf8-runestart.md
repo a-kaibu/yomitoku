@@ -27,10 +27,6 @@ tags: [Unicode, ビット演算, 文字列処理, 標準ライブラリ]
 func RuneStart(b byte) bool { return b&0xC0 != 0x80 }
 ```
 
-```go:line-numbers=457
-func RuneStart(b byte) bool { return b&0xC0 != 0x80 }
-```
-
 ## 前提知識
 
 - **UTF-8 の続きのバイト**: 2 バイト目以降は、必ず `10xxxxxx` の形です。上位 2 ビットが `10` になります。
