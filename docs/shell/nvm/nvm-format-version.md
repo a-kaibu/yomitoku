@@ -55,6 +55,11 @@ nvm_format_version() {
 
 ### 1 回目: `nvm_format_version 20`
 
+```sh:line-numbers=1498
+  VERSION="$(nvm_ensure_version_prefix "${1-}")"
+```
+
+
 - `nvm_ensure_version_prefix` で `v` を付けて `v20` にします。
 - `nvm_num_version_groups` で要素数を数えると `1` です。
 - 3 より少ないので、 `v20` に `.0` を足した `v20.0` で自分を呼びます。
@@ -72,9 +77,19 @@ nvm_format_version() {
 
 ### `.0` を足す前に末尾のドットを取る
 
+```sh:line-numbers=1502
+    nvm_format_version "${VERSION%.}.0"
+```
+
+
 `${VERSION%.}` によって、`20.` のように末尾がドットの値でも `20..0` にならず `20.0` になります。
 
 ### 4 要素以上の場合
+
+```sh:line-numbers=1504
+    nvm_echo "${VERSION}" | command cut -f1-3 -d.
+```
+
 
 `v20.1.3.4` のように多すぎる場合は、`cut -f1-3 -d.` で最初の 3 つだけを残して `v20.1.3` にします。
 

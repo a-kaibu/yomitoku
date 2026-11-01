@@ -64,13 +64,28 @@ nvm_cd() {
 
 ### 1. zsh かどうかを調べる
 
+```sh:line-numbers=42
+  if [ -n "${ZSH_VERSION-}" ]; then
+```
+
+
 `[ -n "${ZSH_VERSION-}" ]` で、今動いているシェルが zsh かどうかを判定します。
 
 ### 2. zsh なら builtin cd
 
+```sh:line-numbers=44
+    builtin cd "$@"
+```
+
+
 zsh では `builtin cd "$@"` を使います。コメントによると、zsh で `command cd` と書くと、組み込みの `cd` ではなく `/usr/bin/cd` という外部コマンドが実行されてしまうことがあります。外部コマンドは別プロセスで動くため、そこで移動しても **呼び出したシェルの場所は変わりません**。これでは意味がないので、zsh では `builtin` を使います。
 
 ### 3. それ以外は command cd
+
+```sh:line-numbers=46
+    command cd "$@"
+```
+
 
 bash・dash・ksh などでは `command cd "$@"` を使います。`command` は関数とエイリアスを飛ばすので、ユーザーが `cd` を関数で上書きしていても本来の `cd` が実行されます。dash のように `builtin` を持たないシェルもあるため、こちらは POSIX で決められている `command` を使います。
 

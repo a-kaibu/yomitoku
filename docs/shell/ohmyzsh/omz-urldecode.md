@@ -129,9 +129,19 @@ function omz_urldecode {
 
 ### 4. printf に渡す
 
+```zsh:line-numbers=266
+  # Protect other escapes to pass through the printf unchanged
+```
+
+
 `printf` が `\xE3\x81\x93` を 3 バイトに変換し、それが UTF-8 の「こ」になります。結果は `a こ\n` です。
 
 ### 5. 必要なら文字コードを変換
+
+```zsh:line-numbers=277
+    decoded=$(echo -E "$decoded" | iconv -f UTF-8 -t $caller_encoding)
+```
+
 
 呼び出し元のロケールが UTF-8 でなければ、`iconv` で変換します。
 

@@ -97,6 +97,11 @@ nvm_resolve_local_alias() {
 
 ### 2. 別名をたどる
 
+```sh:line-numbers=2073
+  VERSION="$(nvm_resolve_alias "${1-}")"
+```
+
+
 `nvm_resolve_alias` で別名をたどり、結果と終了ステータスを両方受け取ります。結果が空なら、その終了ステータスをそのまま返します。どこで失敗したかの情報を失わないためです。
 
 ### 3. 循環していたら
@@ -108,6 +113,11 @@ nvm_resolve_local_alias() {
 結果が `v20.11.0` のような正確なバージョンで、しかもインストール済みなら、それを返して終わります。
 
 ### 5. 通常の道
+
+```sh:line-numbers=2089
+  nvm_version "${VERSION}"
+```
+
 
 `lts/iron` → `20` のように、まだあいまいな値なら、`nvm_version` でインストール済みの中から探します。
 

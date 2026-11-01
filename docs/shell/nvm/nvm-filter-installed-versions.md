@@ -70,6 +70,11 @@ nvm_filter_installed_versions() {
 
 ### 1. LTS の記録が必要か調べる
 
+```sh:line-numbers=2250
+      nvm_err 'The LTS status of installed versions is not recorded yet; run `nvm ls-remote` to record it.'
+```
+
+
 選ばれたカテゴリによっては、LTS かどうかを区別する必要があります。必要なのに記録ファイルが無ければ、`nvm ls-remote` を実行するよう案内して終わります。
 
 ### 2. カテゴリをカンマで挟んで渡す
@@ -78,9 +83,19 @@ nvm_filter_installed_versions() {
 
 ### 3. 記録を辞書に読む
 
+```sh:line-numbers=2258
+    BEGIN {
+```
+
+
 `BEGIN` で記録ファイルを 1 行ずつ読みます。各行は `v20.11.0 iron` のような「バージョン 名前」の形で、LTS でないものは名前が `-` です。これを `lts` 辞書に入れます。
 
 ### 4. 1 行ずつカテゴリを決める
+
+```sh:line-numbers=2267
+      if ($1 == "system" || $1 == "N/A") { print; next }
+```
+
 
 - `system` と `N/A` は常に残します。
 - `iojs-` で始まれば `iojs`、alpha の形なら `alpha` です。

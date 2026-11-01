@@ -146,6 +146,11 @@ nvm_acquire_install_lock() {
 
 ### 2. mkdir できるまで待つ
 
+```sh:line-numbers=4433
+  command mkdir -p "${LOCK_ROOT}" 2>/dev/null || return 0
+```
+
+
 `mkdir` に成功すればループを抜けます。失敗した（ほかの誰かがロックを持っている）ときは、次のことをします。
 
 - 古いロックの設定があり、ロックが設定した分数より古ければ、前のインストールが異常終了して残ったものとみなして削除し、すぐにやり直します。
@@ -154,6 +159,11 @@ nvm_acquire_install_lock() {
 - 1 秒待って、待ち時間を 1 増やします。
 
 ### 3. ロックを記録
+
+```sh:line-numbers=4439
+  TIMEOUT="${NVM_INSTALL_LOCK_TIMEOUT:-600}"
+```
+
 
 取ったロックの場所を `NVM_INSTALL_LOCK` に保存します。インストールが終わると `nvm_release_install_lock` がこのディレクトリを消します。
 

@@ -120,6 +120,11 @@ nvm_change_path() {
 
 ### 2. NVM_DIR をエスケープ
 
+```sh:line-numbers=1549
+  # `${NVM_DIR}` is matched literally, so escape characters that are special in regexes
+```
+
+
 `NVM_DIR` を正規表現の中で使うので、特殊文字の前に `\` を付けます。`/home/me/.nvm` の `.` は「任意の 1 文字」ではなく本物のドットとして扱われます。
 
 ### 3. nvm のディレクトリが無ければ先頭へ

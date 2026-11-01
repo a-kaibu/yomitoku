@@ -65,9 +65,19 @@ nvm_echo() {
 
 ### zsh かどうかで分岐する
 
+```sh:line-numbers=23
+  if [ -n "${ZSH_VERSION-}" ]; then
+```
+
+
 まず `ZSH_VERSION` が空でないかを調べ、zsh で動いているかを判定します。
 
 ### printf で 1 行出力する
+
+```sh:line-numbers=22
+  # in zsh, `command printf` skips the builtin and runs `/usr/bin/printf`
+```
+
 
 どちらの分岐でもやっていることは同じで、`printf %s\n "$*"` を実行します。たとえば `nvm_echo '-n' 'foo'` と呼ぶと、`"$*"` は `-n foo` という 1 つの文字列になり、`%s` の位置にそのまま入って `-n foo` と表示されます。
 

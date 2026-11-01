@@ -77,17 +77,43 @@ nvm_num_version_groups() {
 
 ### 1. 前後を整える
 
+```sh:line-numbers=1511
+  VERSION="${VERSION#v}"
+```
+```sh:line-numbers=1512
+  VERSION="${VERSION%.}"
+```
+
+
 `v` を取って `20.1.3` にします。末尾がドットなら取り除きます。
 
 ### 2. 空なら 0
+
+```sh:line-numbers=1513
+  if [ -z "${VERSION}" ]; then
+```
+
 
 何も残らなければ、要素は 0 個です。
 
 ### 3. ドットだけを残す
 
+```sh:line-numbers=1518
+  NVM_NUM_DOTS=$(nvm_echo "${VERSION}" | command sed -e 's/[^\.]//g')
+```
+
+
 `sed 's/[^\.]//g'` で、数字などドット以外をすべて消します。`20.1.3` → `..` になります。
 
 ### 4. ドットを 1 つ足して数える
+
+```sh:line-numbers=1520
+  NVM_NUM_GROUPS=".${NVM_NUM_DOTS}" # add extra dot, since it's (n - 1) dots at this point
+```
+```sh:line-numbers=1521
+  nvm_echo "${#NVM_NUM_GROUPS}"
+```
+
 
 要素の数は「ドットの数 + 1」です。そこで `.` を 1 つ前に足して `...` とし、`${#NVM_NUM_GROUPS}` で文字数 `3` を得ます。コメント「n - 1 個のドットなので、1 つ足す」はこのことです。
 

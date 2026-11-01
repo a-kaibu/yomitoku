@@ -189,9 +189,19 @@ nvm_get_os() {
 
 ### 1. 変数を空で初期化
 
+```sh:line-numbers=3283
+  # dash's `local` keeps the caller's value, so these must start empty
+```
+
+
 コメントのとおり、dash の `local` は呼び出し元の値を引き継ぐため、明示的に空にしています。
 
 ### 2. os-release から ID を読む
+
+```sh:line-numbers=3306
+          break
+```
+
 
 ファイルを 1 行ずつ読み、`ID=` で始まる行を見つけたら値を取り出して `break` します。ファイルは **`source` せずに読む** ので、中に何が書かれていても実行されません。
 
@@ -199,9 +209,19 @@ nvm_get_os() {
 
 ### 3. ID から OS を決める
 
+```sh:line-numbers=3316
+      freebsd) NVM_OS=freebsd ;;
+```
+
+
 `freebsd`、`cygwin` などの既知の ID はそのまま対応する名前にします。それ以外の ID（`ubuntu`、`fedora` など）は、Linux の可能性が高いですが、念のため `/proc/sys/kernel/ostype` を読んで `Linux` と書かれているときだけ `linux` にします。
 
 ### 4. 決まらなければ uname
+
+```sh:line-numbers=3299
+  # fall through to `uname -a` below.
+```
+
 
 macOS など os-release が無い環境では、`uname -a` の出力の先頭で判定します。
 

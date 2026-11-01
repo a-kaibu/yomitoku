@@ -69,14 +69,29 @@ function git_current_branch() {
 
 ### 1. HEAD が指すものを調べる
 
+```zsh:line-numbers=302
+  ref=$(__git_prompt_git symbolic-ref --quiet HEAD 2> /dev/null)
+```
+
+
 `git symbolic-ref --quiet HEAD` の結果を `ref` に、終了ステータスを `ret` に入れます。
 
 ### 2. 失敗したときの場合分け
+
+```zsh:line-numbers=306
+    ref=$(__git_prompt_git rev-parse --short HEAD 2> /dev/null) || return
+```
+
 
 - `ret` が 128 なら、git のリポジトリの外です。何も表示せずに終わります。
 - それ以外の失敗（detached HEAD）なら、`git rev-parse --short HEAD` で短いコミット ID を `ref` に入れます。これも失敗したら終わります。
 
 ### 3. 表示する
+
+```zsh:line-numbers=308
+  echo ${ref#refs/heads/}
+```
+
 
 `refs/heads/main` なら先頭を取って `main` を表示します。コミット ID には `refs/heads/` が付いていないので、そのまま表示されます。
 

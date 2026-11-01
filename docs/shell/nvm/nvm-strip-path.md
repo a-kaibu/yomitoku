@@ -82,9 +82,19 @@ nvm_strip_path() {
 
 ### 1. `NVM_DIR` を確認
 
+```sh:line-numbers=1525
+  if [ -z "${NVM_DIR-}" ]; then
+```
+
+
 基準になる `NVM_DIR` が無ければエラーにします。
 
 ### 2. PATH を要素ごとに処理
+
+```sh:line-numbers=1530
+  RESULT="$(command printf %s "${1-}" | command awk -v NVM_DIR="${NVM_DIR}" -v RS=: '
+```
+
 
 `printf %s` で PATH を（改行を付けずに）出力し、`RS=:` の awk に渡します。awk は要素を 1 つずつ受け取ります。
 

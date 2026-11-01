@@ -113,6 +113,11 @@ nvm_get_mirror() {
 
 ### 1. 種類ごとに値を決める
 
+```sh:line-numbers=3469
+    node-std) NVM_MIRROR="${NVM_NODEJS_ORG_MIRROR:-https://nodejs.org/dist}" ;;
+```
+
+
 `node-std` なら `NVM_NODEJS_ORG_MIRROR`、`iojs-std` なら `NVM_IOJS_ORG_MIRROR` を使い、未設定なら公式の URL にします。それ以外の組み合わせはエラーです。
 
 ### 2. 第 1 段階: 危険な記号を弾く

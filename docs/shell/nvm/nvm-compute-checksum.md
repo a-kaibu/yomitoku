@@ -75,9 +75,19 @@ nvm_compute_checksum() {
 
 ### 1. 引数のチェック
 
+```sh:line-numbers=2830
+    return 2
+```
+
+
 ファイル名が空なら `return 2`、ファイルが無ければ `return 1` で終わります。
 
 ### 2. コマンドを順に試す
+
+```sh:line-numbers=2836
+  if nvm_has_non_aliased "sha256sum"; then
+```
+
 
 上から順に、次のコマンドを探します。
 

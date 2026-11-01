@@ -77,9 +77,28 @@ nvm_sort_versions() {
 
 ### 1. 余計な前後を取る
 
+```sh:line-numbers=2303
+    version = $1;
+```
+```sh:line-numbers=2304
+    sub(/\.(node|iojs)$/, "", version);
+```
+```sh:line-numbers=2305
+    sub(/^(iojs-)?v/, "", version);
+```
+
+
 `iojs-v` や `v`、末尾の `.node` などを取り除き、数字の部分だけにします。
 
 ### 2. プレリリースのキーを作る
+
+```sh:line-numbers=2306
+    prerelease = "~";
+```
+```sh:line-numbers=2320
+        prerelease = prerelease identifier "!";
+```
+
 
 プレリリースが無ければキーは `~` です。`~` は ASCII で英数字より後ろの文字なので、**正式版は同じ番号のプレリリースより後ろ** に並びます。
 
@@ -92,6 +111,11 @@ nvm_sort_versions() {
 
 ### 3. キーを付けて出力
 
+```sh:line-numbers=2326
+    printf "%d %d %d %s\t%s\n", parts[1], parts[2], parts[3], prerelease, $0;
+```
+
+
 たとえば `v20.0.0-rc.2` は次のような行になります。
 
 ```
@@ -99,6 +123,14 @@ nvm_sort_versions() {
 ```
 
 ### 4. 並べてキーを外す
+
+```sh:line-numbers=2328
+    LC_ALL=C command sort -u -k 1,1n -k 2,2n -k 3,3n -k 4,4 | command cut -f 2-
+```
+```sh:line-numbers=2330
+    LC_ALL=C command sort -k 1,1n -k 2,2n -k 3,3n -k 4,4 | command cut -f 2- | command uniq
+```
+
 
 `sort` で 1〜3 列目を数値として、4 列目を文字列として並べ、`cut` でキーを捨てます。
 

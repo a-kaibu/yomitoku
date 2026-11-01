@@ -58,17 +58,37 @@ function take() {
 
 ### 1. tar アーカイブの URL
 
+```zsh:line-numbers=79
+  if [[ $1 =~ ^(https?|ftp).*\.(tar\.(gz|bz2|xz)|tgz)$ ]]; then
+```
+
+
 `^(https?|ftp).*\.(tar\.(gz|bz2|xz)|tgz)$` は、「`http`・`https`・`ftp` で始まり、`.tar.gz`・`.tar.bz2`・`.tar.xz`・`.tgz` のどれかで終わる」という意味です。一致したら `takeurl` を呼びます。
 
 ### 2. zip の URL
+
+```zsh:line-numbers=82
+    takezip "$1"
+```
+
 
 同じように、`.zip` で終わる URL なら `takezip` を呼びます。
 
 ### 3. git のリポジトリ
 
+```zsh:line-numbers=83
+  elif [[ $1 =~ ^([A-Za-z0-9]\+@|https?|git|ssh|ftps?|rsync).*\.git/?$ ]]; then
+```
+
+
 `^([A-Za-z0-9]\+@|https?|git|ssh|ftps?|rsync).*\.git/?$` は、「`user@` のような形か、`https`・`git`・`ssh` などで始まり、`.git` か `.git/` で終わる」という意味です。`git@github.com:me/repo.git` も `https://github.com/me/repo.git` も一致します。一致したら `takegit` を呼びます。
 
 ### 4. それ以外
+
+```zsh:line-numbers=86
+    takedir "$@"
+```
+
 
 どれにも当てはまらなければ、普通のディレクトリ名とみなして `takedir` を呼びます。
 

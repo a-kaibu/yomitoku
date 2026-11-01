@@ -76,9 +76,19 @@ bash で動いていて、しかも `$-` に `h` が無い（`set +h` されて�
 
 ### 2. ksh93 のとき
 
+```sh:line-numbers=1578
+  # under `set +h` there is no cache to clear, and `hash -r` errors
+```
+
+
 ksh93 の `hash` は `-r` オプションを持たず、しかも使い方の誤りが「致命的なエラー」としてシェルごと止めてしまうことがあります（コメント）。そこで、**サブシェルの中で試しに `hash -r` を実行** し、失敗したら何もせずに終わります。サブシェルなら、致命的なエラーでもサブシェルが終わるだけで済みます。
 
 ### 3. 普通に実行
+
+```sh:line-numbers=1584
+  if [ -n "${KSH_VERSION-}" ] && ! ( \hash -r ) >/dev/null 2>&1; then
+```
+
 
 それ以外のシェルでは `\hash -r` を実行します。
 
