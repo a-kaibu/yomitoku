@@ -11,8 +11,10 @@ file: Lib/posixpath.py
 lines: [561, 597]
 function: commonpath
 difficulty: 2
+format: 2
 tags: [文字列処理, ファイル, アルゴリズム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `commonpath(paths)` は、複数のパスに **共通する一番深いディレクトリ** を返す関数です。
@@ -21,7 +23,49 @@ tags: [文字列処理, ファイル, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=561
+::: code-group
+
+```python:line-numbers=561 [日本語訳]
+def commonpath(paths):
+    """パス名の並びを受け取り、共通する最長の親ディレクトリを返す。"""
+
+    paths = tuple(map(os.fspath, paths))
+
+    if not paths:
+        raise ValueError('commonpath() arg is an empty sequence')
+
+    if isinstance(paths[0], bytes):
+        sep = b'/'
+        curdir = b'.'
+    else:
+        sep = '/'
+        curdir = '.'
+
+    try:
+        split_paths = [path.split(sep) for path in paths]
+
+        try:
+            isabs, = {p.startswith(sep) for p in paths}
+        except ValueError:
+            raise ValueError("Can't mix absolute and relative paths") from None
+
+        split_paths = [[c for c in s if c and c != curdir] for s in split_paths]
+        s1 = min(split_paths)
+        s2 = max(split_paths)
+        common = s1
+        for i, c in enumerate(s1):
+            if c != s2[i]:
+                common = s1[:i]
+                break
+
+        prefix = sep if isabs else sep[:0]
+        return prefix + sep.join(common)
+    except (TypeError, AttributeError):
+        genericpath._check_arg_types('commonpath', *paths)
+        raise
+```
+
+```python:line-numbers=561 [原文]
 def commonpath(paths):
     """Given a sequence of path names, returns the longest common sub-path."""
 
@@ -61,6 +105,8 @@ def commonpath(paths):
         raise
 ```
 
+:::
+
 ## 前提知識
 
 - **`map(f, xs)`**: `xs` の各要素に `f` を適用します。ここではすべてのパスを `os.fspath` で文字列にしています。
@@ -72,15 +118,40 @@ def commonpath(paths):
 
 ## 何をしているか
 
-### 1. 入力の準備（564〜574 行目）
+### 1. 入力を準備し、区切り文字を決める
 
-空ならエラー。文字列かバイト列かで区切り文字を決めます。
+```python:line-numbers=564
+    paths = tuple(map(os.fspath, paths))
 
-### 2. 絶対パスと相対パスが混ざっていないか（579〜582 行目）
+    if not paths:
+        raise ValueError('commonpath() arg is an empty sequence')
+
+    if isinstance(paths[0], bytes):
+        sep = b'/'
+        curdir = b'.'
+    else:
+        sep = '/'
+        curdir = '.'
+```
+
+空ならエラーです。文字列かバイト列かで区切り文字を決めます。
+
+### 2. 絶対パスと相対パスが混ざっていないか調べる
+
+```python:line-numbers=579
+        try:
+            isabs, = {p.startswith(sep) for p in paths}
+        except ValueError:
+            raise ValueError("Can't mix absolute and relative paths") from None
+```
 
 `{p.startswith(sep) for p in paths}` は、全部が絶対パスなら `{True}`、全部が相対なら `{False}`、混ざっていたら `{True, False}` です。要素が 1 個でなければ分解代入が失敗し、「混ぜられない」というエラーにします。
 
-### 3. 区切って、空と `.` を捨てる（577, 584 行目）
+### 3. 区切って、空と `.` を捨てる
+
+```python:line-numbers=584
+        split_paths = [[c for c in s if c and c != curdir] for s in split_paths]
+```
 
 例のパスは次の 3 つのリストになります。
 
@@ -88,11 +159,26 @@ def commonpath(paths):
 - `['usr', 'lib', 'perl']`
 - `['usr', 'local']`
 
-### 4. 最小と最大を比べる（585〜591 行目）
+### 4. 最小と最大を比べる
+
+```python:line-numbers=585
+        s1 = min(split_paths)
+        s2 = max(split_paths)
+        common = s1
+        for i, c in enumerate(s1):
+            if c != s2[i]:
+                common = s1[:i]
+                break
+```
 
 辞書順の最小は `['usr', 'lib', 'perl']`、最大は `['usr', 'local']` です。先頭から比べると 2 番目で `'lib'` と `'local'` が違うので、共通部分は `['usr']` です。
 
-### 5. 組み立てる（593〜594 行目）
+### 5. 組み立てる
+
+```python:line-numbers=593
+        prefix = sep if isabs else sep[:0]
+        return prefix + sep.join(common)
+```
 
 絶対パスなら先頭に `/` を付けて `'/usr'` を返します。
 
@@ -109,11 +195,11 @@ def commonpath(paths):
 
 ### 分解代入をチェックに使う
 
-`isabs, = {...}` という 1 行で、「全部が同じ種類か」の判定と、その値の取り出しを同時に行っています。if 文で個数を調べるより短く、意図もはっきりしています。
+`isabs, = {...}` という 1 行で、「全部同じ種類か」の判定と、その値の取り出しを同時に行っています。if 文で個数を調べるより短く、意図もはっきりしています。
 
 ### 型の違いでエラーになったら原因を調べ直す
 
-文字列とバイト列が混ざっていると、途中で `TypeError` などが起きます。595〜597 行目でそれを捕まえ、`_check_arg_types` で「どの引数の型がおかしいか」がわかるエラーを出し直しています。
+文字列とバイト列が混ざっていると、途中で `TypeError` などが起きます。その場合は `_check_arg_types` で「どの引数の型がおかしいか」がわかるエラーを出し直しています。
 
 ## まとめ
 

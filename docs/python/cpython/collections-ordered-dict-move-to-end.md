@@ -11,8 +11,10 @@ file: Lib/collections/__init__.py
 lines: [194, 217]
 function: OrderedDict.move_to_end
 difficulty: 2
+format: 2
 tags: [データ構造, キャッシュ, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `move_to_end(key)` は、`OrderedDict` の中のキーを **順番の最後へ移動** するメソッドです。`last=False` を渡すと最初へ移動します。
@@ -21,7 +23,36 @@ tags: [データ構造, キャッシュ, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=194
+::: code-group
+
+```python:line-numbers=194 [日本語訳]
+    def move_to_end(self, key, last=True):
+        '''既存の要素を末尾（last が偽なら先頭）へ移動する。
+
+        要素が存在しない場合は KeyError を送出する。
+        '''
+        link = self.__map[key]
+        link_prev = link.prev
+        link_next = link.next
+        soft_link = link_next.prev
+        link_prev.next = link_next
+        link_next.prev = link_prev
+        root = self.__root
+        if last:
+            last = root.prev
+            link.prev = last
+            link.next = root
+            root.prev = soft_link
+            last.next = link
+        else:
+            first = root.next
+            link.prev = root
+            link.next = first
+            first.prev = soft_link
+            root.next = link
+```
+
+```python:line-numbers=194 [原文]
     def move_to_end(self, key, last=True):
         '''Move an existing element to the end (or beginning if last is false).
 
@@ -48,6 +79,8 @@ tags: [データ構造, キャッシュ, 標準ライブラリ]
             root.next = link
 ```
 
+:::
+
 ## 前提知識
 
 - **双方向連結リスト**: 各要素が `prev`（前）と `next`（次）への参照を持つリストです。`OrderedDict` はこれでキーの順番を管理しています。
@@ -60,21 +93,52 @@ tags: [データ構造, キャッシュ, 標準ライブラリ]
 
 `root ⇄ a ⇄ b ⇄ c ⇄ (root)` の状態で `move_to_end("a")` を実行します。
 
-### 1. 移動するリンクを見つける（199〜202 行目）
+### 1. 移動するリンクを見つけて、前後を覚える
+
+```python:line-numbers=199
+        link = self.__map[key]
+        link_prev = link.prev
+        link_next = link.next
+        soft_link = link_next.prev
+```
 
 `self.__map["a"]` からリンクを取り出し、前（`root`）と次（`b`）を覚えます。
 `soft_link = link_next.prev` は「`b` が `a` を指している参照」、つまり **`a` への弱参照** です。あとで使います。
 
-### 2. リストから外す（203〜204 行目）
+### 2. リストから外す
+
+```python:line-numbers=203
+        link_prev.next = link_next
+        link_next.prev = link_prev
+```
 
 `root.next = b`、`b.prev = root` とすると、`a` を飛ばしてつながります。リストは `root ⇄ b ⇄ c ⇄ (root)` です。
 
-### 3. 末尾につなぐ（206〜211 行目）
+### 3. 末尾につなぐ
+
+```python:line-numbers=205
+        root = self.__root
+        if last:
+            last = root.prev
+            link.prev = last
+            link.next = root
+            root.prev = soft_link
+            last.next = link
+```
 
 今の末尾 `c`（`root.prev`）の後ろに `a` を置きます。`a.prev = c`、`a.next = root`、`root.prev = soft_link`（a への弱参照）、`c.next = a`。
 結果は `root ⇄ b ⇄ c ⇄ a ⇄ (root)` です。
 
-### 4. 先頭へ移す場合（212〜217 行目）
+### 4. 先頭へ移す場合
+
+```python:line-numbers=212
+        else:
+            first = root.next
+            link.prev = root
+            link.next = first
+            first.prev = soft_link
+            root.next = link
+```
 
 `last=False` なら、`root` と今の先頭の間に入れます。考え方は同じです。
 
@@ -83,12 +147,12 @@ tags: [データ構造, キャッシュ, 標準ライブラリ]
 ### 辞書とリストの合わせ技で O(1)
 
 ふつうのリストで「ある要素を末尾へ移す」と、要素を探すのに O(n)、取り除いて詰めるのにも O(n) かかります。
-`OrderedDict` は、キーからリンクを辞書で一発で見つけ（199 行目）、双方向リストの付け替えで移動するので、要素数に関係なく一定の時間で済みます。LRU キャッシュでは「使うたびに末尾へ移す」が大量に起きるので、この差は決定的です。
+`OrderedDict` は、キーからリンクを辞書で一発で見つけ（`self.__map[key]`）、双方向リストの付け替えで移動するので、要素数に関係なく一定の時間で済みます。LRU キャッシュでは「使うたびに末尾へ移す」が大量に起きるので、この差は決定的です。
 
 ### 弱参照を「作り直さず使い回す」
 
 `OrderedDict` では `prev` 側に弱参照を使う約束になっています。リンクを末尾につなぎ直すとき、本来は `root.prev = proxy(link)` と弱参照を新しく作る必要があります。
-202 行目では、すでに `b.prev` に入っていた **`a` への弱参照を取っておき**、それを `root.prev`（または `first.prev`）にそのまま付け替えています。新しいオブジェクトを作らずに済み、余計なメモリ確保もありません。
+`soft_link = link_next.prev` の行では、すでに `b.prev` に入っていた **`a` への弱参照を取っておき**、それを `root.prev`（または `first.prev`）にそのまま付け替えています。新しいオブジェクトを作らずに済み、余計なメモリ確保もありません。
 
 ### 値には一切触れない
 
