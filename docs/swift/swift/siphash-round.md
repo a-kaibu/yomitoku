@@ -12,6 +12,7 @@ lines: [48, 76]
 function: "Hasher._State._round()"
 difficulty: 3
 tags: [ハッシュ, ビット演算, セキュリティ, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -63,23 +64,68 @@ extension Hasher._State {
 
 ## 何をしているか
 
-### 回転（50〜52 行目）
+### 回転
 
+```swift:line-numbers=50
+  private static func _rotateLeft(_ x: UInt64, by amount: UInt64) -> UInt64 {
+    return (x &<< amount) | (x &>> (64 - amount))
+  }
+```
 `_rotateLeft` は `(x << n) | (x >> (64 - n))` という定番の式です。左へずらした結果と、はみ出すはずだった上位ビットを右端へ持ってきた結果を OR で合体させます。多くの CPU はこの式を 1 個の回転命令（`rol` など）に変換します。
 
-### 1 ラウンド（55〜70 行目）
+### 1 ラウンド
 
+```swift:line-numbers=55
+  private mutating func _round() {
+    v0 = v0 &+ v1
+    v1 = Hasher._State._rotateLeft(v1, by: 13)
+    v1 ^= v0
+    v0 = Hasher._State._rotateLeft(v0, by: 32)
+    v2 = v2 &+ v3
+    v3 = Hasher._State._rotateLeft(v3, by: 16)
+    v3 ^= v2
+    v0 = v0 &+ v3
+    v3 = Hasher._State._rotateLeft(v3, by: 21)
+    v3 ^= v0
+    v2 = v2 &+ v1
+    v1 = Hasher._State._rotateLeft(v1, by: 17)
+    v1 ^= v2
+    v2 = Hasher._State._rotateLeft(v2, by: 32)
+  }
+```
 処理は 2 つの組 `(v0, v1)` と `(v2, v3)` が交差しながら進みます。
 
-1. 56〜59 行目: `v0` に `v1` を足し、`v1` を 13 ビット回して `v0` と XOR、`v0` を 32 ビット回す。
-2. 60〜62 行目: 同じことを `v2`, `v3` で（回転量は 16）。
-3. 63〜65 行目: 今度は `v0` と `v3` を組み合わせる（21 ビット）。
-4. 66〜69 行目: `v2` と `v1` を組み合わせる（17 ビット）。
+まず `v0` に `v1` を足し、`v1` を 13 ビット回して `v0` と XOR、`v0` を 32 ビット回します。同じことを `v2`, `v3` でも行います（回転量は 16）。
 
+```swift:line-numbers=56
+    v0 = v0 &+ v1
+    v1 = Hasher._State._rotateLeft(v1, by: 13)
+    v1 ^= v0
+    v0 = Hasher._State._rotateLeft(v0, by: 32)
+    v2 = v2 &+ v3
+    v3 = Hasher._State._rotateLeft(v3, by: 16)
+    v3 ^= v2
+```
+次は組み合わせを入れ替えて、`v0` と `v3`（21 ビット）、`v2` と `v1`（17 ビット）を混ぜます。
+
+```swift:line-numbers=63
+    v0 = v0 &+ v3
+    v3 = Hasher._State._rotateLeft(v3, by: 21)
+    v3 ^= v0
+    v2 = v2 &+ v1
+    v1 = Hasher._State._rotateLeft(v1, by: 17)
+    v1 ^= v2
+    v2 = Hasher._State._rotateLeft(v2, by: 32)
+```
 足し算は下位ビットの影響を上位へ伝え（繰り上がり）、回転はビットの位置を入れ替え、XOR は 2 つの値を混ぜます。これを繰り返すと、入力の 1 ビットの違いが状態全体に広がります。
 
-### 取り出し（73〜75 行目）
+### 取り出し
 
+```swift:line-numbers=73
+  private func _extract() -> UInt64 {
+    return v0 ^ v1 ^ v2 ^ v3
+  }
+```
 最後に 4 つを XOR して 1 つの 64 ビット値にし、ハッシュ値とします。
 
 ## ここがすごい

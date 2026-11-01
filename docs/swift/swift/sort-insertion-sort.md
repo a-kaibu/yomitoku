@@ -12,6 +12,7 @@ lines: [269, 297]
 function: "MutableCollection._insertionSort(within:sortedEnd:by:)"
 difficulty: 1
 tags: [ソート, アルゴリズム, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -20,7 +21,41 @@ tags: [ソート, アルゴリズム, 標準ライブラリ]
 
 ## コード
 
-```swift:line-numbers=269
+::: code-group
+
+```swift:line-numbers=269 [日本語訳]
+  @inlinable
+  internal mutating func _insertionSort(
+    within range: Range<Index>,
+    sortedEnd: Index,
+    by areInIncreasingOrder: (Element, Element) throws -> Bool
+  ) rethrows {
+    var sortedEnd = sortedEnd
+    
+    // 整列済みの部分が全体を覆うまでソートを続ける。
+    while sortedEnd != range.upperBound {
+      var i = sortedEnd
+      // 整列済みの部分の中で `self[i]` が入る位置を後ろ向きに探し、
+      // 場所を空けるために各要素を 1 つずつ前（後方）へずらす。
+      repeat {
+        let j = index(before: i)
+        
+        // `self[i]` が `self[j]` より前に来るべきでなければ、
+        // そこが入る位置である。
+        if try !areInIncreasingOrder(self[i], self[j]) {
+          break
+        }
+        
+        swapAt(i, j)
+        i = j
+      } while i != range.lowerBound
+      
+      formIndex(after: &sortedEnd)
+    }
+  }
+```
+
+```swift:line-numbers=269 [原文]
   @inlinable
   internal mutating func _insertionSort(
     within range: Range<Index>,
@@ -52,6 +87,8 @@ tags: [ソート, アルゴリズム, 標準ライブラリ]
   }
 ```
 
+:::
+
 ## 前提知識
 
 - **`extension` の中のメソッド**: この関数は `MutableCollection`（要素を書き換えられるコレクション）に対する拡張として定義されています。配列なら `array._insertionSort(...)` のように呼べます。
@@ -66,12 +103,50 @@ tags: [ソート, アルゴリズム, 標準ライブラリ]
 
 `[2, 5, 9, 1, 7]`、`sortedEnd = 3`（先頭 3 つは整列済み）で追います。
 
-### 外側のループ（278〜296 行目）
+### 外側のループ
 
-`sortedEnd` が範囲の終わりに届くまで、「次の 1 要素を並んでいる部分に差し込む」を繰り返します。295 行目で並んでいる部分を 1 つ広げます。
+```swift:line-numbers=278
+    while sortedEnd != range.upperBound {
+      var i = sortedEnd
+      // 整列済みの部分の中で `self[i]` が入る位置を後ろ向きに探し、
+      // 場所を空けるために各要素を 1 つずつ前（後方）へずらす。
+      repeat {
+        let j = index(before: i)
+        
+        // `self[i]` が `self[j]` より前に来るべきでなければ、
+        // そこが入る位置である。
+        if try !areInIncreasingOrder(self[i], self[j]) {
+          break
+        }
+        
+        swapAt(i, j)
+        i = j
+      } while i != range.lowerBound
+      
+      formIndex(after: &sortedEnd)
+    }
+```
+`sortedEnd` が範囲の終わりに届くまで、「次の 1 要素を並んでいる部分に差し込む」を繰り返します。最後の `formIndex(after: &sortedEnd)` で並んでいる部分を 1 つ広げます。
 
-### 内側のループ（282〜293 行目）
+```swift:line-numbers=295
+      formIndex(after: &sortedEnd)
+```
+### 内側のループ
 
+```swift:line-numbers=282
+      repeat {
+        let j = index(before: i)
+        
+        // `self[i]` が `self[j]` より前に来るべきでなければ、
+        // そこが入る位置である。
+        if try !areInIncreasingOrder(self[i], self[j]) {
+          break
+        }
+        
+        swapAt(i, j)
+        i = j
+      } while i != range.lowerBound
+```
 `i = 3`（値は `1`）から始めて後ろ向きに見ていきます。
 
 - `j = 2`（値 `9`）: `1 < 9` なので交換 → `[2, 5, 1, 9, 7]`、`i = 2`
@@ -79,15 +154,22 @@ tags: [ソート, アルゴリズム, 標準ライブラリ]
 - `j = 0`（値 `2`）: `1 < 2` なので交換 → `[1, 2, 5, 9, 7]`、`i = 0`
 - `i` が範囲の始まりに着いたので終了。
 
-次は `7` です。`7 < 9` なので交換、`7 < 5` は偽なので 287〜289 行目の `break` で止まります。結果は `[1, 2, 5, 7, 9]` です。
+次は `7` です。`7 < 9` なので交換、`7 < 5` は偽なので `break` で止まります。結果は `[1, 2, 5, 7, 9]` です。
 
 ### 安定性
 
-287 行目は「`self[i]` が `self[j]` より **真に小さい** ときだけ」交換します。等しい場合は止まるので、等しい要素どうしの順番は入れ替わりません。これで安定ソートになります。
+```swift:line-numbers=287
+        if try !areInIncreasingOrder(self[i], self[j]) {
+          break
+        }
+```
+この条件は「`self[i]` が `self[j]` より **真に小さい** ときだけ」交換します。等しい場合は止まるので、等しい要素どうしの順番は入れ替わりません。これで安定ソートになります。
 
 ## ここがすごい
 
-- **`sortedEnd` という 1 つの引数で用途が広がる**: 通常の挿入ソートは先頭 1 要素を整列済みとして始めます（その版は同じファイルの 302 行目にあり、`sortedEnd` に 2 番目の位置を渡すだけです）。Timsort では、見つけたランが短すぎるとき、後ろの要素を足してランを最小長まで伸ばします。このとき「すでに並んでいる部分」はラン全体なので、この関数をそのまま使えます。同じコードを 2 つの用途で共有しているわけです。
+- **`sortedEnd` という 1 つの引数で用途が広がる**: 通常の挿入ソートは先頭 1 要素を整列済みとして始めます（その版も同じファイルにあり、`sortedEnd` に 2 番目の位置を渡すだけです）
+
+@@L 312-314@@。Timsort では、見つけたランが短すぎるとき、後ろの要素を足してランを最小長まで伸ばします。このとき「すでに並んでいる部分」はラン全体なので、この関数をそのまま使えます。同じコードを 2 つの用途で共有しているわけです。
 - **どんな添字でも動く**: `i - 1` ではなく `index(before:)` を使っているので、整数以外の添字を持つコレクションでも動きます。Swift の標準ライブラリらしい、プロトコル中心の書き方です。
 - **`repeat-while` で無駄な比較を省く**: 内側のループに入るとき `i` は必ず範囲の先頭より後ろにあるので、最初の境界チェックは要りません。`while` ではなく `repeat-while` にしてチェックを後ろに回しています。
 

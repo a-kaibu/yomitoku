@@ -12,6 +12,7 @@ lines: [316, 352]
 function: "_UnsafeBitset.Word.next()"
 difficulty: 2
 tags: [ビット演算, イテレータ, データ構造, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -20,7 +21,49 @@ tags: [ビット演算, イテレータ, データ構造, 標準ライブラリ]
 
 ## コード
 
-```swift:line-numbers=316
+::: code-group
+
+```swift:line-numbers=316 [日本語訳]
+// Word は自分自身のコピーをイテレータとして使うことで Sequence を実装する。
+// `next()` による反復はワードの値を壊すが、ふつうの使い方では問題にならない。
+// `next()` はたいてい元のワードではなく、別に作られた
+// イテレータに対して呼ばれるからである。
+extension _UnsafeBitset.Word: @unsafe Sequence, @unsafe IteratorProtocol {
+
+  @usableFromInline
+  typealias Element = Int
+
+  @inlinable
+  internal var count: Int {
+    return value.nonzeroBitCount
+  }
+
+  @inlinable
+  internal var underestimatedCount: Int {
+    return count
+  }
+
+  @inlinable
+  internal var isEmpty: Bool {
+    @inline(__always)
+    get {
+      return value == 0
+    }
+  }
+
+  /// このワードで立っているいちばん下のビットの位置を返し、
+  /// そのビットを破壊的に消す。
+  @inlinable
+  internal mutating func next() -> Int? {
+    guard value != 0 else { return nil }
+    let bit = value.trailingZeroBitCount
+    value &= value &- 1       // いちばん下の 0 でないビットを消す。
+    return bit
+  }
+}
+```
+
+```swift:line-numbers=316 [原文]
 // Word implements Sequence by using a copy of itself as its Iterator.
 // Iteration with `next()` destroys the word's value; however, this won't cause
 // problems in normal use, because `next()` is usually called on a separate
@@ -60,6 +103,8 @@ extension _UnsafeBitset.Word: @unsafe Sequence, @unsafe IteratorProtocol {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **ビット集合（bitset）**: 「`n` 番目のビットが 1 なら `n` は集合に含まれる」というルールで集合を表す方法です。64 個までの要素の有無を 1 つの整数で表せます。
@@ -75,21 +120,36 @@ extension _UnsafeBitset.Word: @unsafe Sequence, @unsafe IteratorProtocol {
 
 `value = 0b10110` の場合で追います。
 
-### 1 回目の呼び出し（346〜351 行目）
+### 1 回目の呼び出し
 
-- 347 行目: `value` は 0 でないので続行。
-- 348 行目: `trailingZeroBitCount` は 1（右端に 0 が 1 個）。これが返す要素です。
-- 349 行目: `value &= value &- 1`。
+```swift:line-numbers=346
+  internal mutating func next() -> Int? {
+    guard value != 0 else { return nil }
+    let bit = value.trailingZeroBitCount
+    value &= value &- 1       // いちばん下の 0 でないビットを消す。
+    return bit
+  }
+```
+- `value` は 0 でないので続行。
+- `trailingZeroBitCount` は 1（右端に 0 が 1 個）。これが返す要素です。
+- `value &= value &- 1`。
   - `value - 1` は `0b10101`（いちばん下の 1 が 0 になり、その下の 0 が全部 1 になる）。
   - `0b10110 & 0b10101 = 0b10100`。**いちばん下の 1 だけが消えました。**
 - `1` を返します。
 
 ### 2 回目以降
 
-`0b10100` → 2 を返して `0b10000` に。次は 4 を返して `0` に。4 回目は 347 行目で `nil` を返して終わりです。
+`0b10100` → 2 を返して `0b10000` に。次は 4 を返して `0` に。4 回目はこの部分 `nil` を返して終わりです。
 
-### Word が自分自身のイテレータになる（316〜320 行目）
+### Word が自分自身のイテレータになる
 
+```swift:line-numbers=316
+// Word は自分自身のコピーをイテレータとして使うことで Sequence を実装する。
+// `next()` による反復はワードの値を壊すが、ふつうの使い方では問題にならない。
+// `next()` はたいてい元のワードではなく、別に作られた
+// イテレータに対して呼ばれるからである。
+extension _UnsafeBitset.Word: @unsafe Sequence, @unsafe IteratorProtocol {
+```
 コメントにある通り、`Word` は `Sequence` でありながら `IteratorProtocol` でもあります。`for x in word` と書くと、`word` のコピーがイテレータとして使われます。`next()` は値を壊していきますが、壊れるのはコピーなので元の `word` は無事です。値型（構造体）ならではの設計です。
 
 ## ここがすごい

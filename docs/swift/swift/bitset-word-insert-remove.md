@@ -12,6 +12,7 @@ lines: [216, 244]
 function: "_UnsafeBitset.Word.uncheckedInsert(_:) / uncheckedRemove(_:)"
 difficulty: 1
 tags: [ビット演算, データ構造, API設計, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -65,30 +66,54 @@ tags: [ビット演算, データ構造, API設計, 標準ライブラリ]
 
 `value = 0b0101`（集合 `{0, 2}`）とします。
 
-### uncheckedContains(2)（218〜221 行目）
+### uncheckedContains(2)
 
+```swift:line-numbers=218
+  internal func uncheckedContains(_ bit: Int) -> Bool {
+    _internalInvariant(bit >= 0 && bit < UInt.bitWidth)
+    return value & (1 &<< bit) != 0
+  }
+```
 `0b0101 & 0b0100 = 0b0100` で 0 ではないので `true`。
 
-### uncheckedInsert(1)（226〜232 行目）
+### uncheckedInsert(1)
 
+```swift:line-numbers=226
+  internal mutating func uncheckedInsert(_ bit: Int) -> Bool {
+    _internalInvariant(bit >= 0 && bit < UInt.bitWidth)
+    let mask: UInt = 1 &<< bit
+    let inserted = value & mask == 0
+    value |= mask
+    return inserted
+  }
+```
 - `mask = 0b0010`。
-- 229 行目: `value & mask == 0` は `true`。つまり **まだ入っていなかった**。
-- 230 行目: `value |= mask` で `0b0111` に。
+- `value & mask == 0` は `true`。つまり **まだ入っていなかった**。
+- `value |= mask` で `0b0111` に。
 - `true`（新しく入った）を返します。
 
-もう一度 `uncheckedInsert(1)` を呼ぶと、229 行目で `false` になり、230 行目で値は変わらず、`false` を返します。
+もう一度 `uncheckedInsert(1)` を呼ぶと、この部分 `false` になり、この部分値は変わらず、`false` を返します。
 
-### uncheckedRemove(2)（237〜243 行目）
+### uncheckedRemove(2)
 
+```swift:line-numbers=237
+  internal mutating func uncheckedRemove(_ bit: Int) -> Bool {
+    _internalInvariant(bit >= 0 && bit < UInt.bitWidth)
+    let mask: UInt = 1 &<< bit
+    let removed = value & mask != 0
+    value &= ~mask
+    return removed
+  }
+```
 - `mask = 0b0100`。
-- 240 行目: `value & mask != 0` は `true`。入っていた。
-- 241 行目: `value &= ~mask` で 2 ビット目だけを 0 にします。`0b0111 & 0b1011 = 0b0011`。
+- `value & mask != 0` は `true`。入っていた。
+- `value &= ~mask` で 2 ビット目だけを 0 にします。`0b0111 & 0b1011 = 0b0011`。
 - `true`（実際に消えた）を返します。
 
 ## ここがすごい
 
 - **「変化したか」を一緒に返す**: Swift の `Set.insert` は「新しく入ったか」を返します。このビット集合も同じ発想です。呼び出し側は「新しく入ったときだけカウントを増やす」といった処理を、`contains` を別に呼ばずに書けます。チェックと更新を 2 回に分けると、ワードを 2 回読むことになりますが、この書き方なら 1 回の読み込みで済みます。
-- **分岐のない更新**: 230 行目と 241 行目は、入っていてもいなくても同じ命令を実行します。「入っていなければ立てる」と `if` を書く必要はありません。`|=` は立っているビットを立て直しても結果が同じ、`&= ~mask` は 0 のビットを 0 にしても同じ、という性質（冪等性）を利用しています。
+- **分岐のない更新**:この部分とこの部分は、入っていてもいなくても同じ命令を実行します。「入っていなければ立てる」と `if` を書く必要はありません。`|=` は立っているビットを立て直しても結果が同じ、`&= ~mask` は 0 のビットを 0 にしても同じ、という性質（冪等性）を利用しています。
 - **安全と速さの切り分け**: チェックは呼び出し側の責任とし、関数自体は最小限の命令にしています。名前に `unchecked` と付けることで、その約束が名前からわかります。
 
 ## まとめ

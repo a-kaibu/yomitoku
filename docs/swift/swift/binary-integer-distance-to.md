@@ -12,6 +12,7 @@ lines: [1841, 1867]
 function: "BinaryInteger.distance(to:)"
 difficulty: 2
 tags: [数値計算, 防御的プログラミング, ジェネリクス, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -61,24 +62,53 @@ tags: [数値計算, 防御的プログラミング, ジェネリクス, 標準�
 
 ## 何をしているか
 
-### 符号なしの場合（1844〜1853 行目）
+### 符号なしの場合
 
+```swift:line-numbers=1844
+    if !Self.isSigned {
+      if self > other {
+        if let result = Int(exactly: self - other) {
+          return -result
+        }
+      } else {
+        if let result = Int(exactly: other - self) {
+          return result
+        }
+      }
+```
 `UInt8` の `10.distance(to: 3)` を考えます。`3 - 10` は `UInt8` では計算できません（負になる）。そこで、大きいほうから小さいほうを引きます。
 
 - `self > other` なので `self - other = 7` を計算し、`Int` にして符号を反転、`-7` を返します。
 
-### 符号付きで、同じ符号の場合（1855〜1859 行目）
+### 符号付きで、同じ符号の場合
 
+```swift:line-numbers=1855
+      let isNegative = self < (0 as Self)
+      if isNegative == (other < (0 as Self)) {
+        if let result = Int(exactly: other - self) {
+          return result
+        }
+```
 両方とも正か両方とも負なら、`other - self` はあふれません。たとえば `Int8` の `-100` と `-20` の差は 80 で、範囲内です。
 
-### 符号付きで、符号が違う場合（1860〜1864 行目）
+### 符号付きで、符号が違う場合
 
+```swift:line-numbers=1860
+      } else {
+        if let result = Int(exactly: self.magnitude + other.magnitude) {
+          return isNegative ? result : -result
+        }
+      }
+```
 `Int8` の `-100.distance(to: 100)` を考えます。`100 - (-100) = 200` は `Int8`（最大 127）に入りません。
 
 そこで絶対値を足します。`magnitude` は `UInt8` なので、`100 + 100 = 200` は収まります（最大 255）。`self` が負なので、結果は正の `200` です。
 
-### 表せない場合（1866 行目）
+### 表せない場合
 
+```swift:line-numbers=1866
+    _preconditionFailure("Distance is not representable in Int")
+```
 `Int` 自身より大きい型（`UInt64` の巨大な差など）で、結果が `Int` に入らないときは停止します。
 
 ## ここがすごい

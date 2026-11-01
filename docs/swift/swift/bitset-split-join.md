@@ -12,6 +12,7 @@ lines: [41, 74]
 function: "_UnsafeBitset.split(_:) / join(word:bit:)"
 difficulty: 2
 tags: [ビット演算, 最適化, データ構造, 標準ライブラリ]
+format: 2
 ---
 ## ひとことで
 
@@ -20,7 +21,46 @@ tags: [ビット演算, 最適化, データ構造, 標準ライブラリ]
 
 ## コード
 
-```swift:line-numbers=41
+::: code-group
+
+```swift:line-numbers=41 [日本語訳]
+extension _UnsafeBitset {
+  @inlinable
+  @inline(__always)
+  internal static func word(for element: Int) -> Int {
+    _internalInvariant(element >= 0)
+    // 注: シフトで速くなる符号なしの計算をするため UInt で計算する。
+    let element = UInt(bitPattern: element)
+    let capacity = UInt(bitPattern: Word.capacity)
+    return Int(bitPattern: element / capacity)
+  }
+
+  @inlinable
+  @inline(__always)
+  internal static func bit(for element: Int) -> Int {
+    _internalInvariant(element >= 0)
+    // 注: マスクで速くなる符号なしの計算をするため UInt で計算する。
+    let element = UInt(bitPattern: element)
+    let capacity = UInt(bitPattern: Word.capacity)
+    return Int(bitPattern: element % capacity)
+  }
+
+  @inlinable
+  @inline(__always)
+  internal static func split(_ element: Int) -> (word: Int, bit: Int) {
+    return (word(for: element), bit(for: element))
+  }
+
+  @inlinable
+  @inline(__always)
+  internal static func join(word: Int, bit: Int) -> Int {
+    _internalInvariant(bit >= 0 && bit < Word.capacity)
+    return word &* Word.capacity &+ bit
+  }
+}
+```
+
+```swift:line-numbers=41 [原文]
 extension _UnsafeBitset {
   @inlinable
   @inline(__always)
@@ -57,6 +97,8 @@ extension _UnsafeBitset {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`static func`**: インスタンスではなく型そのものに属する関数です。`_UnsafeBitset.split(130)` のように呼びます。
@@ -69,23 +111,53 @@ extension _UnsafeBitset {
 
 ## 何をしているか
 
-### word(for:) と bit(for:)（44〜60 行目）
+### word(for:) と bit(for:)
 
+```swift:line-numbers=44
+  internal static func word(for element: Int) -> Int {
+    _internalInvariant(element >= 0)
+    // 注: シフトで速くなる符号なしの計算をするため UInt で計算する。
+    let element = UInt(bitPattern: element)
+    let capacity = UInt(bitPattern: Word.capacity)
+    return Int(bitPattern: element / capacity)
+  }
+
+  @inlinable
+  @inline(__always)
+  internal static func bit(for element: Int) -> Int {
+    _internalInvariant(element >= 0)
+    // 注: マスクで速くなる符号なしの計算をするため UInt で計算する。
+    let element = UInt(bitPattern: element)
+    let capacity = UInt(bitPattern: Word.capacity)
+    return Int(bitPattern: element % capacity)
+  }
+```
 `element = 130` のとき、`word(for:)` は `130 / 64 = 2`、`bit(for:)` は `130 % 64 = 2` を返します。
 
-どちらも計算の前に、`element` と `capacity` を `UInt` に変換しています（47〜48 行目、57〜58 行目）。コメントには「符号なしの計算のほうが速い（シフト、マスク）」とあります。
+どちらも計算の前に、`element` と `capacity` を `UInt` に変換しています。コメントには「符号なしの計算のほうが速い（シフト、マスク）」とあります。
 
-### split（64〜66 行目）
+### split
 
+```swift:line-numbers=64
+  internal static func split(_ element: Int) -> (word: Int, bit: Int) {
+    return (word(for: element), bit(for: element))
+  }
+```
 2 つを呼んでタプルにまとめるだけです。呼び出し側は `let (word, bit) = split(element)` と 1 行で書けます。
 
-### join（70〜73 行目）
+### join
 
-逆変換で、`2 * 64 + 2 = 130` を計算します。`bit` は 0〜63 の範囲でなければいけないので、71 行目でそれを確かめています。
+```swift:line-numbers=70
+  internal static func join(word: Int, bit: Int) -> Int {
+    _internalInvariant(bit >= 0 && bit < Word.capacity)
+    return word &* Word.capacity &+ bit
+  }
+```
+逆変換で、`2 * 64 + 2 = 130` を計算します。`bit` は 0〜63 の範囲でなければいけないので、この部分それを確かめています。
 
 ## ここがすごい
 
-- **符号なしにするだけで速くなる理由**: 64 は 2 のべき乗なので、`n / 64` は「右に 6 ビットシフト」、`n % 64` は「下位 6 ビットを取り出す（`& 63`）」で計算できます。ところが `Int`（符号付き）だと、負の数で結果が変わるため、コンパイラは単純なシフトに置き換えられません。たとえば `-1 / 64` は 0 ですが、`-1 >> 6` は -1 です。ここでは `element >= 0` が保証されている（45 行目）ので、`UInt` に変換しても値は変わりません。こうして「負になりえない」という知識をコンパイラに伝え、最速の命令を引き出しています。
+- **符号なしにするだけで速くなる理由**: 64 は 2 のべき乗なので、`n / 64` は「右に 6 ビットシフト」、`n % 64` は「下位 6 ビットを取り出す（`& 63`）」で計算できます。ところが `Int`（符号付き）だと、負の数で結果が変わるため、コンパイラは単純なシフトに置き換えられません。たとえば `-1 / 64` は 0 ですが、`-1 >> 6` は -1 です。ここでは `element >= 0` が保証されているので、`UInt` に変換しても値は変わりません。こうして「負になりえない」という知識をコンパイラに伝え、最速の命令を引き出しています。
 - **小さな関数に分けて組み立てる**: `word`、`bit`、`split`、`join` と細かく分けておくと、挿入・削除・検索などの各メソッドが `let (word, bit) = split(element)` の 1 行で書けます。すべて `@inline(__always)` なので、分けたことによる呼び出しコストはありません。
 - **前提条件をコードで表す**: `_internalInvariant` で「0 以上」「ビット番号は範囲内」を明示しています。デバッグ時にはバグを早く見つけ、本番では速度を落としません。
 
