@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Buffers/Text/FormattingHel
 lines: [14, 61]
 function: "FormattingHelpers.CountDigits(ulong)"
 difficulty: 2
+format: 2
 tags: [数値計算, 最適化, ビット演算]
 ---
 
@@ -23,7 +24,60 @@ tags: [数値計算, 最適化, ビット演算]
 
 ## コード
 
-```csharp:line-numbers=14
+::: code-group
+
+```csharp:line-numbers=14 [日本語訳]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int CountDigits(ulong value)
+        {
+            // log2(value) を 10 のべき乗の指数に対応させる。
+            ReadOnlySpan<byte> log2ToPow10 =
+            [
+                1,  1,  1,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,
+                6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9,  10, 10, 10,
+                10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 15, 15,
+                15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 19, 20
+            ];
+            Debug.Assert(log2ToPow10.Length == 64);
+
+            nint elementOffset = log2ToPow10[(int)ulong.Log2(value)];
+
+            // 対応する 10 のべき乗を読む。
+            ReadOnlySpan<ulong> powersOf10 =
+            [
+                0, // 使わない要素（引き算を避けるため）
+                0,
+                10,
+                100,
+                1000,
+                10000,
+                100000,
+                1000000,
+                10000000,
+                100000000,
+                1000000000,
+                10000000000,
+                100000000000,
+                1000000000000,
+                10000000000000,
+                100000000000000,
+                1000000000000000,
+                10000000000000000,
+                100000000000000000,
+                1000000000000000000,
+                10000000000000000000,
+            ];
+            Debug.Assert((elementOffset + 1) <= powersOf10.Length);
+            ulong powerOf10 = Unsafe.Add(ref MemoryMarshal.GetReference(powersOf10), elementOffset);
+
+            // 10 のべき乗から桁数を求め、
+            // しきい値を下回るなら 1 減らす。
+            int index = (int)elementOffset;
+            return index - (value < powerOf10 ? 1 : 0);
+        }
+```
+
+```csharp:line-numbers=14 [原文]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int CountDigits(ulong value)
         {
@@ -74,6 +128,8 @@ tags: [数値計算, 最適化, ビット演算]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`ulong`**: 64 ビット符号なし整数です。0 から約 1844 京まで表せます。
@@ -85,18 +141,65 @@ tags: [数値計算, 最適化, ビット演算]
 
 ## 何をしているか
 
-### 1. log2 から「多めに見積もった桁数」を引く（18〜27 行目）
+### 1. log2 から「多めに見積もった桁数」を引く
+
+```csharp:line-numbers=18
+            ReadOnlySpan<byte> log2ToPow10 =
+            [
+                1,  1,  1,  2,  2,  2,  3,  3,  3,  4,  4,  4,  4,  5,  5,  5,
+                6,  6,  6,  7,  7,  7,  7,  8,  8,  8,  9,  9,  9,  10, 10, 10,
+                10, 11, 11, 11, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 15, 15,
+                15, 16, 16, 16, 16, 17, 17, 17, 18, 18, 18, 19, 19, 19, 19, 20
+            ];
+            Debug.Assert(log2ToPow10.Length == 64);
+
+            nint elementOffset = log2ToPow10[(int)ulong.Log2(value)];
+```
 
 2 進数で k+1 桁（log2 = k）の数は、10 進数では 2 通りの桁数のどちらかです。表 `log2ToPow10` には、そのうち **大きいほうの桁数** が入っています。
 
 `value = 99` の場合、2 進数は `1100011` なので log2 = 6、表の 6 番目は **3** です（64〜127 は 2 桁か 3 桁）。
 
-### 2. 対応する 10 のべき乗を引く（30〜55 行目）
+### 2. 対応する 10 のべき乗を引く
+
+```csharp:line-numbers=30
+            ReadOnlySpan<ulong> powersOf10 =
+            [
+                0, // 使わない要素（引き算を避けるため）
+                0,
+                10,
+                100,
+                1000,
+                10000,
+                100000,
+                1000000,
+                10000000,
+                100000000,
+                1000000000,
+                10000000000,
+                100000000000,
+                1000000000000,
+                10000000000000,
+                100000000000000,
+                1000000000000000,
+                10000000000000000,
+                100000000000000000,
+                1000000000000000000,
+                10000000000000000000,
+            ];
+            Debug.Assert((elementOffset + 1) <= powersOf10.Length);
+            ulong powerOf10 = Unsafe.Add(ref MemoryMarshal.GetReference(powersOf10), elementOffset);
+```
 
 `powersOf10[n]` には「n 桁の最小値」、つまり 10ⁿ⁻¹ が入っています。`powersOf10[3]` は `100` です。
-32 行目のコメントの通り、先頭に使わない 0 を 1 つ置いて、`n - 1` の引き算を省いています。
+コメントの通り、先頭に使わない 0 を 1 つ置いて、`n - 1` の引き算を省いています。
 
-### 3. 1 回だけ比べる（59〜60 行目）
+### 3. 1 回だけ比べる
+
+```csharp:line-numbers=59
+            int index = (int)elementOffset;
+            return index - (value < powerOf10 ? 1 : 0);
+```
 
 `value < 100` なら、見積もりより 1 桁少ないので `3 - 1 = 2`。`value = 100` なら `3` のまま。
 
@@ -105,9 +208,9 @@ tags: [数値計算, 最適化, ビット演算]
 ## ここがすごい
 
 - **2 進の桁数と 10 進の桁数の関係を使う**: 2³ ≒ 10 なので、2 進数で 3〜4 桁増えるごとに 10 進数は 1 桁増えます。この「ずれ」を表にしておけば、候補は常に 2 つに絞れ、比較は 1 回で済みます。
-- **配列に番兵を置いて引き算を消す**: 先頭の未使用要素（32 行目）で添字の計算を 1 つ減らしています。小さなことですが、数値の文字列化はとても頻繁に呼ばれるので効きます。
-- **範囲チェックの省略を Assert で裏付け**: 54 行目の `Debug.Assert` で「添字が範囲内である」ことをデバッグ時に確かめたうえで、本番では `Unsafe.Add` によってチェックを外しています。
-- **出典がコメントに**: 13 行目に、元になった C++ の fmt ライブラリの該当行への固定リンクがあります。
+- **配列に番兵を置いて引き算を消す**: 先頭の未使用要素で添字の計算を 1 つ減らしています。小さなことですが、数値の文字列化はとても頻繁に呼ばれるので効きます。
+- **範囲チェックの省略を Assert で裏付け**: `Debug.Assert` で「添字が範囲内である」ことをデバッグ時に確かめたうえで、本番では `Unsafe.Add` によってチェックを外しています。
+- **出典がコメントに**: 関数の直前のコメントに、元になった C++ の fmt ライブラリの該当行への固定リンクがあります。
 
 ## まとめ
 

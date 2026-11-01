@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/ArrayS
 lines: [458, 505]
 function: "GenericArraySortHelper<T>.PickPivotAndPartition"
 difficulty: 3
+format: 2
 tags: [ソート, 最適化, 低レイヤ]
 ---
 
@@ -18,11 +19,64 @@ tags: [ソート, 最適化, 低レイヤ]
 
 この関数は、クイックソートの「分割」（ピボットより小さい値を左、大きい値を右に集める処理）を、`int` や `string` など **自分で大小比較ができる型（`IComparable<T>`）専用** に書き直した高速版です。
 
-比較関数を受け取る汎用版（同じファイルの 179 行目〜）と考え方は同じですが、配列の添字 `keys[i]` を使わず、**要素への参照（`ref`）を直接進めていく** ことで、範囲チェックを完全になくしています。
+比較関数を受け取る汎用版と考え方は同じですが、配列の添字 `keys[i]` を使わず、**要素への参照（`ref`）を直接進めていく** ことで、範囲チェックを完全になくしています。
 
 ## コード
 
-```csharp:line-numbers=458
+::: code-group
+
+```csharp:line-numbers=458 [日本語訳]
+        private static unsafe int PickPivotAndPartition(Span<T> keys)
+        {
+            Debug.Assert(keys.Length >= Array.IntrosortSizeThreshold);
+
+            // 中央値でピボットを選ぶ。0 番目、Length-1 番目、Length/2 番目の要素を並べ替える。
+            ref T zeroRef = ref MemoryMarshal.GetReference(keys);
+            ref T lastRef = ref Unsafe.Add(ref zeroRef, keys.Length - 1);
+            ref T middleRef = ref Unsafe.Add(ref zeroRef, (keys.Length - 1) >> 1);
+            SwapIfGreater(ref zeroRef, ref middleRef);
+            SwapIfGreater(ref zeroRef, ref lastRef);
+            SwapIfGreater(ref middleRef, ref lastRef);
+
+            // 中央の値をピボットとし、最後の要素の直前に移動する。
+            ref T nextToLastRef = ref Unsafe.Add(ref zeroRef, keys.Length - 2);
+            T pivot = middleRef;
+            Swap(ref middleRef, ref nextToLastRef);
+
+            // 要素を交換しながら、左右のポインタが交差するまで進める。
+            ref T leftRef = ref zeroRef, rightRef = ref nextToLastRef;
+            while (Unsafe.IsAddressLessThan(ref leftRef, ref rightRef))
+            {
+                if (pivot == null)
+                {
+                    while (Unsafe.IsAddressLessThan(ref leftRef, ref nextToLastRef) && (leftRef = ref Unsafe.Add(ref leftRef, 1)) == null) ;
+                    while (Unsafe.IsAddressGreaterThan(ref rightRef, ref zeroRef) && (rightRef = ref Unsafe.Add(ref rightRef, -1)) != null) ;
+                }
+                else
+                {
+                    while (Unsafe.IsAddressLessThan(ref leftRef, ref nextToLastRef) && GreaterThan(ref pivot, ref leftRef = ref Unsafe.Add(ref leftRef, 1))) ;
+                    while (Unsafe.IsAddressGreaterThan(ref rightRef, ref zeroRef) && LessThan(ref pivot, ref rightRef = ref Unsafe.Add(ref rightRef, -1))) ;
+                }
+
+                if (Unsafe.IsAddressGreaterThanOrEqualTo(ref leftRef, ref rightRef))
+                {
+                    break;
+                }
+
+                Swap(ref leftRef, ref rightRef);
+            }
+
+            // ピボットを正しい位置に置く。
+            if (!Unsafe.AreSame(ref leftRef, ref nextToLastRef))
+            {
+                Swap(ref leftRef, ref nextToLastRef);
+            }
+
+            return (int)((nint)Unsafe.ByteOffset(ref zeroRef, ref leftRef) / sizeof(T));
+        }
+```
+
+```csharp:line-numbers=458 [原文]
         private static unsafe int PickPivotAndPartition(Span<T> keys)
         {
             Debug.Assert(keys.Length >= Array.IntrosortSizeThreshold);
@@ -73,6 +127,8 @@ tags: [ソート, 最適化, 低レイヤ]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`ref T`（参照）**: 変数や配列要素「そのもの」を指す参照です。C 言語のポインタに近いものですが、GC（ガベージコレクタ）が正しく追跡できる安全な形です。`ref T x = ref keys[0];` で x は keys[0] の別名になり、x に代入すると keys[0] が書き換わります。
@@ -80,29 +136,85 @@ tags: [ソート, 最適化, 低レイヤ]
 - **`Unsafe.Add(ref r, n)`**: 参照 r から n 要素先の参照を作ります。範囲チェックはしません。
 - **`Unsafe.IsAddressLessThan(ref a, ref b)`**: a が b より前のアドレスを指しているかを比べます。
 - **`Unsafe.ByteOffset(ref a, ref b)`**: 2 つの参照の間のバイト数です。要素のサイズ `sizeof(T)` で割ると、要素何個分離れているか（＝添字）がわかります。`sizeof(T)` を使うので関数に `unsafe` が付いています。
-- **`GreaterThan` / `LessThan`**: 同じクラスにある補助関数で、`int` や `double` などの基本型では直接 `<` や `>` を使い、それ以外の型では `CompareTo` を呼びます（562 行目以降のコメント）。
+- **`GreaterThan` / `LessThan`**: 同じクラスにある補助関数で、`int` や `double` などの基本型では直接 `<` や `>` を使い、それ以外の型では `CompareTo` を呼びます。
 - **`ref leftRef = ref Unsafe.Add(ref leftRef, 1)`**: 「参照の付け替え」です。leftRef が指す先を 1 つ右にずらします（値のコピーではありません）。
 
 ## 何をしているか
 
-### 1. 中央値を選んでピボットを避難（462〜473 行目）
+### 1. 中央値を選んでピボットを避難
+
+```csharp:line-numbers=462
+            // 中央値でピボットを選ぶ。0 番目、Length-1 番目、Length/2 番目の要素を並べ替える。
+            ref T zeroRef = ref MemoryMarshal.GetReference(keys);
+            ref T lastRef = ref Unsafe.Add(ref zeroRef, keys.Length - 1);
+            ref T middleRef = ref Unsafe.Add(ref zeroRef, (keys.Length - 1) >> 1);
+            SwapIfGreater(ref zeroRef, ref middleRef);
+            SwapIfGreater(ref zeroRef, ref lastRef);
+            SwapIfGreater(ref middleRef, ref lastRef);
+
+            // 中央の値をピボットとし、最後の要素の直前に移動する。
+            ref T nextToLastRef = ref Unsafe.Add(ref zeroRef, keys.Length - 2);
+            T pivot = middleRef;
+            Swap(ref middleRef, ref nextToLastRef);
+```
 
 先頭・末尾・中央の 3 つへの参照を作り、`SwapIfGreater` 3 回で並べ、中央の値をピボットにします。ピボットは末尾の 1 つ手前（`nextToLastRef`）に移します。ここまでは汎用版と同じです。
 
-### 2. 参照を左右から進める（476〜496 行目）
+### 2. 参照を左右から進める
 
-`leftRef` は先頭から右へ、`rightRef` は末尾の 1 つ手前から左へ、**参照そのものを 1 要素ずつずらしながら** 進みます。486 行目では、
+```csharp:line-numbers=476
+            ref T leftRef = ref zeroRef, rightRef = ref nextToLastRef;
+            while (Unsafe.IsAddressLessThan(ref leftRef, ref rightRef))
+            {
+                if (pivot == null)
+                {
+                    while (Unsafe.IsAddressLessThan(ref leftRef, ref nextToLastRef) && (leftRef = ref Unsafe.Add(ref leftRef, 1)) == null) ;
+                    while (Unsafe.IsAddressGreaterThan(ref rightRef, ref zeroRef) && (rightRef = ref Unsafe.Add(ref rightRef, -1)) != null) ;
+                }
+                else
+                {
+                    while (Unsafe.IsAddressLessThan(ref leftRef, ref nextToLastRef) && GreaterThan(ref pivot, ref leftRef = ref Unsafe.Add(ref leftRef, 1))) ;
+                    while (Unsafe.IsAddressGreaterThan(ref rightRef, ref zeroRef) && LessThan(ref pivot, ref rightRef = ref Unsafe.Add(ref rightRef, -1))) ;
+                }
+
+                if (Unsafe.IsAddressGreaterThanOrEqualTo(ref leftRef, ref rightRef))
+                {
+                    break;
+                }
+
+                Swap(ref leftRef, ref rightRef);
+            }
+```
+
+`leftRef` は先頭から右へ、`rightRef` は末尾の 1 つ手前から左へ、**参照そのものを 1 要素ずつずらしながら** 進みます。右に進むループでは、
 
 1. `leftRef` を 1 つ右にずらし、
 2. ずらした先の値がピボットより小さい間は続ける
 
 という 2 つのことを、条件式の中で同時に行っています。両方止まったら `Swap` で入れ替えます。
 
-### 3. ピボットが null の場合（479〜483 行目）
+### 3. ピボットが null の場合
+
+```csharp:line-numbers=479
+                if (pivot == null)
+                {
+                    while (Unsafe.IsAddressLessThan(ref leftRef, ref nextToLastRef) && (leftRef = ref Unsafe.Add(ref leftRef, 1)) == null) ;
+                    while (Unsafe.IsAddressGreaterThan(ref rightRef, ref zeroRef) && (rightRef = ref Unsafe.Add(ref rightRef, -1)) != null) ;
+                }
+```
 
 参照型の配列では、`null` が「いちばん小さい値」として扱われます。`null` に対して `CompareTo` は呼べないので、ピボットが `null` のときは「`null` かどうか」だけで左右を分ける専用のループを使います。
 
-### 4. 位置を添字に戻して返す（499〜504 行目）
+### 4. 位置を添字に戻して返す
+
+```csharp:line-numbers=499
+            if (!Unsafe.AreSame(ref leftRef, ref nextToLastRef))
+            {
+                Swap(ref leftRef, ref nextToLastRef);
+            }
+
+            return (int)((nint)Unsafe.ByteOffset(ref zeroRef, ref leftRef) / sizeof(T));
+```
 
 ピボットを最終位置に入れ、先頭からのバイト数を要素サイズで割って添字に戻します。
 

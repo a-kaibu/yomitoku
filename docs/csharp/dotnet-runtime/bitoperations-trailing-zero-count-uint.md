@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Numerics/BitOperations.cs
 lines: [539, 577]
 function: "BitOperations.TrailingZeroCount(uint)"
 difficulty: 3
+format: 2
 tags: [ビット演算, ハック, 低レイヤ]
 ---
 
@@ -23,7 +24,51 @@ CPU 命令（`TZCNT`、Arm の `RBIT` + `CLZ`、x86 の `BSF`）を順に試し�
 
 ## コード
 
-```csharp:line-numbers=539
+::: code-group
+
+```csharp:line-numbers=539 [日本語訳]
+        [Intrinsic]
+        [CLSCompliant(false)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int TrailingZeroCount(uint value)
+        {
+            if (Bmi1.IsSupported)
+            {
+                // TZCNT の約束は 0 → 32
+                return (int)Bmi1.TrailingZeroCount(value);
+            }
+
+            if (ArmBase.IsSupported)
+            {
+                return ArmBase.LeadingZeroCount(ArmBase.ReverseElementBits(value));
+            }
+
+            if (WasmBase.IsSupported)
+            {
+                return WasmBase.TrailingZeroCount(value);
+            }
+
+            // フォールバックの約束は 0 → 0、BSF の約束は 0 → 未定義
+            if (value == 0)
+            {
+                return 32;
+            }
+
+            if (X86Base.IsSupported)
+            {
+                return (int)X86Base.BitScanForward(value);
+            }
+
+            // uint.MaxValue >> 27 は必ず 0〜31 なので、境界チェックを避けるために Unsafe.AddByteOffset を使う
+            return Unsafe.AddByteOffset(
+                // de Bruijn 数列、k=2, n=5（2^5=32）: 0b_0000_0111_0111_1100_1011_0101_0011_0001u
+                ref MemoryMarshal.GetReference(TrailingZeroCountDeBruijn),
+                // 32 ビット環境では uint から IntPtr への変換が高コストな overflow チェックを伴うので、ここでは避ける
+                (IntPtr)(int)(((value & (uint)-(int)value) * 0x077CB531u) >> 27)); // 二重キャストで冗長な conv.u8 を避ける
+        }
+```
+
+```csharp:line-numbers=539 [原文]
         [Intrinsic]
         [CLSCompliant(false)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -65,7 +110,9 @@ CPU 命令（`TZCNT`、Arm の `RBIT` + `CLZ`、x86 の `BSF`）を順に試し�
         }
 ```
 
-`TrailingZeroCountDeBruijn` は同じファイルの 28〜34 行目にある 32 要素の表です。
+:::
+
+`TrailingZeroCountDeBruijn` は同じファイルにある 32 要素の表です。
 
 ## 前提知識
 
@@ -77,14 +124,51 @@ CPU 命令（`TZCNT`、Arm の `RBIT` + `CLZ`、x86 の `BSF`）を順に試し�
 
 ## 何をしているか
 
-### 1. CPU 命令を順に試す（544〜569 行目）
+### 1. CPU 命令を順に試す
+
+```csharp:line-numbers=544
+            if (Bmi1.IsSupported)
+            {
+                // TZCNT の約束は 0 → 32
+                return (int)Bmi1.TrailingZeroCount(value);
+            }
+
+            if (ArmBase.IsSupported)
+            {
+                return ArmBase.LeadingZeroCount(ArmBase.ReverseElementBits(value));
+            }
+
+            if (WasmBase.IsSupported)
+            {
+                return WasmBase.TrailingZeroCount(value);
+            }
+
+            // フォールバックの約束は 0 → 0、BSF の約束は 0 → 未定義
+            if (value == 0)
+            {
+                return 32;
+            }
+
+            if (X86Base.IsSupported)
+            {
+                return (int)X86Base.BitScanForward(value);
+            }
+```
 
 - `Bmi1`（x86 の `TZCNT`）: 0 のとき 32 を返す、この関数と同じ約束の命令です。
 - Arm: ビットを反転してから `LeadingZeroCount`。
 - WebAssembly: 専用命令。
-- 古い x86 の `BSF`: 0 のときの結果が未定義なので、先に 561〜564 行目で 0 を処理しています。
+- 古い x86 の `BSF`: 0 のときの結果が未定義なので、先に `value == 0` の場合を処理しています。
 
-### 2. ソフトウェア版（572〜576 行目）
+### 2. ソフトウェア版
+
+```csharp:line-numbers=572
+            return Unsafe.AddByteOffset(
+                // de Bruijn 数列、k=2, n=5（2^5=32）: 0b_0000_0111_0111_1100_1011_0101_0011_0001u
+                ref MemoryMarshal.GetReference(TrailingZeroCountDeBruijn),
+                // 32 ビット環境では uint から IntPtr への変換が高コストな overflow チェックを伴うので、ここでは避ける
+                (IntPtr)(int)(((value & (uint)-(int)value) * 0x077CB531u) >> 27)); // 二重キャストで冗長な conv.u8 を避ける
+```
 
 `value = 12` で追います。
 
@@ -97,8 +181,8 @@ CPU 命令（`TZCNT`、Arm の `RBIT` + `CLZ`、x86 の `BSF`）を順に試し�
 ## ここがすごい
 
 - **`x & -x` という古典テクニック**: 一番下の 1 だけを残す、ビット演算でもっともよく知られた技の 1 つです。これで入力が 32 通りに絞られます。
-- **範囲チェックの省略を理由つきで**: 571 行目のコメントの通り、`>> 27` の結果は必ず 0〜31 なので、範囲外アクセスは起こりえません。それを人間が保証したうえで `Unsafe.AddByteOffset` を使い、JIT が挿入する範囲チェックを消しています。
-- **キャストの順番まで気にしている**: 575〜576 行目のコメントにある通り、`uint` から直接 `IntPtr` にすると 32 ビット環境であふれ確認のコードが入ることがあるため、`int` を経由させています。1 命令単位で詰めているのがわかります。
+- **範囲チェックの省略を理由つきで**: コメントの通り、`>> 27` の結果は必ず 0〜31 なので、範囲外アクセスは起こりえません。それを人間が保証したうえで `Unsafe.AddByteOffset` を使い、JIT が挿入する範囲チェックを消しています。
+- **キャストの順番まで気にしている**: コメントにある通り、`uint` から直接 `IntPtr` にすると 32 ビット環境であふれ確認のコードが入ることがあるため、`int` を経由させています。1 命令単位で詰めているのがわかります。
 - **0 の扱いを契約として明示**: 各命令の「0 のとき何を返すか」がコメントで整理されていて、古い命令の未定義動作を if 1 つで吸収しています。
 
 ## まとめ

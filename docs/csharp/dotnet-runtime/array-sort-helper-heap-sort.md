@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/ArrayS
 lines: [217, 256]
 function: "ArraySortHelper<T>.HeapSort"
 difficulty: 2
+format: 2
 tags: [ソート, データ構造, アルゴリズム]
 ---
 
@@ -75,19 +76,60 @@ tags: [ソート, データ構造, アルゴリズム]
 
 ## 何をしているか
 
-### 1. 配列をヒープにする（222〜226 行目）
+### 1. 配列をヒープにする
+
+```csharp:line-numbers=222
+            int n = keys.Length;
+            for (int i = n >> 1; i >= 1; i--)
+            {
+                DownHeap(keys, i, n, comparer);
+            }
+```
 
 子を持つ最後の節（`n / 2`）から根に向かって、順に `DownHeap`（ふるい落とし）を行います。下の部分木から順に整えていくので、最後には全体がヒープになります。
 
-### 2. 最大値を末尾に移して、残りを整え直す（228〜232 行目）
+### 2. 最大値を末尾に移して、残りを整え直す
+
+```csharp:line-numbers=228
+            for (int i = n; i > 1; i--)
+            {
+                Swap(keys, 0, i - 1);
+                DownHeap(keys, 1, i - 1, comparer);
+            }
+```
 
 ヒープの根（`keys[0]`）は最大値なので、配列の末尾と入れ替えます。末尾は確定したので、ヒープの大きさを 1 減らし、根に来た値を `DownHeap` で正しい位置まで沈めます。これを繰り返すと、後ろから大きい順に値が確定し、配列が小さい順に並びます。
 
 `[3, 1, 2]` なら、ヒープ化で `[3, 1, 2]`（すでにヒープ）→ 3 と 2 を入れ替え `[2, 1, 3]` → 2 を沈める（子の 1 より大きいので動かない）→ 2 と 1 を入れ替え `[1, 2, 3]` で完成です。
 
-### 3. DownHeap: 値を沈める（235〜256 行目）
+### 3. DownHeap: 値を沈める
 
-番号 i の値 `d` を取り出し、**2 人の子のうち大きいほう** と比べます（242〜246 行目）。子のほうが大きければ子を上に引き上げ、自分は 1 段下がります。子より小さくなくなったら止まり、最後に `d` をその場所に書きます（255 行目）。
+```csharp:line-numbers=235
+        private static void DownHeap(Span<T> keys, int i, int n, Comparison<T> comparer)
+        {
+            Debug.Assert(comparer != null);
+
+            T d = keys[i - 1];
+            while (i <= n >> 1)
+            {
+                int child = 2 * i;
+                if (child < n && comparer(keys[child - 1], keys[child]) < 0)
+                {
+                    child++;
+                }
+
+                if (!(comparer(d, keys[child - 1]) < 0))
+                    break;
+
+                keys[i - 1] = keys[child - 1];
+                i = child;
+            }
+
+            keys[i - 1] = d;
+        }
+```
+
+番号 i の値 `d` を取り出し、**2 人の子のうち大きいほう** と比べます。子のほうが大きければ子を上に引き上げ、自分は 1 段下がります。子より小さくなくなったら止まり、最後に `d` をその場所に書きます。
 
 ## ここがすごい
 

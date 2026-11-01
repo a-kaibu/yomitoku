@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/Dictio
 lines: [1248, 1291]
 function: "Dictionary<TKey, TValue>.Resize"
 difficulty: 3
+format: 2
 tags: [ハッシュ, データ構造, メモリ管理]
 ---
 
@@ -22,7 +23,56 @@ tags: [ハッシュ, データ構造, メモリ管理]
 
 ## コード
 
-```csharp:line-numbers=1248
+::: code-group
+
+```csharp:line-numbers=1248 [日本語訳]
+        private void Resize(int newSize, bool forceNewHashCodes)
+        {
+            // 値型はリハッシュしない
+            Debug.Assert(!forceNewHashCodes || !typeof(TKey).IsValueType);
+            Debug.Assert(_entries != null, "_entries should be non-null");
+            Debug.Assert(HashHelpers.IsPrime(newSize));
+            Debug.Assert(newSize >= _entries.Length);
+
+            Entry[] entries = new Entry[newSize];
+
+            int count = _count;
+            Array.Copy(_entries, entries, count);
+
+            if (!typeof(TKey).IsValueType && forceNewHashCodes)
+            {
+                Debug.Assert(_comparer is NonRandomizedStringEqualityComparer);
+                IEqualityComparer<TKey> comparer = _comparer = (IEqualityComparer<TKey>)((NonRandomizedStringEqualityComparer)_comparer).GetRandomizedEqualityComparer();
+
+                for (int i = 0; i < count; i++)
+                {
+                    if (entries[i].next >= -1)
+                    {
+                        entries[i].hashCode = (uint)comparer.GetHashCode(entries[i].key);
+                    }
+                }
+            }
+
+            // 2 つの配列を確保してから代入し、2 つ目の確保が失敗したときの破損を防ぐ
+            _buckets = new int[newSize];
+#if TARGET_64BIT
+            _fastModMultiplier = HashHelpers.GetFastModMultiplier((uint)newSize);
+#endif
+            for (int i = 0; i < count; i++)
+            {
+                if (entries[i].next >= -1)
+                {
+                    ref int bucket = ref GetBucket(entries[i].hashCode);
+                    entries[i].next = bucket - 1; // _buckets の値は 1 始まり
+                    bucket = i + 1;
+                }
+            }
+
+            _entries = entries;
+        }
+```
+
+```csharp:line-numbers=1248 [原文]
         private void Resize(int newSize, bool forceNewHashCodes)
         {
             // Value types never rehash
@@ -69,6 +119,8 @@ tags: [ハッシュ, データ構造, メモリ管理]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **ハッシュ表とバケット**: キーからハッシュ値（整数）を計算し、それをバケット数で割った余りで「どのバケットに入れるか」を決めます。違うキーが同じバケットになる（衝突する）ことがあるので、同じバケットのエントリはリストでつなぎます。
@@ -79,15 +131,54 @@ tags: [ハッシュ, データ構造, メモリ管理]
 
 ## 何をしているか
 
-### 1. エントリをまるごとコピー（1256〜1259 行目）
+### 1. エントリをまるごとコピー
+
+```csharp:line-numbers=1256
+            Entry[] entries = new Entry[newSize];
+
+            int count = _count;
+            Array.Copy(_entries, entries, count);
+```
 
 新しいエントリ配列を作り、古いものを先頭から `count` 個そのままコピーします。キーも値もハッシュ値も **計算し直しません**。
 
-### 2. 必要ならハッシュ値を計算し直す（1261〜1273 行目）
+### 2. 必要ならハッシュ値を計算し直す
+
+```csharp:line-numbers=1261
+            if (!typeof(TKey).IsValueType && forceNewHashCodes)
+            {
+                Debug.Assert(_comparer is NonRandomizedStringEqualityComparer);
+                IEqualityComparer<TKey> comparer = _comparer = (IEqualityComparer<TKey>)((NonRandomizedStringEqualityComparer)_comparer).GetRandomizedEqualityComparer();
+
+                for (int i = 0; i < count; i++)
+                {
+                    if (entries[i].next >= -1)
+                    {
+                        entries[i].hashCode = (uint)comparer.GetHashCode(entries[i].key);
+                    }
+                }
+            }
+```
 
 文字列キーで衝突が多すぎる場合に限り、ハッシュ関数をランダム化されたものに切り替え、ハッシュ値を計算し直します（後述）。
 
-### 3. バケットを作り直して、リンクを張り直す（1276〜1288 行目）
+### 3. バケットを作り直して、リンクを張り直す
+
+```csharp:line-numbers=1276
+            _buckets = new int[newSize];
+#if TARGET_64BIT
+            _fastModMultiplier = HashHelpers.GetFastModMultiplier((uint)newSize);
+#endif
+            for (int i = 0; i < count; i++)
+            {
+                if (entries[i].next >= -1)
+                {
+                    ref int bucket = ref GetBucket(entries[i].hashCode);
+                    entries[i].next = bucket - 1; // _buckets の値は 1 始まり
+                    bucket = i + 1;
+                }
+            }
+```
 
 新しいバケット配列（すべて 0）を作り、エントリを先頭から 1 つずつ見ていきます。各エントリについて、
 
@@ -106,8 +197,8 @@ tags: [ハッシュ, データ構造, メモリ管理]
 - **ノードを作らない連結リスト**: 衝突したエントリのリストを、オブジェクトのポインタではなく **配列の添字** でつないでいます。エントリは 1 つの配列に詰まっているので、メモリが連続していてキャッシュに優しく、GC が追跡するオブジェクトも増えません。
 - **1 始まりで初期化を省く**: 0 を「空」として使えば、新しく確保した配列（.NET では必ず 0 で埋まっている）をそのまま使えます。-1 で埋め直すループが要りません。
 - **ハッシュ値を保存しておく**: `Entry.hashCode` を持っているので、リサイズのときにキーの `GetHashCode()` を呼び直さずに済みます。文字列のハッシュ計算は文字数に比例するので、大きな効果があります。
-- **ハッシュ衝突攻撃への備え**: 1261〜1273 行目は、文字列キーの衝突が多すぎるときに、ランダムな種を使うハッシュ関数に切り替える仕組みです。わざと同じハッシュ値になる文字列を大量に送りつける攻撃（Hash DoS）への対策です。
-- **OOM に備えた代入の順番**: 1275 行目のコメントの通り、新しい配列を全部確保できてからフィールドに代入しています。途中でメモリ不足になっても、Dictionary が壊れた状態にならないようにしています。
+- **ハッシュ衝突攻撃への備え**: `forceNewHashCodes` が真のときの処理は、文字列キーの衝突が多すぎるときに、ランダムな種を使うハッシュ関数に切り替える仕組みです。わざと同じハッシュ値になる文字列を大量に送りつける攻撃（Hash DoS）への対策です。
+- **OOM に備えた代入の順番**: コメントの通り、新しい配列を全部確保できてからフィールドに代入しています。途中でメモリ不足になっても、Dictionary が壊れた状態にならないようにしています。
 
 ## まとめ
 

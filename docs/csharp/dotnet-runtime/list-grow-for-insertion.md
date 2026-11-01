@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/List.c
 lines: [456, 485]
 function: "List<T>.GrowForInsertion"
 difficulty: 2
+format: 2
 tags: [最適化, データ構造, メモリ管理]
 ---
 
@@ -21,7 +22,42 @@ tags: [最適化, データ構造, メモリ管理]
 
 ## コード
 
-```csharp:line-numbers=456
+::: code-group
+
+```csharp:line-numbers=456 [日本語訳]
+        /// <summary>
+        /// このリストに、少なくとも insertionCount 個の要素を追加できるようにする。
+        /// 挿入後の位置へデータをコピーする。
+        /// 挿入専用のメソッドで、配列のコピーを 1 回減らせる。
+        /// Count + insertionCount > Capacity のときだけ呼ぶこと。
+        /// </summary>
+        /// <param name="indexToInsert">最初の挿入位置。</param>
+        /// <param name="insertionCount">挿入する要素数。</param>
+        internal void GrowForInsertion(int indexToInsert, int insertionCount = 1)
+        {
+            Debug.Assert(insertionCount > 0);
+
+            int requiredCapacity = checked(_size + insertionCount);
+            int newCapacity = GetNewCapacity(requiredCapacity);
+
+            // set_Capacity のロジックをここにインライン化して調整する
+
+            T[] newItems = new T[newCapacity];
+            if (indexToInsert != 0)
+            {
+                Array.Copy(_items, newItems, length: indexToInsert);
+            }
+
+            if (_size != indexToInsert)
+            {
+                Array.Copy(_items, indexToInsert, newItems, indexToInsert + insertionCount, _size - indexToInsert);
+            }
+
+            _items = newItems;
+        }
+```
+
+```csharp:line-numbers=456 [原文]
         /// <summary>
         /// Enlarge this list so it may contain at least <paramref name="insertionCount"/> more elements
         /// And copy data to their after-insertion positions.
@@ -54,7 +90,9 @@ tags: [最適化, データ構造, メモリ管理]
         }
 ```
 
-`GetNewCapacity` は 487〜503 行目の関数で、基本的には今の容量の 2 倍（空なら既定の 4）を新しい容量として返します。
+:::
+
+`GetNewCapacity` は 関数で、基本的には今の容量の 2 倍（空なら既定の 4）を新しい容量として返します。
 
 ## 前提知識
 
@@ -67,11 +105,27 @@ tags: [最適化, データ構造, メモリ管理]
 
 `[A, B, C, D]`（容量 4、満杯）の 1 番目（B の位置）に X を 1 つ挿入する場合を考えます。
 
-### 1. 新しい容量を決めて配列を作る（468〜473 行目）
+### 1. 新しい容量を決めて配列を作る
+
+```csharp:line-numbers=468
+            int requiredCapacity = checked(_size + insertionCount);
+            int newCapacity = GetNewCapacity(requiredCapacity);
+
+            // set_Capacity のロジックをここにインライン化して調整する
+
+            T[] newItems = new T[newCapacity];
+```
 
 必要な容量は `4 + 1 = 5`、`GetNewCapacity` は 2 倍の 8 を返します。長さ 8 の新しい配列を作ります。
 
-### 2. 挿入位置より前を写す（474〜477 行目）
+### 2. 挿入位置より前を写す
+
+```csharp:line-numbers=474
+            if (indexToInsert != 0)
+            {
+                Array.Copy(_items, newItems, length: indexToInsert);
+            }
+```
 
 先頭から 1 個（A）を、新しい配列の先頭に写します。
 
@@ -79,7 +133,14 @@ tags: [最適化, データ構造, メモリ管理]
 新: [A, _, _, _, _, _, _, _]
 ```
 
-### 3. 挿入位置より後ろを、隙間の分ずらして写す（479〜482 行目）
+### 3. 挿入位置より後ろを、隙間の分ずらして写す
+
+```csharp:line-numbers=479
+            if (_size != indexToInsert)
+            {
+                Array.Copy(_items, indexToInsert, newItems, indexToInsert + insertionCount, _size - indexToInsert);
+            }
+```
 
 もとの 1 番目から 3 個（B, C, D）を、新しい配列の `1 + 1 = 2` 番目から写します。
 
@@ -91,7 +152,7 @@ tags: [最適化, データ構造, メモリ管理]
 
 ## ここがすごい
 
-- **コピーを 1 回減らす**: ふつうに書くと「配列を広げる（全要素をコピー）」→「挿入位置より後ろを 1 つずらす（もう一度コピー）」となり、後ろの要素は 2 回動きます。この関数は新しい配列に写すときに最初から正しい位置に置くので、どの要素も 1 回しか動きません（459 行目のコメント）。
+- **コピーを 1 回減らす**: ふつうに書くと「配列を広げる（全要素をコピー）」→「挿入位置より後ろを 1 つずらす（もう一度コピー）」となり、後ろの要素は 2 回動きます。この関数は新しい配列に写すときに最初から正しい位置に置くので、どの要素も 1 回しか動きません（コメント）。
 - **一般的な `Grow` との使い分け**: 末尾への追加では隙間がいらないので普通の `Grow` を、途中への挿入ではこの関数を使います。同じ「広げる」でも目的に合わせて専用の版を用意しています。
 - **無駄な呼び出しを省く**: 先頭への挿入（`indexToInsert == 0`）なら前半のコピーを、末尾への挿入なら後半のコピーを、if で飛ばしています。
 - **オーバーフローを checked で検出**: 要素数 + 挿入数が int を超えると、黙って負の容量になる危険があります。`checked` で例外にして、壊れた状態を防いでいます。

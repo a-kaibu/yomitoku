@@ -11,6 +11,7 @@ file: src/libraries/Common/src/System/Collections/HashHelpers.cs
 lines: [41, 66]
 function: "HashHelpers.IsPrime"
 difficulty: 1
+format: 2
 tags: [アルゴリズム, 数値計算, ハッシュ]
 ---
 
@@ -23,7 +24,38 @@ tags: [アルゴリズム, 数値計算, ハッシュ]
 
 ## コード
 
-```csharp:line-numbers=41
+::: code-group
+
+```csharp:line-numbers=41 [日本語訳]
+        public static bool IsPrime(int candidate)
+        {
+            // ハッシュテーブルの容量だけを判定するので最小は MinPrime。2 は意図的に除外している。
+            Debug.Assert(candidate >= MinPrime);
+
+            if ((candidate & 1) == 0 || (uint)candidate % MinPrime == 0)
+            {
+                return candidate == MinPrime;
+            }
+
+            return HasNoPrimeDivisors(candidate, (int)Math.Sqrt(candidate));
+        }
+
+        private static bool HasNoPrimeDivisors(int candidate, int limit)
+        {
+            // 3 より大きい素数は 6k - 1 か 6k + 1 なので、各組の両方を調べる。
+            for (int divisor = 5; divisor <= limit; divisor += 6)
+            {
+                if (candidate % divisor == 0 || candidate % (divisor + 2) == 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+```
+
+```csharp:line-numbers=41 [原文]
         public static bool IsPrime(int candidate)
         {
             // This only tests hash table capacities, whose minimum is MinPrime, so 2 is intentionally excluded.
@@ -52,6 +84,8 @@ tags: [アルゴリズム, 数値計算, ハッシュ]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`(candidate & 1) == 0`**: `&` はビットごとの AND です。2 進数の一番下の桁が 0 なら偶数なので、これは「偶数か？」の判定です。`% 2 == 0` と同じ意味ですが、より軽い計算です。
@@ -62,11 +96,37 @@ tags: [アルゴリズム, 数値計算, ハッシュ]
 
 ## 何をしているか
 
-### 1. 2 と 3 の倍数を先に除く（46〜49 行目）
+### 1. 2 と 3 の倍数を先に除く
 
-偶数か 3 の倍数なら、素数なのは 3 そのもののときだけです（2 は 43 行目のコメントの通り、ハッシュ表の容量としては使わないので対象外）。
+```csharp:line-numbers=46
+            if ((candidate & 1) == 0 || (uint)candidate % MinPrime == 0)
+            {
+                return candidate == MinPrime;
+            }
+```
 
-### 2. √n までを 6 個ずつ調べる（51〜66 行目）
+偶数か 3 の倍数なら、素数なのは 3 そのもののときだけです（2 は コメントの通り、ハッシュ表の容量としては使わないので対象外）。
+
+### 2. √n までを 6 個ずつ調べる
+
+```csharp:line-numbers=51
+            return HasNoPrimeDivisors(candidate, (int)Math.Sqrt(candidate));
+        }
+
+        private static bool HasNoPrimeDivisors(int candidate, int limit)
+        {
+            // 3 より大きい素数は 6k - 1 か 6k + 1 なので、各組の両方を調べる。
+            for (int divisor = 5; divisor <= limit; divisor += 6)
+            {
+                if (candidate % divisor == 0 || candidate % (divisor + 2) == 0)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+```
 
 `n` が合成数（素数でない数）なら、必ず `√n` 以下の約数を持ちます。なので `√n` まで調べれば十分です。
 

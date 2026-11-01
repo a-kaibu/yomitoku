@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Buffers/Text/FormattingHel
 lines: [63, 106]
 function: "FormattingHelpers.CountDigits(uint)"
 difficulty: 3
+format: 2
 tags: [ビット演算, 数値計算, ハック]
 ---
 
@@ -23,7 +24,56 @@ tags: [ビット演算, 数値計算, ハック]
 
 ## コード
 
-```csharp:line-numbers=63
+::: code-group
+
+```csharp:line-numbers=63 [日本語訳]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int CountDigits(uint value)
+        {
+            // Daniel Lemire の方法 (https://lemire.me/blog/2021/06/03/computing-the-number-of-digits-of-an-integer-even-faster) に基づく
+            ReadOnlySpan<long> table =
+            [
+                4294967296,
+                8589934582,
+                8589934582,
+                8589934582,
+                12884901788,
+                12884901788,
+                12884901788,
+                17179868184,
+                17179868184,
+                17179868184,
+                21474826480,
+                21474826480,
+                21474826480,
+                21474826480,
+                25769703776,
+                25769703776,
+                25769703776,
+                30063771072,
+                30063771072,
+                30063771072,
+                34349738368,
+                34349738368,
+                34349738368,
+                34349738368,
+                38554705664,
+                38554705664,
+                38554705664,
+                41949672960,
+                41949672960,
+                41949672960,
+                42949672960,
+                42949672960,
+            ];
+            Debug.Assert(table.Length == 32, "Every result of uint.Log2(value) needs a long entry in the table.");
+
+            long tableValue = table[(int)uint.Log2(value)];
+            return (int)((value + tableValue) >> 32);
+        }
+```
+
+```csharp:line-numbers=63 [原文]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int CountDigits(uint value)
         {
@@ -70,6 +120,8 @@ tags: [ビット演算, 数値計算, ハック]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`uint` と `long`**: `uint` は 32 ビット符号なし整数、`long` は 64 ビット符号付き整数です。`value + tableValue` では `uint` が自動的に `long` に広げられてから足されます。
@@ -85,7 +137,12 @@ tags: [ビット演算, 数値計算, ハック]
 2 進数の桁数（= log2 + 1）がわかると、10 進数の桁数は **2 通りのどちらか** に絞れます。
 たとえば log2 が 6 の数は 64〜127 で、10 進数では 2 桁（64〜99）か 3 桁（100〜127）です。
 
-### 2. 表の値を足して上位 32 ビットを取る（104〜105 行目）
+### 2. 表の値を足して上位 32 ビットを取る
+
+```csharp:line-numbers=104
+            long tableValue = table[(int)uint.Log2(value)];
+            return (int)((value + tableValue) >> 32);
+```
 
 表の各要素は、上位 32 ビットに「桁数」、下位 32 ビットに「しきい値の補正」を詰めた値です。
 log2 = 6 のときの値 `12884901788` は `3 × 2³² − 100` になっています。
@@ -103,7 +160,7 @@ log2 = 0〜2（値 1〜7）は必ず 1 桁なので、表の値は `4294967296`�
 
 - **比較を繰り上がりに置き換える**: 「value が 10ᵏ 以上か」という判定を、`2³² − 10ᵏ` を足したときに上位ビットへ繰り上がるかどうかに置き換えています。分岐がないので、CPU の分岐予測ミスが起きません。
 - **1 つの数に 2 つの情報を詰める**: 上位に答え、下位にしきい値という詰め方で、表を 1 回引くだけで済みます。
-- **出典が明記されている**: 66 行目のコメントにある通り、Daniel Lemire 氏のブログで紹介された手法です。同じファイルの `ulong` 版は fmt ライブラリ由来の別の手法（log2 → 10 のべき乗表 → 比較 1 回）を使っていて、値の幅に応じて手法を選び分けているのがわかります。
+- **出典が明記されている**: コメントにある通り、Daniel Lemire 氏のブログで紹介された手法です。同じファイルの `ulong` 版は fmt ライブラリ由来の別の手法（log2 → 10 のべき乗表 → 比較 1 回）を使っていて、値の幅に応じて手法を選び分けているのがわかります。
 - **`uint` の範囲だけで成り立つ**: `uint` の最大値でも 64 ビットの足し算はあふれません。値の範囲が限られていることをうまく利用しています。
 
 ## まとめ

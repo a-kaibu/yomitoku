@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/DateTime.cs
 lines: [1551, 1564]
 function: "DateTime.IsLeapYear"
 difficulty: 1
+format: 2
 tags: [日時, ビット演算, 最適化]
 ---
 
@@ -22,7 +23,26 @@ tags: [日時, ビット演算, 最適化]
 
 ## コード
 
-```csharp:line-numbers=1551
+::: code-group
+
+```csharp:line-numbers=1551 [日本語訳]
+        // 与えられた年がうるう年かどうかを判定する。
+        // うるう年なら true、そうでなければ false を返す。
+        //
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsLeapYear(int year)
+        {
+            if (year < 1 || year > 9999)
+            {
+                ThrowHelper.ThrowArgumentOutOfRange_Year();
+            }
+            if ((year & 3) != 0) return false;
+            if ((year & 15) == 0) return true;
+            return (uint)year % 25 != 0;
+        }
+```
+
+```csharp:line-numbers=1551 [原文]
         // Checks whether a given year is a leap year. This method returns true if
         // year is a leap year, or false if not.
         //
@@ -39,6 +59,8 @@ tags: [日時, ビット演算, 最適化]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **うるう年の規則**: 4 で割り切れる年はうるう年。ただし 100 で割り切れる年は平年。ただし 400 で割り切れる年はうるう年。
@@ -48,15 +70,27 @@ tags: [日時, ビット演算, 最適化]
 
 ## 何をしているか
 
-### 1. 4 の倍数でなければ平年（1561 行目）
+### 1. 4 の倍数でなければ平年
+
+```csharp:line-numbers=1561
+            if ((year & 3) != 0) return false;
+```
 
 ほとんどの年（4 分の 3）はここで終わります。2023 年は `2023 & 3 = 3` なので false です。
 
-### 2. 16 の倍数ならうるう年（1562 行目）
+### 2. 16 の倍数ならうるう年
+
+```csharp:line-numbers=1562
+            if ((year & 15) == 0) return true;
+```
 
 ここがおもしろいところです。16 の倍数の年は、もし 100 で割り切れたとしても、100 = 4 × 25 なので「16 の倍数かつ 25 の倍数」= 400 の倍数になります。つまり **16 の倍数は必ずうるう年** です。2000 年は 2000 = 16 × 125 なので true です。
 
-### 3. 残りは 25 で割り切れるかで決まる（1563 行目）
+### 3. 残りは 25 で割り切れるかで決まる
+
+```csharp:line-numbers=1563
+            return (uint)year % 25 != 0;
+```
 
 ここに来るのは「4 の倍数だが 16 の倍数ではない」年です。このとき、
 
@@ -68,7 +102,7 @@ tags: [日時, ビット演算, 最適化]
 ## ここがすごい
 
 - **100 と 400 を 25 と 16 に分解**: 100 = 4 × 25、400 = 16 × 25 という関係を使い、2 のべき乗の部分（4 と 16）をビット演算に、残りの 25 を割り算 1 回に分けています。
-- **よくある順に判定**: 4 の倍数でない年（75%）が最初の 1 行で終わり、16 の倍数（約 6%）も 2 行目で終わります。割り算が必要なのは残りの年だけです。
+- **よくある順に判定**: 4 の倍数でない年（75%）が最初の 1 行で終わり、16 の倍数（約 6%）も 2 つ目の if で終わります。割り算が必要なのは残りの年だけです。
 - **定数での割り算はさらに速い**: `% 25` は定数での割り算なので、JIT は掛け算とシフトに置き換えられます。結果として、この関数には遅い割り算命令が 1 つも出てきません。
 - **入力チェックは別関数に**: 例外を投げる部分を ThrowHelper に任せることで、関数本体が小さくなり `AggressiveInlining` が効きやすくなっています。.NET の標準ライブラリ全体で使われている書き方です。
 

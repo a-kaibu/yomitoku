@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Random.Xoshiro256StarStarI
 lines: [51, 74]
 function: "Random.XoshiroImpl.NextUInt64"
 difficulty: 3
+format: 2
 tags: [乱数, ビット演算, 標準ライブラリ]
 ---
 
@@ -22,7 +23,36 @@ tags: [乱数, ビット演算, 標準ライブラリ]
 
 ## コード
 
-```csharp:line-numbers=51
+::: code-group
+
+```csharp:line-numbers=51 [日本語訳]
+            /// <summary>[0, ulong.MaxValue] の範囲の値を生成する。</summary>
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] // 小さめのホットパス。いくつかの「next」メソッドで使われる。
+            internal ulong NextUInt64()
+            {
+                ulong s0 = _s0, s1 = _s1, s2 = _s2, s3 = _s3;
+
+                ulong result = BitOperations.RotateLeft(s1 * 5, 7) * 9;
+                ulong t = s1 << 17;
+
+                s2 ^= s0;
+                s3 ^= s1;
+                s1 ^= s2;
+                s0 ^= s3;
+
+                s2 ^= t;
+                s3 = BitOperations.RotateLeft(s3, 45);
+
+                _s0 = s0;
+                _s1 = s1;
+                _s2 = s2;
+                _s3 = s3;
+
+                return result;
+            }
+```
+
+```csharp:line-numbers=51 [原文]
             /// <summary>Produces a value in the range [0, ulong.MaxValue].</summary>
             [MethodImpl(MethodImplOptions.AggressiveInlining)] // small-ish hot path used by a handful of "next" methods
             internal ulong NextUInt64()
@@ -49,7 +79,9 @@ tags: [乱数, ビット演算, 標準ライブラリ]
             }
 ```
 
-21〜29 行目のコメントにある通り、元になった C のコードは作者によってパブリックドメインとして公開されています。
+:::
+
+コメントにある通り、元になった C のコードは作者によってパブリックドメインとして公開されています。
 
 ## 前提知識
 
@@ -62,27 +94,56 @@ tags: [乱数, ビット演算, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 状態をローカル変数に読む（55 行目）
+### 1. 状態をローカル変数に読む
+
+```csharp:line-numbers=55
+                ulong s0 = _s0, s1 = _s1, s2 = _s2, s3 = _s3;
+```
 
 フィールドを直接何度も読み書きするより、ローカル変数（CPU のレジスタ）で計算して最後に書き戻すほうが速いので、まず 4 つをコピーします。
 
-### 2. 出力を作る（57 行目）
+### 2. 出力を作る
+
+```csharp:line-numbers=57
+                ulong result = BitOperations.RotateLeft(s1 * 5, 7) * 9;
+```
 
 `s1 × 5` を 7 ビット回転して 9 を掛けたものが出力です。この「掛けて回して掛ける」部分が名前の `**`（スタースター）の由来で、状態のビットのかたよりを出力に出さないための「仕上げ」です。
 
-### 3. 状態を更新する（58〜66 行目）
+### 3. 状態を更新する
+
+```csharp:line-numbers=58
+                ulong t = s1 << 17;
+
+                s2 ^= s0;
+                s3 ^= s1;
+                s1 ^= s2;
+                s0 ^= s3;
+
+                s2 ^= t;
+                s3 = BitOperations.RotateLeft(s3, 45);
+```
 
 4 つの値を互いに XOR で混ぜ、`s1` を 17 ビット左にずらした値を `s2` に混ぜ、最後に `s3` を 45 ビット回転します。名前の **xo**r・**shi**ft・**ro**tate はこの 3 つの演算を表しています。
 
-### 4. 書き戻して返す（68〜73 行目）
+### 4. 書き戻して返す
+
+```csharp:line-numbers=68
+                _s0 = s0;
+                _s1 = s1;
+                _s2 = s2;
+                _s3 = s3;
+
+                return result;
+```
 
 更新した状態をフィールドに戻し、2. で作った値を返します。
 
 ## ここがすごい
 
 - **とても軽い**: 1 回の生成で使うのは、掛け算 2 回、XOR 6 回、シフト 1 回、回転 2 回程度です。表も割り算もありません。
-- **周期が長い**: 256 ビットの状態を持ち、周期（同じ列に戻るまでの長さ）は 2²⁵⁶ − 1 です。ふつうの用途で使い切ることはありません。状態がすべて 0 だと 0 しか出なくなるため、44 行目のコンストラクタは「少なくとも 1 つは 0 でない」まで種を取り直しています。
-- **互換性を捨てられる場所を見極めた設計**: 13〜18 行目のコメントの通り、種を指定しない `Random` は「どんな列が出るか」を誰も当てにしていないので、昔の実装との互換性を気にせず新しいアルゴリズムに切り替えられました。種を指定した場合は、昔と同じ列が出るように古い実装（`CompatImpl`）が使われます。
+- **周期が長い**: 256 ビットの状態を持ち、周期（同じ列に戻るまでの長さ）は 2²⁵⁶ − 1 です。ふつうの用途で使い切ることはありません。状態がすべて 0 だと 0 しか出なくなるため、コンストラクタは「少なくとも 1 つは 0 でない」まで種を取り直しています。
+- **互換性を捨てられる場所を見極めた設計**: コメントの通り、種を指定しない `Random` は「どんな列が出るか」を誰も当てにしていないので、昔の実装との互換性を気にせず新しいアルゴリズムに切り替えられました。種を指定した場合は、昔と同じ列が出るように古い実装（`CompatImpl`）が使われます。
 - **ほかの関数の土台**: `NextUInt32` は上位 32 ビットを、`NextDouble` は上位 53 ビットを使います。xoshiro の出力は上位ビットほど質がよいとされているので、いつも上位から取り出しています。
 
 ## まとめ

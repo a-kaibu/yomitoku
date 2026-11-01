@@ -11,6 +11,7 @@ file: src/libraries/System.Collections/src/System/Collections/Generic/PriorityQu
 lines: [684, 711]
 function: "PriorityQueue<TElement, TPriority>.Heapify"
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -23,7 +24,40 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## コード
 
-```csharp:line-numbers=684
+::: code-group
+
+```csharp:line-numbers=684 [日本語訳]
+        /// <summary>
+        /// 順序のない一覧をヒープに変換する。
+        /// </summary>
+        private void Heapify()
+        {
+            // 木の葉は実際には 1 要素のヒープなので、
+            // 修正の必要はない。ヒープの性質を回復する必要があるのは
+            // 子を持つ最初の節から上の節だけである。
+            // 配列の最後の要素の親にあたる。
+
+            (TElement Element, TPriority Priority)[] nodes = _nodes;
+            int lastParentWithChildren = GetParentIndex(_size - 1);
+
+            if (_comparer == null)
+            {
+                for (int index = lastParentWithChildren; index >= 0; --index)
+                {
+                    MoveDownDefaultComparer(nodes[index], index);
+                }
+            }
+            else
+            {
+                for (int index = lastParentWithChildren; index >= 0; --index)
+                {
+                    MoveDownCustomComparer(nodes[index], index);
+                }
+            }
+        }
+```
+
+```csharp:line-numbers=684 [原文]
         /// <summary>
         /// Converts an unordered list into a heap.
         /// </summary>
@@ -54,10 +88,12 @@ tags: [データ構造, アルゴリズム, 最適化]
         }
 ```
 
-`GetParentIndex` は 677 行目で次のように定義されています。子が 4 つの「4 分ヒープ」なので、親の番号は `(i − 1) / 4` です。
+:::
 
-```csharp
-private static int GetParentIndex(int index) => (index - 1) >> Log2Arity;
+`GetParentIndex` は同じファイルで次のように定義されています。子が 4 つの「4 分ヒープ」なので、親の番号は `(i − 1) / 4` です。
+
+```csharp:line-numbers=677
+        private static int GetParentIndex(int index) => (index - 1) >> Log2Arity;
 ```
 
 ## 前提知識
@@ -67,15 +103,36 @@ private static int GetParentIndex(int index) => (index - 1) >> Log2Arity;
 - **`>> Log2Arity`**: `Log2Arity` は 2 なので、右に 2 ビットずらす＝ 4 で割る（切り捨て）です。
 - **`MoveDownDefaultComparer(node, index)`**: 同じファイルにある関数で、`index` の位置にある値を、子より大きければ下へ沈めます。
 - **`--index`**: 1 減らしてから使う、前置デクリメントです。
-- **ローカル変数 `nodes` に配列を入れる（694 行目）**: フィールド `_nodes` を毎回読むより、ローカル変数に入れたほうが JIT が最適化しやすくなります。
+- **ローカル変数 `nodes` に配列を入れる**: フィールド `_nodes` を毎回読むより、ローカル変数に入れたほうが JIT が最適化しやすくなります。
 
 ## 何をしているか
 
-### 1. 子を持つ最後の節を求める（695 行目）
+### 1. 子を持つ最後の節を求める
 
-**最後の要素の親** が、子を持つ節のうち最も後ろにあるものです。要素が 10 個（番号 0〜9）なら、`GetParentIndex(9) = (9 − 1) >> 2 = 2` です。番号 3〜9 は葉なので、何もしなくても「1 要素のヒープ」として正しい形です（689〜692 行目のコメント）。
+```csharp:line-numbers=695
+            int lastParentWithChildren = GetParentIndex(_size - 1);
+```
 
-### 2. 後ろから根に向かって沈める（697〜710 行目）
+**最後の要素の親** が、子を持つ節のうち最も後ろにあるものです。要素が 10 個（番号 0〜9）なら、`GetParentIndex(9) = (9 − 1) >> 2 = 2` です。番号 3〜9 は葉なので、何もしなくても「1 要素のヒープ」として正しい形です（コメント）。
+
+### 2. 後ろから根に向かって沈める
+
+```csharp:line-numbers=697
+            if (_comparer == null)
+            {
+                for (int index = lastParentWithChildren; index >= 0; --index)
+                {
+                    MoveDownDefaultComparer(nodes[index], index);
+                }
+            }
+            else
+            {
+                for (int index = lastParentWithChildren; index >= 0; --index)
+                {
+                    MoveDownCustomComparer(nodes[index], index);
+                }
+            }
+```
 
 番号 2, 1, 0 の順に `MoveDown` します。ある節を沈める時点で、その子の部分木はすでにヒープになっているので、沈めるだけで「その節を根とする部分木」全体がヒープになります。最後に根（0 番）を沈めれば、全体がヒープになります。
 

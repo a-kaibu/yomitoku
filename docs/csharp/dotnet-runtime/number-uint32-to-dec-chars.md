@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Number.Formatting.cs
 lines: [1771, 1795]
 function: "Number.UInt32ToDecChars(uint, Span<char>)"
 difficulty: 3
+format: 2
 tags: [文字列処理, 数値計算, 最適化]
 ---
 
@@ -54,27 +55,53 @@ tags: [文字列処理, 数値計算, 最適化]
 
 - **`Span<char>`**: 文字の並びへの「窓」です。ここでは、桁数ちょうどの長さで作られた文字列の中身を指しています。
 - **`MemoryMarshal.Cast<char, DigitPair>(span)`**: 同じメモリを別の型の並びとして見直します。`char` は 2 バイト、`DigitPair` は 4 バイト（`uint` 1 つ）なので、char 2 つ分が DigitPair 1 つになります。コピーは起きません。
-- **`DigitPair`**: 同じファイルの 279〜285 行目で定義されている、`uint` を 1 つだけ持つ構造体です。`Pack = sizeof(char)` という指定で、char の並びの途中（2 バイト境界）に置いても正しく扱えるようにしています。
+- **`DigitPair`**: 同じファイルで定義されている、`uint` を 1 つだけ持つ構造体です。`Pack = sizeof(char)` という指定で、char の並びの途中（2 バイト境界）に置いても正しく扱えるようにしています。
 - **`Math.DivRem(value, 100)`**: 商と余りを同時に返します。タプル `(value, uint remainder) = ...` で 2 つの変数に受け取っています。
-- **`GetTwoDigitsChars(n)`**: 0〜99 の数を、2 つの文字（UTF-16）を詰めた 32 ビット値に変える表引きです（Number.Formatting.Common.cs の 220〜229 行目）。
+- **`GetTwoDigitsChars(n)`**: 0〜99 の数を、2 つの文字（UTF-16）を詰めた 32 ビット値に変える表引きです。
 - **`buffer.Length & 1`**: 長さが奇数なら 1、偶数なら 0 です。
 
 ## 何をしているか
 
 `value = 12345`（5 桁、`buffer` の長さは 5）で追います。
 
-### 1. 先頭に何桁残すかを決める（1776〜1777 行目）
+### 1. 先頭に何桁残すかを決める
+
+```csharp:line-numbers=1776
+            int leadingDigits = 2 - (buffer.Length & 1);
+            Span<DigitPair> pairs = MemoryMarshal.Cast<char, DigitPair>(buffer.Slice(leadingDigits));
+```
 
 長さ 5 は奇数なので `leadingDigits = 2 - 1 = 1`。先頭の 1 文字を残し、後ろの 4 文字を DigitPair 2 つとして見ます。偶数桁なら先頭 2 文字を残します。
 
-### 2. 後ろから 2 桁ずつ書く（1779〜1783 行目）
+### 2. 後ろから 2 桁ずつ書く
+
+```csharp:line-numbers=1779
+            for (int i = pairs.Length - 1; (uint)i < (uint)pairs.Length; i--)
+            {
+                (value, uint remainder) = Math.DivRem(value, 100);
+                pairs[i] = new DigitPair(GetTwoDigitsChars(remainder));
+            }
+```
 
 - `12345 ÷ 100` → 商 123、余り **45** → 最後の DigitPair に `"45"` を書く
 - `123 ÷ 100` → 商 1、余り **23** → その前の DigitPair に `"23"` を書く
 
 ループの条件 `(uint)i < (uint)pairs.Length` は、`i` が −1 になると符号なしで巨大な数になって終わる、という書き方です。
 
-### 3. 先頭の桁を書く（1785〜1794 行目）
+### 3. 先頭の桁を書く
+
+```csharp:line-numbers=1785
+            if (leadingDigits == 1)
+            {
+                Debug.Assert(value < 10);
+                buffer[0] = (char)(value + '0');
+            }
+            else
+            {
+                Debug.Assert(value < 100);
+                WriteTwoDigits(value, buffer.Slice(0, 2));
+            }
+```
 
 残った `value = 1` を `'1'` にして先頭に書きます。結果は `"12345"` です。
 

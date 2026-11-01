@@ -11,6 +11,7 @@ file: src/libraries/Common/src/System/Collections/HashHelpers.cs
 lines: [150, 164]
 function: "HashHelpers.ExpandPrime"
 difficulty: 1
+format: 2
 tags: [防御的プログラミング, ハッシュ, イディオム]
 ---
 
@@ -21,7 +22,27 @@ tags: [防御的プログラミング, ハッシュ, イディオム]
 
 ## コード
 
-```csharp:line-numbers=150
+::: code-group
+
+```csharp:line-numbers=150 [日本語訳]
+        // 拡張先のハッシュテーブルのサイズを返す。
+        public static int ExpandPrime(int oldSize)
+        {
+            int newSize = 2 * oldSize;
+
+            // ハッシュテーブルは容量オーバーになるまで（約 20 億要素まで）大きくできるようにする。
+            // (uint) キャストのおかげで、_items.Length がオーバーフローしていてもこのチェックは正しく働く。
+            if ((uint)newSize > MaxPrimeArrayLength && MaxPrimeArrayLength > oldSize)
+            {
+                Debug.Assert(MaxPrimeArrayLength == GetPrime(MaxPrimeArrayLength), "Invalid MaxPrimeArrayLength");
+                return MaxPrimeArrayLength;
+            }
+
+            return GetPrime(newSize);
+        }
+```
+
+```csharp:line-numbers=150 [原文]
         // Returns the size of the hashtable to grow to.
         public static int ExpandPrime(int oldSize)
         {
@@ -39,7 +60,9 @@ tags: [防御的プログラミング, ハッシュ, イディオム]
         }
 ```
 
-`MaxPrimeArrayLength` は 14 行目で定義されている定数 `0x7FFFFFC3`（= 2147483587）で、.NET の配列の最大長より小さい最大の素数です。
+:::
+
+`MaxPrimeArrayLength` は同じファイルで定義されている定数 `0x7FFFFFC3`（= 2147483587）で、.NET の配列の最大長より小さい最大の素数です。
 
 ## 前提知識
 
@@ -51,23 +74,35 @@ tags: [防御的プログラミング, ハッシュ, イディオム]
 
 ## 何をしているか
 
-### 1. とりあえず 2 倍する（153 行目）
+### 1. とりあえず 2 倍する
+
+```csharp:line-numbers=153
+            int newSize = 2 * oldSize;
+```
 
 `oldSize = 1000` なら `newSize = 2000`、その後 `GetPrime(2000)` で `2333` が返ります（表の中で 2000 以上の最小の素数）。
 
-### 2. 大きすぎたら最大値に丸める（157〜161 行目）
+### 2. 大きすぎたら最大値に丸める
+
+```csharp:line-numbers=157
+            if ((uint)newSize > MaxPrimeArrayLength && MaxPrimeArrayLength > oldSize)
+            {
+                Debug.Assert(MaxPrimeArrayLength == GetPrime(MaxPrimeArrayLength), "Invalid MaxPrimeArrayLength");
+                return MaxPrimeArrayLength;
+            }
+```
 
 `oldSize = 1_500_000_000` のとき、2 倍は 30 億で `int` をあふれ、`newSize` は約 −12.9 億という **負の数** になります。
 
 もし `newSize > MaxPrimeArrayLength` と `int` のまま比べると、負の数は小さいので「超えていない」と判定されてしまいます。
-ここで `(uint)newSize` にすると、約 −12.9 億は約 30 億という正の数に戻り、正しく「最大値を超えた」と判定できます。156 行目のコメントが、まさにこのことを説明しています。
+ここで `(uint)newSize` にすると、約 −12.9 億は約 30 億という正の数に戻り、正しく「最大値を超えた」と判定できます。コメントが、まさにこのことを説明しています。
 
 条件の後半 `MaxPrimeArrayLength > oldSize` は、「すでに最大サイズなら、それ以上は広げない」という意味です。最大サイズのまま呼ばれた場合は `GetPrime` に進み、最終的に容量オーバーのエラーになります。
 
 ## ここがすごい
 
 - **あふれを「検出」ではなく「解釈し直す」**: 2 倍の結果はいったんあふれますが、`uint` として見れば正しい値（30 億など）になっています。`int` の 2 倍は `uint` の範囲には必ず収まるので、キャスト 1 つで安全に比べられます。`checked` や `long` を使う方法よりも軽い書き方です。
-- **限界まで使い切る**: 2 倍できないからといってエラーにせず、使える最大の素数サイズまでは広げます。155 行目のコメントの通り、約 20 億要素まで使えるようにするための配慮です。
+- **限界まで使い切る**: 2 倍できないからといってエラーにせず、使える最大の素数サイズまでは広げます。コメントの通り、約 20 億要素まで使えるようにするための配慮です。
 - **定数の正しさを Assert で確認**: `MaxPrimeArrayLength` が本当に素数として扱われるか（GetPrime が同じ値を返すか）を、デバッグ時に確かめています。
 
 ## まとめ

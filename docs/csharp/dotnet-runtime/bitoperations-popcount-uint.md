@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Numerics/BitOperations.cs
 lines: [427, 461]
 function: "BitOperations.PopCount(uint)"
 difficulty: 3
+format: 2
 tags: [ビット演算, 最適化, 低レイヤ]
 ---
 
@@ -23,7 +24,47 @@ x86 の `POPCNT` 命令、Arm のベクトル命令、そしてどちらも使�
 
 ## コード
 
-```csharp:line-numbers=427
+::: code-group
+
+```csharp:line-numbers=427 [日本語訳]
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CLSCompliant(false)]
+        public static int PopCount(uint value)
+        {
+            if (Popcnt.IsSupported)
+            {
+                return (int)Popcnt.PopCount(value);
+            }
+
+            if (AdvSimd.Arm64.IsSupported)
+            {
+                // PopCount はベクトルで動くので、まず入力をベクトルに変換する
+
+                Vector64<uint> input = Vector64.CreateScalar(value);
+                Vector64<byte> aggregated = AdvSimd.Arm64.AddAcross(AdvSimd.PopCount(input.AsByte()));
+                return aggregated.ToScalar();
+            }
+
+            return SoftwareFallback(value);
+
+            static int SoftwareFallback(uint value)
+            {
+                const uint c1 = 0x_55555555u;
+                const uint c2 = 0x_33333333u;
+                const uint c3 = 0x_0F0F0F0Fu;
+                const uint c4 = 0x_01010101u;
+
+                value -= (value >> 1) & c1;
+                value = (value & c2) + ((value >> 2) & c2);
+                value = (((value + (value >> 4)) & c3) * c4) >> 24;
+
+                return (int)value;
+            }
+        }
+```
+
+```csharp:line-numbers=427 [原文]
         [Intrinsic]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CLSCompliant(false)]
@@ -61,42 +102,83 @@ x86 の `POPCNT` 命令、Arm のベクトル命令、そしてどちらも使�
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`[Intrinsic]`**: JIT コンパイラが特別扱いする関数の印です。可能なら関数呼び出しそのものを CPU 命令 1 個に置き換えます。
 - **`Popcnt.IsSupported`**: 実行中の CPU が x86 の `POPCNT` 命令を持っているか。JIT にとっては定数なので、使わない分岐はマシン語から消えます。
 - **`Vector64<uint>`**: 64 ビット幅の SIMD レジスタ（1 つの命令で複数の値をまとめて扱うレジスタ）を表す型です。`AsByte()` は中身を 8 個の byte として見直します。
-- **ローカル関数**: 448 行目の `static int SoftwareFallback(...)` のように、関数の中に関数を書けます。`static` を付けると外側の変数を使えないことが保証されます。
+- **ローカル関数**: `static int SoftwareFallback(...)` のように、関数の中に関数を書けます。`static` を付けると外側の変数を使えないことが保証されます。
 - **`const`**: コンパイル時に決まる定数です。`0x_55555555u` のように `_` で区切って読みやすくできます。
 - **`-=`**: `value = value - ...` の略です。
 
 ## 何をしているか
 
-### 1. x86: POPCNT 命令（432〜435 行目）
+### 1. x86: POPCNT 命令
+
+```csharp:line-numbers=432
+            if (Popcnt.IsSupported)
+            {
+                return (int)Popcnt.PopCount(value);
+            }
+```
 
 命令 1 個で答えが出ます。
 
-### 2. Arm64: バイトごとに数えて合計（437〜444 行目）
+### 2. Arm64: バイトごとに数えて合計
+
+```csharp:line-numbers=437
+            if (AdvSimd.Arm64.IsSupported)
+            {
+                // PopCount はベクトルで動くので、まず入力をベクトルに変換する
+
+                Vector64<uint> input = Vector64.CreateScalar(value);
+                Vector64<byte> aggregated = AdvSimd.Arm64.AddAcross(AdvSimd.PopCount(input.AsByte()));
+                return aggregated.ToScalar();
+            }
+```
 
 Arm には 32 ビット整数のための popcount 命令がないため、値をベクトルレジスタに入れ、`AdvSimd.PopCount` で **8 バイトそれぞれの 1 の数** を数えます。続く `AddAcross` で全バイトを合計し、`ToScalar()` で普通の整数に戻します。
 
-### 3. ソフトウェア版（448〜460 行目）
+### 3. ソフトウェア版
+
+```csharp:line-numbers=448
+            static int SoftwareFallback(uint value)
+            {
+                const uint c1 = 0x_55555555u;
+                const uint c2 = 0x_33333333u;
+                const uint c3 = 0x_0F0F0F0Fu;
+                const uint c4 = 0x_01010101u;
+```
 
 `value = 0b1101_1011`（下位 8 ビットだけ、1 は 6 個）で追います。
 
-**455 行目**: 2 ビットずつの箱に、その箱の 1 の数を入れます。2 ビットの値 `ab` は `2a + b` なので、そこから `a` を引くと `a + b` になる、という引き算の技です。
+```csharp:line-numbers=455
+                value -= (value >> 1) & c1;
+```
+
+2 ビットずつの箱に、その箱の 1 の数を入れます。2 ビットの値 `ab` は `2a + b` なので、そこから `a` を引くと `a + b` になる、という引き算の技です。
 
 ```
 11 01 10 11 → 10 01 01 10   （2, 1, 1, 2）
 ```
 
-**456 行目**: 隣り合う 2 ビットの箱を足して 4 ビットの箱にします。`c2 = 0011…` が箱の片側を取り出すマスクです。
+```csharp:line-numbers=456
+                value = (value & c2) + ((value >> 2) & c2);
+```
+
+隣り合う 2 ビットの箱を足して 4 ビットの箱にします。`c2 = 0011…` が箱の片側を取り出すマスクです。
 
 ```
 10 01 | 01 10 → 0011 | 0011   （3, 3）
 ```
 
-**457 行目**: まず `value + (value >> 4)` と `& c3` で 8 ビット（1 バイト）ごとの個数にします（例では `0000 0110` = 6）。
+```csharp:line-numbers=457
+                value = (((value + (value >> 4)) & c3) * c4) >> 24;
+```
+
+まず `value + (value >> 4)` と `& c3` で 8 ビット（1 バイト）ごとの個数にします（例では `0000 0110` = 6）。
 最後に `c4 = 0x01010101` を掛けます。この掛け算は「4 つのバイトをすべて最上位バイトに足し合わせる」働きをするので、`>> 24` で最上位バイトを取り出せば全体の合計になります。
 
 ## ここがすごい

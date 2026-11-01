@@ -11,6 +11,7 @@ file: src/libraries/System.Collections/src/System/Collections/Generic/PriorityQu
 lines: [778, 824]
 function: "PriorityQueue<TElement, TPriority>.MoveDownDefaultComparer"
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,59 @@ tags: [データ構造, アルゴリズム, 最適化]
 
 ## コード
 
-```csharp:line-numbers=778
+::: code-group
+
+```csharp:line-numbers=778 [日本語訳]
+        /// <summary>
+        /// 木の中で節を下に動かしてヒープ順序を回復する。
+        /// </summary>
+        private void MoveDownDefaultComparer((TElement Element, TPriority Priority) node, int nodeIndex)
+        {
+            // 下に動かす節は毎回実際に入れ替えるわけではない。
+            // 代わりに、影響を受ける経路上の値を上に動かし、
+            // この値を入れる空きを作る。挿入ソートと同様の最適化。
+
+            Debug.Assert(_comparer is null);
+            Debug.Assert(0 <= nodeIndex && nodeIndex < _size);
+
+            (TElement Element, TPriority Priority)[] nodes = _nodes;
+            int size = _size;
+
+            int i;
+            while ((i = GetFirstChildIndex(nodeIndex)) < size)
+            {
+                // 優先度が最小の子ノードを探す
+                (TElement Element, TPriority Priority) minChild = nodes[i];
+                int minChildIndex = i;
+
+                int childIndexUpperBound = Math.Min(i + Arity, size);
+                while (++i < childIndexUpperBound)
+                {
+                    (TElement Element, TPriority Priority) nextChild = nodes[i];
+                    if (Comparer<TPriority>.Default.Compare(nextChild.Priority, minChild.Priority) < 0)
+                    {
+                        minChild = nextChild;
+                        minChildIndex = i;
+                    }
+                }
+
+                // ヒープ性質が満たされたので、この位置に挿入する。
+                if (Comparer<TPriority>.Default.Compare(node.Priority, minChild.Priority) <= 0)
+                {
+                    break;
+                }
+
+                // 最小の子を 1 段上に動かし、
+                // その位置から再帰的に続ける。
+                nodes[nodeIndex] = minChild;
+                nodeIndex = minChildIndex;
+            }
+
+            nodes[nodeIndex] = node;
+        }
+```
+
+```csharp:line-numbers=778 [原文]
         /// <summary>
         /// Moves a node down in the tree to restore heap order.
         /// </summary>
@@ -72,12 +125,20 @@ tags: [データ構造, アルゴリズム, 最適化]
         }
 ```
 
-使われている定数と補助関数は同じファイルで次のように定義されています（47 行目、52 行目、682 行目）。
+:::
 
-```csharp
-private const int Arity = 4;
-private const int Log2Arity = 2;
-private static int GetFirstChildIndex(int index) => (index << Log2Arity) + 1;
+使われている定数と補助関数は同じファイルで次のように定義されています。
+
+```csharp:line-numbers=47
+        private const int Arity = 4;
+```
+
+```csharp:line-numbers=52
+        private const int Log2Arity = 2;
+```
+
+```csharp:line-numbers=682
+        private static int GetFirstChildIndex(int index) => (index << Log2Arity) + 1;
 ```
 
 ## 前提知識
@@ -90,19 +151,54 @@ private static int GetFirstChildIndex(int index) => (index << Log2Arity) + 1;
 
 ## 何をしているか
 
-### 1. 4 人の子から最小を探す（794〜809 行目）
+### 1. 4 人の子から最小を探す
+
+```csharp:line-numbers=794
+            while ((i = GetFirstChildIndex(nodeIndex)) < size)
+            {
+                // 優先度が最小の子ノードを探す
+                (TElement Element, TPriority Priority) minChild = nodes[i];
+                int minChildIndex = i;
+
+                int childIndexUpperBound = Math.Min(i + Arity, size);
+                while (++i < childIndexUpperBound)
+                {
+                    (TElement Element, TPriority Priority) nextChild = nodes[i];
+                    if (Comparer<TPriority>.Default.Compare(nextChild.Priority, minChild.Priority) < 0)
+                    {
+                        minChild = nextChild;
+                        minChildIndex = i;
+                    }
+                }
+```
 
 `nodeIndex = 0`（根）なら、子は 1, 2, 3, 4 番です。まず 1 番を仮の最小とし、残りの 2〜4 番と比べて、優先度がいちばん小さい子を `minChild` にします。要素数が足りないときは `Math.Min(i + Arity, size)` で範囲を切り詰めます。
 
-### 2. 沈める値のほうが小さければ止まる（812〜815 行目）
+### 2. 沈める値のほうが小さければ止まる
+
+```csharp:line-numbers=812
+                if (Comparer<TPriority>.Default.Compare(node.Priority, minChild.Priority) <= 0)
+                {
+                    break;
+                }
+```
 
 沈めたい値 `node` の優先度が、最小の子以下なら、ここが正しい場所です。
 
-### 3. 最小の子を引き上げて、1 段下へ（819〜820 行目）
+### 3. 最小の子を引き上げて、1 段下へ
+
+```csharp:line-numbers=819
+                nodes[nodeIndex] = minChild;
+                nodeIndex = minChildIndex;
+```
 
 そうでなければ、最小の子を今の位置に書き写し、自分はその子の位置へ下がります。`node` 自体はまだどこにも書きません。
 
-### 4. 最後に 1 回だけ書く（823 行目）
+### 4. 最後に 1 回だけ書く
+
+```csharp:line-numbers=823
+            nodes[nodeIndex] = node;
+```
 
 ループを抜けた位置に `node` を書き込みます。
 
@@ -111,8 +207,8 @@ private static int GetFirstChildIndex(int index) => (index << Log2Arity) + 1;
 ## ここがすごい
 
 - **4 分木で木を低くする**: 子が 4 つなら木の高さは log₄ n、つまり二分木の約半分です。沈める段数が半分になる代わりに、各段の比較は 1 回から 3 回に増えます。それでも、4 人の子は配列上で **隣り合って並んでいる** ので、同じキャッシュライン（CPU が一度に読むメモリの単位）に載りやすく、メモリアクセスの回数が減ります。.NET チームは性能計測をもとにこの形を選びました。
-- **シフトで子の番号を計算**: Arity を 2 のべき乗に限定し（45 行目のコメント）、掛け算をシフト 1 回にしています。57 行目ではデバッグ時に `2^Log2Arity == Arity` を確認しています。
-- **入れ替えず「穴」を動かす**: 783〜785 行目のコメントの通り、1 段ごとに値を交換するのではなく、子を上に書き写して最後に 1 回だけ書きます。代入の回数がほぼ 3 分の 1 になります。
+- **シフトで子の番号を計算**: Arity を 2 のべき乗に限定し（コメント）、掛け算をシフト 1 回にしています。静的コンストラクタではデバッグ時に `2^Log2Arity == Arity` を確認しています。
+- **入れ替えず「穴」を動かす**: コメントの通り、1 段ごとに値を交換するのではなく、子を上に書き写して最後に 1 回だけ書きます。代入の回数がほぼ 3 分の 1 になります。
 - **比較器ごとに専用の関数**: 比較器を指定しない場合（`_comparer == null`）と指定した場合で関数を分けています。既定の比較器版では、`Comparer<T>.Default` の呼び出しが JIT によって型ごとの直接比較に置き換わり、仮想呼び出しのコストが消えます。
 
 ## まとめ
