@@ -1,6 +1,6 @@
 ---
-title: 並べ替えから「辞書順で何番目か」を逆算する
-description: more_itertools.permutation_index は、ある並べ替えが辞書順で何番目かを、全部を数えずに計算する。各段階で「残りの中の何番目を取ったか」を求め、階乗進数として組み立てる。
+title: 並べ替えから、辞書順で何番目かを逆算する
+description: more_itertools.permutation_index は、与えられた並べ替えが、辞書順で何番目かを返す。nth_permutation の逆の操作である。候補から要素を 1 つずつ探して位置を取り、位置を階乗の進数のように積み上げて番号を作る。
 language: python
 project: more-itertools
 repo: https://github.com/more-itertools/more-itertools
@@ -11,17 +11,45 @@ file: more_itertools/more.py
 lines: [4571, 4592]
 function: permutation_index
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 数値計算]
 ---
+
 ## ひとことで
 
-`permutation_index(element, iterable)` は、並べ替え `element` が、`permutations(iterable)` の結果の **何番目に出てくるか** を求める関数です。
-`permutation_index('bca', 'abc')` は `3` を返します（`abc, acb, bac, bca, ...` の 3 番目、0 始まり）。
-`nth_permutation`（番号から並べ替えを作る関数）のちょうど逆の計算です。
+`permutation_index(element, iterable)` は、**並べ替え `element` が、辞書順で何番目にあるか** を返す関数です。
+`permutation_index([1, 3, 2], range(5))` は `19` を返します。`nth_permutation` で番号から並べ替えを作る操作を、逆向きに行います。
 
 ## コード
 
-```python:line-numbers=4571
+::: code-group
+
+```python:line-numbers=4571 [日本語訳]
+def permutation_index(element, iterable):
+    """``list(permutations(iterable, r)).index(element)`` と同じ結果になる。
+
+    *iterable* の長さ *r* の部分列のうち、順番が大事なものは、
+    辞書順に並べられる。:func:`permutation_index` は、
+    最初に現れる *element* の番号を、
+    それより前の並べ替えを計算せずに直接求める。
+
+        >>> permutation_index([1, 3, 2], range(5))
+        19
+
+    与えられた *element* が、
+    *iterable* の並べ替えの 1 つでなければ ``ValueError`` を出す。
+    """
+    index = 0
+    pool = list(iterable)
+    for i, x in zip(range(len(pool), -1, -1), element):
+        r = pool.index(x)
+        index = index * i + r
+        del pool[r]
+
+    return index
+```
+
+```python:line-numbers=4571 [原文]
 def permutation_index(element, iterable):
     """Equivalent to ``list(permutations(iterable, r)).index(element)```
 
@@ -46,56 +74,68 @@ def permutation_index(element, iterable):
     return index
 ```
 
+:::
+
 ## 前提知識
 
-- **並べ替えの辞書順**: `abc` の並べ替えを辞書順に並べると、`abc, acb, bac, bca, cab, cba` です。
-- **`pool.index(x)`**: リストの中で `x` が最初に出てくる位置を返します。
-- **`del pool[r]`**: リストの r 番目を削除します。
-- **`zip(range(n, -1, -1), element)`**: `n, n-1, n-2, ...` という数と、`element` の各要素を組にして取り出します。
-- **ホーナー法**: `index = index * i + r` を繰り返して、桁ごとの値から数を組み立てる方法です。10 進数の `3, 1, 4` から 314 を作るときの `((3 × 10) + 1) × 10 + 4` と同じ考え方です。
+- **辞書順**: 先頭から順に比べて並べる順番です。
+- **`nth_permutation`**: 番号から、辞書順で同じ位置の並べ替えを作る関数です。この関数はその逆です。
+- **`list.index`**: 要素が最初に現れる位置を返すメソッドです。
+- **`del`**: リストから、指定した位置の要素を取り除く文です。
 
 ## 何をしているか
 
-`element = ('b', 'c', 'a')`、`pool = ['a', 'b', 'c']` で追います。
+### 1. 初期値を用意する
 
-| i | x | r = pool.index(x) | index = index * i + r | pool（削除後） |
-| --- | --- | --- | --- | --- |
-| 3 | b | 1 | 0 × 3 + 1 = 1 | [a, c] |
-| 2 | c | 1 | 1 × 2 + 1 = 3 | [a] |
-| 1 | a | 0 | 3 × 1 + 0 = 3 | [] |
+```python:line-numbers=4585
+    index = 0
+    pool = list(iterable)
+```
 
-答えは `3` です。
+`index` は、ここまでの番号を積み上げる変数です。`pool` は、まだ使っていない候補の一覧です。最初は、すべての要素が候補になります。
 
-### 各段階の意味
+### 2. 各位置で、候補の中の位置を求める
 
-- 最初に `b` を取りました。`b` は残り 3 つの中で 1 番目です。`a` で始まる並べ替え（2! = 2 通り）がすべて前にあります。
-- 次に `c` を取りました。残り `[a, c]` の中で 1 番目です。`ba...` で始まる 1 通りが前にあります。
-- 最後の `a` は残り 1 つの中で 0 番目です。
+```python:line-numbers=4587
+    for i, x in zip(range(len(pool), -1, -1), element):
+        r = pool.index(x)
+```
 
-前にある数を足すと、`1 × 2! + 1 × 1! + 0 × 0! = 3` です。589 行目の `index * i + r` は、この足し算をホーナー法で組み立てています。
+`zip` で、残りの候補の数を並べた値と、並べ替えの要素を組にして順に読みます。`pool.index(x)` で、今の要素が候補の何番目にあるかを求めます。
+
+### 3. 位置を積み上げて、候補から外す
+
+```python:line-numbers=4589
+        index = index * i + r
+        del pool[r]
+```
+
+`index * i + r` で、今の位置を次の桁として積み上げます。使った要素は `del` で候補から外し、次の位置の数を正しく数えられるようにします。
+
+### 4. 番号を返す
+
+```python:line-numbers=4592
+    return index
+```
+
+すべての要素を読み終えると、`index` が辞書順の番号になります。
 
 ## ここがすごい
 
-### 「自分より前にいくつあるか」を桁ごとに数える
+### `nth_permutation` の逆になっている
 
-ある並べ替えより辞書順で前にあるものは、
+`nth_permutation` は、番号を桁に分けて要素を選びます。この関数は、要素の選ばれた位置を桁として積み上げて、番号に戻します。2 つを並べると、往復の関係がはっきりします。
 
-- 先頭が自分より小さいもの（その数 × 残りの並べ方の数）
-- 先頭が同じで、2 番目が自分より小さいもの
-- ……
+### 全部の並べ替えを作らない
 
-の合計です。「残りの中で何番目か」（`pool.index(x)`）が「自分より小さいものの数」になるのは、`pool` を元の順番のまま保ち、使ったものを削除していくからです。
+並べ替えを全部作って、その中から探すのではありません。各要素の位置だけを順に求めるので、並べ替えの全体を作る必要はありません。ただし、一覧の検索と削除が毎回かかるので、要素が多いと遅くなります。
 
-### 割り算の逆はかけ算
+### 見つからない要素は例外で止める
 
-`nth_permutation` は `divmod` で番号を「各段階の位置」に分解しました。`permutation_index` はその逆で、「各段階の位置」をかけ算と足し算で番号に組み立てます。2 つの関数を並べて読むと、**階乗進数への変換と逆変換** になっていることがわかります。
-
-### 全部を数えない
-
-素直に `list(permutations(iterable)).index(element)` とすると n! 個を作ります。この方法なら、`index` と `del` を n 回するだけです。
+`pool.index` は、候補にない要素で `ValueError` を出します。与えられた並べ替えが正しくないと、すぐに分かります。
 
 ## まとめ
 
-- 並べ替えの番号は「各段階で、自分より小さい選択肢がいくつ残っていたか」から計算できる。
-- 桁ごとの値から数を組み立てるには、ホーナー法（`index * i + r`）が便利。
-- 番号 → 並べ替え（割り算）と、並べ替え → 番号（かけ算）は、ちょうど逆の操作になる。
+- 各位置で候補の中の位置を求め、階乗の進数のように積み上げると、辞書順の番号になる。
+- `nth_permutation` と組み合わせると、番号と並べ替えを行き来できる。
+- 候補にない要素は例外で知らせるので、誤った番号を返さない。

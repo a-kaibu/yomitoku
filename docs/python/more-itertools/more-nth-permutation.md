@@ -1,6 +1,6 @@
 ---
-title: 全部並べずに「n 番目の並べ替え」を直接作る、階乗進数の考え方
-description: more_itertools.nth_permutation は、並べ替えを辞書順に並べたときの n 番目を、すべてを生成せずに計算で求める。番号を階乗進数に直し、各桁を「残りの中の何番目を取るか」として使う。
+title: 全部並べずに、n 番目の並べ替えを階乗の桁で直接作る
+description: more_itertools.nth_permutation は、列から長さ r の並べ替えのうち、辞書順で index 番目のものを直接作る。全部を並べずに、index を階乗の進数（ファクトリアル進数）の桁に分けて、要素を 1 つずつ選ぶ。
 language: python
 project: more-itertools
 repo: https://github.com/more-itertools/more-itertools
@@ -11,17 +11,57 @@ file: more_itertools/more.py
 lines: [4340, 4373]
 function: nth_permutation
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 数値計算]
 ---
+
 ## ひとことで
 
-`nth_permutation(iterable, r, index)` は、`itertools.permutations(iterable, r)` が出す並べ替えのうち、**index 番目のものだけを直接求める** 関数です。
-`nth_permutation('abcde', 5, 10**0)` のように使い、10 個の要素の並べ替え（362 万通り以上）の何番目でも、全部を作らずに一瞬で答えます。
-番号を **階乗進数**（各桁の重みが 1!, 2!, 3!, … になる数の表し方）に直して、各桁を「残りの要素の何番目を取るか」として使います。
+`nth_permutation(iterable, r, index)` は、**列から長さ `r` の並べ替えを、辞書順で `index` 番目のものだけ直接作る** 関数です。
+`nth_permutation('ghijk', 2, 5)` は `('h', 'i')` を返します。全部の並べ替えを作らずに、答えを 1 つだけ取り出せます。
 
 ## コード
 
-```python:line-numbers=4340
+::: code-group
+
+```python:line-numbers=4340 [日本語訳]
+def nth_permutation(iterable, r, index):
+    """``list(permutations(iterable, r))[index]`` と同じ結果になる。
+
+    *iterable* の長さ *r* の部分列のうち、順番が大事なものは、
+    辞書順に並べられる。:func:`nth_permutation` は、
+    並び順で *index* 番目の部分列を、
+    前の部分列を計算せずに直接求める。
+
+        >>> nth_permutation('ghijk', 2, 5)
+        ('h', 'i')
+
+    *r* が負なら ``ValueError`` を出す。
+    *index* が範囲外なら ``IndexError`` を出す。
+    """
+    pool = list(iterable)
+    n = len(pool)
+    if r is None:
+        r = n
+    c = perm(n, r)
+
+    if index < 0:
+        index += c
+    if not 0 <= index < c:
+        raise IndexError
+
+    result = [0] * r
+    q = index
+    for d in range(n - r + 1, n + 1):
+        q, i = divmod(q, d)
+        result[n - d] = i
+        if q == 0:
+            break
+
+    return tuple(map(pool.pop, result))
+```
+
+```python:line-numbers=4340 [原文]
 def nth_permutation(iterable, r, index):
     """Equivalent to ``list(permutations(iterable, r))[index]```
 
@@ -58,65 +98,78 @@ def nth_permutation(iterable, r, index):
     return tuple(map(pool.pop, result))
 ```
 
-`perm(n, r)` は `math.perm` で、n 個から r 個を選んで並べる方法の数です。
+:::
 
 ## 前提知識
 
-- **並べ替え（順列）の数**: 3 個の要素を全部並べる方法は 3 × 2 × 1 = 6 通りです。
-- **`divmod(q, d)`**: 商と余りを同時に返します。
-- **`[0] * r`**: 0 を r 個並べたリストです。
-- **`pool.pop(i)`**: リストの i 番目を取り出して削除し、その値を返します。
-- **`map(pool.pop, result)`**: `result` の各値を順に `pool.pop` に渡します。`pool` は呼ぶたびに短くなります。
-- **負の index**: Python では -1 が最後を表すので、ここでも `index += c` で後ろから数えられるようにしています。
+- **辞書順**: 文字や数を、先頭から順に比べて並べる順番です。`ab` は `ba` より前にきます。
+- **順列の数 `perm(n, r)`**: `n` 個から `r` 個を選んで並べる方法の数です。
+- **`divmod`**: 割り算の商と余りを同時に返す組み込み関数です。
+- **階乗の進数**: 各桁の位が、階乗の値で決まる数の表し方です。桁ごとに、残りの選択肢の数が決まります。
 
 ## 何をしているか
 
-`pool = ['a', 'b', 'c']`、`r = 3`、`index = 3` で追います。辞書順の並べ替えは `abc, acb, bac, bca, cab, cba` なので、3 番目（0 始まり）は `bca` のはずです。
+### 1. 候補をリストにして、全体の数を求める
 
-### 1. 範囲の確認（4354〜4363 行目）
+```python:line-numbers=4354
+    pool = list(iterable)
+    n = len(pool)
+    if r is None:
+        r = n
+    c = perm(n, r)
+```
 
-並べ替えの総数は `perm(3, 3) = 6`。index が 0〜5 に入っているか確かめます。
+`pool` は並べる候補の一覧です。`perm(n, r)` で、全部で何通りの並べ替えがあるかを求めます。`r` を省略すると、全要素の並べ替えになります。
 
-### 2. 番号を「選ぶ位置」に分解する（4365〜4371 行目）
+### 2. 番号の範囲を確かめる
 
-`d` を 1, 2, 3 と増やしながら `divmod` していきます。
+```python:line-numbers=4360
+    if index < 0:
+        index += c
+    if not 0 <= index < c:
+        raise IndexError
+```
 
-| d | divmod(q, d) | result |
-| --- | --- | --- |
-| 1 | (3, 0) | result[2] = 0 |
-| 2 | (1, 1) | result[1] = 1 |
-| 3 | (0, 1) | result[0] = 1 |
+負の番号は、後ろから数えた番号として扱います。それでも範囲の外なら、`IndexError` で止めます。
 
-`result = [1, 1, 0]` は、「最初は残りの 1 番目、次は残りの 1 番目、最後は残りの 0 番目を取る」という意味です。
+### 3. 番号を桁に分けて、要素を選ぶ
 
-### 3. 順に取り出す（4373 行目）
+```python:line-numbers=4365
+    result = [0] * r
+    q = index
+    for d in range(n - r + 1, n + 1):
+        q, i = divmod(q, d)
+        result[n - d] = i
+        if q == 0:
+            break
+```
 
-- `pool.pop(1)` → `'b'`（残り `['a', 'c']`）
-- `pool.pop(1)` → `'c'`（残り `['a']`）
-- `pool.pop(0)` → `'a'`
+`divmod(q, d)` で、番号を `d` で割った商と余りに分けます。余りが、候補の中から選ぶ位置になります。商が 0 になったら、残りの桁は 0 なので終わります。
 
-結果は `('b', 'c', 'a')` で、予想どおりです。
+### 4. 選んだ位置の要素を取り出す
+
+```python:line-numbers=4373
+    return tuple(map(pool.pop, result))
+```
+
+選んだ位置を、候補の一覧から `pop` で順に取り出します。取り出した要素を並べたものが、答えです。
 
 ## ここがすごい
 
-### 番号と並べ替えを 1 対 1 に対応させる
+### 全部を作らずに、直接答えを出す
 
-3 個の並べ替えでは、先頭の選び方が 3 通り、それぞれに残りの並べ方が 2! = 2 通りあります。つまり **index ÷ 2! の商が先頭の位置**、余りが「残りの中での番号」です。これを繰り返すと、番号の各桁が「残りの中の何番目を取るか」になります。これは階乗進数（下の桁から 1, 2, 3, … で割っていく表し方）そのものです。
+並べ替えを全部作って数える方法は、要素が多いと数が爆発します。この関数は、番号から直接、各位置の選び方を決めます。
 
-### 全部作らずに答えが出る
+### 番号が、そのまま選び方になる
 
-素直に `list(permutations(...))[index]` とすると、n! 個を全部作ります。10 個なら 362 万個、20 個なら 2.4 × 10^18 個で、とても作れません。この方法なら、割り算を r 回するだけです。
+番号を階乗の進数に直すと、各桁が「残りの候補のどれを選ぶか」になります。数の表し方を、並べ替えの選び方として使っています。
 
-### 早めに打ち切る
+### 候補を取り出して減らす
 
-4370 行目で `q == 0` になったら、残りの桁はすべて 0（「残りの先頭を取る」）なので、ループを抜けます。`result` は最初から 0 で埋めてあるので、そのままで正しく動きます。
-
-### r < n にも対応
-
-r 個だけ選ぶ場合は、`d` を `n - r + 1` から始めることで、選ばない部分の重みを正しく扱っています。
+`pop` で選ばれた要素を一覧から取り除くので、次の桁の選択肢は自然に少なくなります。重複を避ける処理を別に書く必要がありません。
 
 ## まとめ
 
-- 並べ替えの番号は、階乗進数に直すと「各段階で何番目を取るか」に分解できる。
-- 全部を生成しなくても、数え上げの構造がわかれば n 番目を直接計算できる。
-- 残りの桁が 0 なら打ち切れるように、結果を 0 で初期化しておく。
+- 番号を階乗の進数に分けると、並べ替えの選び方が直接決まる。
+- 全部を作らないので、大きな列でも答えを 1 つだけ速く求められる。
+- 取り出した要素を一覧から除くと、重複を避けながら選べる。
