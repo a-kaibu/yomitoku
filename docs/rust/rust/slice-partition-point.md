@@ -11,6 +11,7 @@ file: library/core/src/slice/mod.rs
 lines: [4871, 4877]
 function: <[T]>::partition_point
 difficulty: 2
+format: 2
 tags: [探索, API設計, クロージャ, 標準ライブラリ]
 ---
 
@@ -43,7 +44,12 @@ C++ の `std::partition_point` や `lower_bound` にあたる機能を、たっ�
 
 ## 何をしているか
 
-### 1. 条件を比較結果に読み替える（4875 行目）
+### 1. 条件を比較結果に読み替える
+
+```rust:line-numbers=4875
+        self.binary_search_by(const |x| if pred(x) { Less } else { Greater })
+```
+
 
 `pred(x)` が `true` なら `Less`、`false` なら `Greater` を返すクロージャを作ります。
 二分探索から見ると、「条件を満たす要素はすべて目的より小さく、満たさない要素はすべて目的より大きい」ように見えます。目的の値は、ちょうど境目にある「どこにも存在しない値」です。
@@ -54,7 +60,12 @@ C++ の `std::partition_point` や `lower_bound` にあたる機能を、たっ�
 
 `[1, 2, 3, 4, 5, 6]` で「4 より小さい」なら、比較結果は `[Less, Less, Less, Greater, Greater, Greater]` に見え、挿入位置は `3` です。
 
-### 3. 位置を取り出す（4876 行目）
+### 3. 位置を取り出す
+
+```rust:line-numbers=4876
+            .unwrap_or_else(const |i| i)
+```
+
 
 `unwrap_or_else(|i| i)` で `Err(3)` から `3` を取り出します。`Ok` になることは実際にはありませんが、型の上では両方を扱う必要があるので、`Ok` のときもその値を返す形にしています。
 
