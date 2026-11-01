@@ -42,9 +42,9 @@ export const TAGS = [
  * 例: `MIT OR Apache-2.0`, `GPL-2.0-only WITH Classpath-exception-2.0`, `(MIT OR Apache-2.0) AND BSD-3-Clause`
  */
 export const LICENSES = [
-  // パーミッシブ
+  // パーミッシブ（blessing は SQLite のパブリックドメイン宣言）
   'MIT', 'MIT-0', 'X11', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'BSD-2-Clause-Patent',
-  'ISC', '0BSD', 'Zlib', 'BSL-1.0', 'Unlicense', 'CC0-1.0', 'NCSA', 'UPL-1.0', 'BlueOak-1.0.0',
+  'ISC', '0BSD', 'Zlib', 'BSL-1.0', 'Unlicense', 'CC0-1.0', 'blessing', 'NCSA', 'UPL-1.0', 'BlueOak-1.0.0',
   'Unicode-3.0', 'Unicode-DFS-2016', 'PostgreSQL', 'curl', 'OpenSSL', 'SSLeay', 'libpng-2.0', 'bzip2-1.0.6',
   'PSF-2.0', 'Python-2.0', 'Ruby', 'Artistic-2.0', 'MS-PL', 'W3C', 'AFL-3.0', 'Vim', 'TCL',
   // 弱いコピーレフト
