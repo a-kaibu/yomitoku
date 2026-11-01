@@ -10,7 +10,7 @@ commit: "669f6185187f8e1b5857a25c4bbe6c34a3a02b96"
 file: Sources/IntegerUtilities/DivideWithRounding.swift
 lines: [39, 69]
 function: "BinaryInteger.divided(by:rounding:)"
-difficulty: 4
+difficulty: 3
 tags: [数値計算, 型システム, 防御的プログラミング]
 format: 2
 ---
