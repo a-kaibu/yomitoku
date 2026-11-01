@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [768, 802]
 function: "insertSorted"
 difficulty: 2
+format: 2
 tags: [探索, ビット演算, データ構造]
 ---
 
@@ -76,18 +77,65 @@ export function insertSorted<T>(
 
 ## 何をしているか
 
-### 1. 空なら追加するだけ（775〜778 行目）
+### 1. 空なら追加するだけ
 
-### 2. 二分探索（780 行目）
+```ts:line-numbers=775
+    if (array.length === 0) {
+        array.push(insert);
+        return true;
+    }
+```
+### 2. 二分探索
 
-### 3. 見つからなかった場合（781〜794 行目）
+```ts:line-numbers=780
+    const insertIndex = binarySearch(array, insert, identity, compare);
+```
+### 3. 見つからなかった場合
 
+```ts:line-numbers=781
+    if (insertIndex < 0) {
+        if (equalityComparer && !allowDuplicates) {
+            const idx = ~insertIndex;
+            if (idx > 0 && equalityComparer(insert, array[idx - 1])) {
+                return false;
+            }
+            if (idx < array.length && equalityComparer(insert, array[idx])) {
+                array.splice(idx, 1, insert);
+                return true;
+            }
+        }
+        array.splice(~insertIndex, 0, insert);
+        return true;
+    }
+```
 `insertIndex` が負なので、`~insertIndex` が挿入位置です。`[1, 3, 5]` に `4` を探すと、`4` は位置 2 に入るべきなので `~2 = -3` が返り、`~(-3) = 2` で位置が取り出せます。
 
-重複を許さない設定で `equalityComparer` があるときは、挿入位置の前後に「大小では違うが、等しいとみなすもの」がないかも確かめます（782〜791 行目）。前にあれば挿入しない、後ろにあれば置き換えます。
+重複を許さない設定で `equalityComparer` があるときは、挿入位置の前後に「大小では違うが、等しいとみなすもの」がないかも確かめます。前にあれば挿入しない、後ろにあれば置き換えます。
 
-### 4. 見つかった場合（796〜801 行目）
+```ts:line-numbers=782
+        if (equalityComparer && !allowDuplicates) {
+            const idx = ~insertIndex;
+            if (idx > 0 && equalityComparer(insert, array[idx - 1])) {
+                return false;
+            }
+            if (idx < array.length && equalityComparer(insert, array[idx])) {
+                array.splice(idx, 1, insert);
+                return true;
+            }
+        }
+```
 
+
+### 4. 見つかった場合
+
+```ts:line-numbers=796
+    if (allowDuplicates) {
+        array.splice(insertIndex, 0, insert);
+        return true;
+    }
+
+    return false;
+```
 重複を許すなら挿入し、許さないなら何もしないで `false` を返します。
 
 ## ここがすごい

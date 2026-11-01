@@ -11,6 +11,7 @@ file: src/string/escape.ts
 lines: [1, 24]
 function: "escape"
 difficulty: 1
+format: 2
 tags: [セキュリティ, 文字列処理, イディオム]
 ---
 
@@ -27,7 +28,36 @@ escape('<b>"Tom & Jerry"</b>')
 
 ## コード
 
-```ts:line-numbers=1
+::: code-group
+
+```ts:line-numbers=1 [日本語訳]
+const htmlEscapes: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+/**
+ * * 「&」「<」「>」「"」「'」の 5 文字を、対応する HTML の実体参照に変換する。
+ * * たとえば「<」は「&lt;」になる。
+ *
+ * * @param str エスケープする文字列。
+ * * @returns エスケープされた文字列を返す。
+ *
+ * @example
+ * escape('This is a <div> element.'); // returns 'This is a &lt;div&gt; element.'
+ * escape('This is a "quote"'); // returns 'This is a &quot;quote&quot;'
+ * escape("This is a 'quote'"); // returns 'This is a &#39;quote&#39;'
+ * escape('This is a & symbol'); // returns 'This is a &amp; symbol'
+ */
+export function escape(str: string): string {
+  return str.replace(/[&<>"']/g, match => htmlEscapes[match]);
+}
+```
+
+```ts:line-numbers=1 [原文]
 const htmlEscapes: Record<string, string> = {
   '&': '&amp;',
   '<': '&lt;',
@@ -54,6 +84,8 @@ export function escape(str: string): string {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Record<string, string>`**: 「キーも値も文字列のオブジェクト」という型です。対応表に使っています。
@@ -64,12 +96,26 @@ export function escape(str: string): string {
 
 ## 何をしているか
 
-### 1. 対応表（1〜7 行目）
+### 1. 対応表
 
+```ts:line-numbers=1
+const htmlEscapes: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+```
 置き換える 5 文字と、その置き換え先をオブジェクトにまとめています。
 
-### 2. 置き換え（22〜24 行目）
+### 2. 置き換え
 
+```ts:line-numbers=22
+export function escape(str: string): string {
+  return str.replace(/[&<>"']/g, match => htmlEscapes[match]);
+}
+```
 正規表現で 5 文字のどれかを探し、見つかるたびに対応表から置き換え先を返します。
 
 ```

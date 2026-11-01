@@ -11,6 +11,7 @@ file: src/compiler/path.ts
 lines: [884, 918]
 function: "comparePathsWorker"
 difficulty: 2
+format: 2
 tags: [最適化, ファイル, ソート]
 ---
 
@@ -18,11 +19,51 @@ tags: [最適化, ファイル, ソート]
 
 `comparePathsWorker(a, b, componentComparer)` は、2 つのファイルパスの **並び順を比べる** 関数です。並べ替えや重複の判定に使われます。
 
-パスの比較は、`/a/b/../c` と `/a/c` を同じとみなすなど、正しくやろうとすると正規化が必要で重くなります。そこでこの関数は、**本当に必要になるまで重い処理を後回しにする** ように、2 段階の近道を用意しています（889 行目、898 行目のコメント）。
+パスの比較は、`/a/b/../c` と `/a/c` を同じとみなすなど、正しくやろうとすると正規化が必要で重くなります。そこでこの関数は、**本当に必要になるまで重い処理を後回しにする** ように、2 段階の近道を用意しています（コード中の「NOTE: Performance optimization」のコメント）。
 
 ## コード
 
-```ts:line-numbers=884
+::: code-group
+
+```ts:line-numbers=884 [日本語訳]
+function comparePathsWorker(a: string, b: string, componentComparer: (a: string, b: string) => Comparison) {
+    if (a === b) return Comparison.EqualTo;
+    if (a === undefined) return Comparison.LessThan;
+    if (b === undefined) return Comparison.GreaterThan;
+
+    // // 性能の最適化: ルートが違えば、パスの正規化が不要なので即座に比較を終える。
+    // //     パスの簡略化（正規化）は不要。
+    const aRoot = a.substring(0, getRootLength(a));
+    const bRoot = b.substring(0, getRootLength(b));
+    const result = compareStringsCaseInsensitive(aRoot, bRoot);
+    if (result !== Comparison.EqualTo) {
+        return result;
+    }
+
+    // // 性能の最適化: ルート以外に相対的な部品がなければ、文字列比較で済ませる。
+    // //     ルート以外に . や .. が含まれないなら、そのまま比べる。
+    const aRest = a.substring(aRoot.length);
+    const bRest = b.substring(bRoot.length);
+    if (!relativePathSegmentRegExp.test(aRest) && !relativePathSegmentRegExp.test(bRest)) {
+        return componentComparer(aRest, bRest);
+    }
+
+    // // 相対的な部品がある。両方を正規化し、部品ごとに遅い比較を行う。
+    // // 部品ごとの比較。
+    const aComponents = reducePathComponents(getPathComponents(a));
+    const bComponents = reducePathComponents(getPathComponents(b));
+    const sharedLength = Math.min(aComponents.length, bComponents.length);
+    for (let i = 1; i < sharedLength; i++) {
+        const result = componentComparer(aComponents[i], bComponents[i]);
+        if (result !== Comparison.EqualTo) {
+            return result;
+        }
+    }
+    return compareValues(aComponents.length, bComponents.length);
+}
+```
+
+```ts:line-numbers=884 [原文]
 function comparePathsWorker(a: string, b: string, componentComparer: (a: string, b: string) => Comparison) {
     if (a === b) return Comparison.EqualTo;
     if (a === undefined) return Comparison.LessThan;
@@ -60,30 +101,64 @@ function comparePathsWorker(a: string, b: string, componentComparer: (a: string,
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **ルート**: パスの最初の部分です。`/`、`c:/`、`http://example.com/` など。`getRootLength` はその長さを返す同じファイルの関数です。
 - **`Comparison`**: 比較の結果を表す列挙型で、`LessThan`（前）、`EqualTo`（同じ）、`GreaterThan`（後ろ）があります。
 - **`componentComparer`**: 部品を比べる関数です。大文字・小文字を区別するかどうかで、呼び出し側が別の関数を渡します。
-- **`relativePathSegmentRegExp`**: `//`、`.`、`..` の部品を含むかを調べる正規表現です（882 行目）。
+- **`relativePathSegmentRegExp`**: `//`、`.`、`..` の部品を含むかを調べる正規表現です。
 - **`reducePathComponents(getPathComponents(a))`**: パスを部品の配列に分けてから、`.` と `..` を取り除きます。
 
 ## 何をしているか
 
-### 0. 簡単な場合（885〜887 行目）
+### 0. 簡単な場合
 
+```ts:line-numbers=885
+    if (a === b) return Comparison.EqualTo;
+    if (a === undefined) return Comparison.LessThan;
+    if (b === undefined) return Comparison.GreaterThan;
+```
 まったく同じ文字列なら等しい、`undefined` は先に並べます。
 
-### 1. 近道その 1: ルートを比べる（891〜896 行目）
+### 1. 近道その 1: ルートを比べる
 
+```ts:line-numbers=891
+    const aRoot = a.substring(0, getRootLength(a));
+    const bRoot = b.substring(0, getRootLength(b));
+    const result = compareStringsCaseInsensitive(aRoot, bRoot);
+    if (result !== Comparison.EqualTo) {
+        return result;
+    }
+```
 ルートが違えば、それで順番が決まります。ルートは大文字・小文字を区別せずに比べます（Windows のドライブ名 `C:` と `c:` は同じだからです）。
 
-### 2. 近道その 2: 相対的な部品がなければ文字列で比べる（900〜904 行目）
+### 2. 近道その 2: 相対的な部品がなければ文字列で比べる
 
+```ts:line-numbers=900
+    const aRest = a.substring(aRoot.length);
+    const bRest = b.substring(bRoot.length);
+    if (!relativePathSegmentRegExp.test(aRest) && !relativePathSegmentRegExp.test(bRest)) {
+        return componentComparer(aRest, bRest);
+    }
+```
 ルート以外の部分に `.` や `..` や `//` が 1 つもなければ、正規化しても文字列は変わりません。なので、そのまま文字列として比べます。
 
-### 3. 最後の手段: 正規化して部品ごとに比べる（908〜917 行目）
+### 3. 最後の手段: 正規化して部品ごとに比べる
 
+```ts:line-numbers=908
+    const aComponents = reducePathComponents(getPathComponents(a));
+    const bComponents = reducePathComponents(getPathComponents(b));
+    const sharedLength = Math.min(aComponents.length, bComponents.length);
+    for (let i = 1; i < sharedLength; i++) {
+        const result = componentComparer(aComponents[i], bComponents[i]);
+        if (result !== Comparison.EqualTo) {
+            return result;
+        }
+    }
+    return compareValues(aComponents.length, bComponents.length);
+```
 部品の配列にして正規化し、0 番目（ルート、比較済み）を除いて 1 つずつ比べます。共通の部分がすべて同じなら、部品が少ないほうを先にします。
 
 ```

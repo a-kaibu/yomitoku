@@ -11,6 +11,7 @@ file: src/function/flow.ts
 lines: [161, 171]
 function: "flow"
 difficulty: 1
+format: 2
 tags: [関数型, ジェネリクス, イディオム]
 ---
 
@@ -55,12 +56,20 @@ export function flow(...funcs: Array<(...args: any[]) => any>): (...args: any[])
 
 ## 何をしているか
 
-### 1. 最初の関数を実行する（163 行目）
+### 1. 最初の関数を実行する
 
+```ts:line-numbers=163
+    let result = funcs.length ? funcs[0].apply(this, args) : args[0];
+```
 最初の関数 `funcs[0]` には、作った関数に渡された **引数をすべて** `apply` で渡します。関数が 1 つも渡されていなければ、最初の引数をそのまま結果にします（何もしない関数として振る舞う）。
 
-### 2. 残りを順に通す（165〜167 行目）
+### 2. 残りを順に通す
 
+```ts:line-numbers=165
+    for (let i = 1; i < funcs.length; i++) {
+      result = funcs[i].call(this, result);
+    }
+```
 2 番目以降の関数には、前の結果を **1 つだけ** `call` で渡し、結果を上書きしていきます。
 
 上の `toSlug` なら次のように進みます。
@@ -69,8 +78,11 @@ export function flow(...funcs: Array<(...args: any[]) => any>): (...args: any[])
 '  Hello World ' → trim → 'Hello World' → toLowerCase → 'hello world' → replace → 'hello-world'
 ```
 
-### 3. 最後の結果を返す（169 行目）
+### 3. 最後の結果を返す
 
+```ts:line-numbers=169
+    return result;
+```
 ## ここがすごい
 
 - **入口だけ引数を複数受け取れる**: 関数は値を 1 つしか返せないので、2 番目以降には 1 つしか渡せません。しかし入口は自由なので、`flow((a: number, b: number) => a + b, (n) => n * 2)` のように複数の引数から始められます。この非対称さをきちんと実装と型の両方に反映しています。

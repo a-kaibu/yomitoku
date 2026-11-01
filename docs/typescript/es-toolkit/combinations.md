@@ -11,6 +11,7 @@ file: src/array/combinations.ts
 lines: [32, 75]
 function: "combinations"
 difficulty: 2
+format: 2
 tags: [アルゴリズム, 再帰, イテレータ]
 ---
 
@@ -84,21 +85,97 @@ export function combinations<T>(arr: readonly T[], r: number): T[][] {
 
 ## 何をしているか
 
-### 1. 特別な場合（33〜45 行目）
+### 1. 特別な場合
 
+```ts:line-numbers=33
+  if (!Number.isInteger(r) || r < 0) {
+    throw new Error('r must be a non-negative integer.');
+  }
+
+  const n = arr.length;
+
+  if (r > n) {
+    return [];
+  }
+
+  if (r === 0) {
+    return [[]];
+  }
+```
 `r` が負や小数ならエラー、`r` が要素数より大きければ選べないので空配列、`r = 0` なら「何も選ばない」が 1 通りなので `[[]]` を返します。
 
-### 2. 最初の組み合わせ（47〜50 行目）
+### 2. 最初の組み合わせ
 
+```ts:line-numbers=47
+  const indices = Array(r);
+  for (let i = 0; i < r; i++) {
+    indices[i] = i;
+  }
+```
 添字の配列 `indices` を `[0, 1, …, r-1]` にします。これは「先頭から `r` 個を選んだ」状態で、辞書順でいちばん最初の組み合わせです。
 
-### 3. 今の組み合わせを記録して、次へ進む（54〜74 行目）
+### 3. 今の組み合わせを記録して、次へ進む
 
-`indices` が指す要素を取り出して結果に追加します（55〜59 行目）。そのあと、次の組み合わせに進めます。
+```ts:line-numbers=54
+  while (true) {
+    const tuple: T[] = Array(r);
+    for (let i = 0; i < r; i++) {
+      tuple[i] = arr[indices[i]];
+    }
+    result.push(tuple);
 
-- **右から見て、まだ増やせる位置を探す**（61〜64 行目）。位置 `i` の添字が取れる最大値は `i + n - r` です。たとえば `n = 4, r = 2` なら、右端（`i = 1`）は最大 3、左（`i = 0`）は最大 2 です。最大に達している位置は増やせないので飛ばします。
-- 全部が最大なら終わり（66〜68 行目）。
-- 見つけた位置を 1 増やし、その右側を「すぐ隣の値」で詰め直します（70〜73 行目）。
+    let i = r - 1;
+    while (i >= 0 && indices[i] === i + n - r) {
+      i--;
+    }
+
+    if (i < 0) {
+      return result;
+    }
+
+    indices[i]++;
+    for (let j = i + 1; j < r; j++) {
+      indices[j] = indices[j - 1] + 1;
+    }
+  }
+```
+`indices` が指す要素を取り出して結果に追加します。そのあと、次の組み合わせに進めます。
+
+```ts:line-numbers=55
+    const tuple: T[] = Array(r);
+    for (let i = 0; i < r; i++) {
+      tuple[i] = arr[indices[i]];
+    }
+    result.push(tuple);
+```
+
+
+- **右から見て、まだ増やせる位置を探す**。位置 `i` の添字が取れる最大値は `i + n - r` です。たとえば `n = 4, r = 2` なら、右端（`i = 1`）は最大 3、左（`i = 0`）は最大 2 です。最大に達している位置は増やせないので飛ばします。
+
+```ts:line-numbers=61
+    let i = r - 1;
+    while (i >= 0 && indices[i] === i + n - r) {
+      i--;
+    }
+```
+
+- 全部が最大なら終わり。
+
+```ts:line-numbers=66
+    if (i < 0) {
+      return result;
+    }
+```
+
+- 見つけた位置を 1 増やし、その右側を「すぐ隣の値」で詰め直します。
+
+```ts:line-numbers=70
+    indices[i]++;
+    for (let j = i + 1; j < r; j++) {
+      indices[j] = indices[j - 1] + 1;
+    }
+```
+
 
 `n = 4, r = 2` で追うと、`indices` は次のように変わります。
 

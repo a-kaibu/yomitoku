@@ -11,6 +11,7 @@ file: src/string/capitalize.ts
 lines: [13, 17]
 function: "capitalize"
 difficulty: 2
+format: 2
 tags: [型システム, 文字列処理, ジェネリクス]
 ---
 
@@ -22,7 +23,7 @@ tags: [型システム, 文字列処理, ジェネリクス]
 capitalize('hELLO') // 'Hello'
 ```
 
-実行時の処理は 1 行ですが、面白いのは 17 行目の型です。TypeScript の型の機能だけで同じ変換を計算し、**`capitalize('hello')` の戻り値の型を、ただの `string` ではなく `'Hello'` という具体的な型にしています**。
+実行時の処理は 1 行ですが、面白いのは最後の行の型定義です。TypeScript の型の機能だけで同じ変換を計算し、**`capitalize('hello')` の戻り値の型を、ただの `string` ではなく `'Hello'` という具体的な型にしています**。
 
 ## コード
 
@@ -45,12 +46,20 @@ type Capitalize<T extends string> = T extends `${infer F}${infer R}` ? `${Upperc
 
 ## 何をしているか
 
-### 実行時の処理（13〜15 行目）
+### 実行時の処理
 
+```ts:line-numbers=13
+export function capitalize<T extends string>(str: T): Capitalize<T> {
+  return (str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()) as Capitalize<T>;
+}
+```
 `charAt(0)` で先頭の 1 文字を取り大文字に、`slice(1)` で 2 文字目以降を取り小文字にして、つなげます。空文字列でも `charAt(0)` は `''` を返すので、エラーにはなりません。
 
-### 型の計算（17 行目）
+### 型の計算
 
+```ts:line-numbers=17
+type Capitalize<T extends string> = T extends `${infer F}${infer R}` ? `${Uppercase<F>}${Lowercase<R>}` : T;
+```
 ```ts
 type Capitalize<T extends string> =
   T extends `${infer F}${infer R}` ? `${Uppercase<F>}${Lowercase<R>}` : T;

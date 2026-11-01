@@ -11,6 +11,7 @@ file: src/math/range.ts
 lines: [57, 75]
 function: "range"
 difficulty: 1
+format: 2
 tags: [数値計算, 最適化, API設計]
 ---
 
@@ -61,16 +62,30 @@ export function range(start: number, end?: number, step = 1): number[] {
 
 ## 何をしているか
 
-### 1. 引数 1 個の呼び方に対応（58〜61 行目）
+### 1. 引数 1 個の呼び方に対応
 
+```ts:line-numbers=58
+  if (end == null) {
+    end = start;
+    start = 0;
+  }
+```
 `range(4)` のように終了だけを渡されたら、それを `end` にずらして `start` を 0 にします。
 
-### 2. 刻み幅を確認（63〜65 行目）
+### 2. 刻み幅を確認
 
+```ts:line-numbers=63
+  if (!Number.isInteger(step) || step === 0) {
+    throw new Error(`The step value must be a non-zero integer.`);
+  }
+```
 刻み幅が 0 だと永遠に終わらないので、整数でない場合と合わせてエラーにします。
 
-### 3. 長さを計算（67 行目）
+### 3. 長さを計算
 
+```ts:line-numbers=67
+  const length = Math.max(Math.ceil((end - start) / step), 0);
+```
 `(end - start) / step` を切り上げると、作られる数の個数になります。
 
 ```
@@ -82,8 +97,13 @@ range(5, 0)    : (0 - 5) / 1 = -5 → max で 0 個 []
 
 負になる場合（向きと刻み幅の符号が合わない）は `Math.max(…, 0)` で 0 個にします。
 
-### 4. 埋める（70〜72 行目）
+### 4. 埋める
 
+```ts:line-numbers=70
+  for (let i = 0; i < length; i++) {
+    result[i] = start + i * step;
+  }
+```
 `i` 番目の値は `start + i * step` です。足し算を繰り返すのではなく、毎回この式で直接求めています。
 
 ## ここがすごい

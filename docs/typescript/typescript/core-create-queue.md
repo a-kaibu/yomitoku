@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [1569, 1608]
 function: "createQueue"
 difficulty: 2
+format: 2
 tags: [データ構造, 最適化, メモリ管理]
 ---
 
@@ -22,7 +23,52 @@ tags: [データ構造, 最適化, メモリ管理]
 
 ## コード
 
-```ts:line-numbers=1569
+::: code-group
+
+```ts:line-numbers=1569 [日本語訳]
+export function createQueue<T>(items?: readonly T[]): Queue<T> {
+    const elements: (T | undefined)[] = items?.slice() ?? [];
+    let headIndex = 0;
+
+    function isEmpty() {
+        return headIndex === elements.length;
+    }
+
+    function enqueue(...items: T[]) {
+        elements.push(...items);
+    }
+
+    function dequeue(): T {
+        if (isEmpty()) {
+            throw new Error("Queue is empty");
+        }
+
+        const result = elements[headIndex] as T;
+        elements[headIndex] = undefined; // elements[headIndex] = undefined; // 取り出した要素を参照し続けないようにする
+        headIndex++;
+
+        // // キューの半分以上が空になったら、残りの要素を先頭へ詰める
+        // // 配列を縮める（節約できる枠が 100 未満なら行わない）
+        if (headIndex > 100 && headIndex > (elements.length >> 1)) {
+            const newLength = elements.length - headIndex;
+            elements.copyWithin(/*target*/ 0, /*start*/ headIndex);
+
+            elements.length = newLength;
+            headIndex = 0;
+        }
+
+        return result;
+    }
+
+    return {
+        enqueue,
+        dequeue,
+        isEmpty,
+    };
+}
+```
+
+```ts:line-numbers=1569 [原文]
 export function createQueue<T>(items?: readonly T[]): Queue<T> {
     const elements: (T | undefined)[] = items?.slice() ?? [];
     let headIndex = 0;
@@ -65,6 +111,8 @@ export function createQueue<T>(items?: readonly T[]): Queue<T> {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **クロージャ**: 関数の中で作った関数は、外側の変数（ここでは `elements` と `headIndex`）を覚えていて、あとから読み書きできます。このキューはクラスではなく、クロージャで状態を隠しています。
@@ -75,11 +123,59 @@ export function createQueue<T>(items?: readonly T[]): Queue<T> {
 
 ## 何をしているか
 
-### 取り出し（1581〜1601 行目）
+### 取り出し
 
-1. 空ならエラー（1582〜1584 行目）。
-2. 先頭の位置の値を取り出し、その場所を `undefined` にして、先頭の位置を 1 進めます（1586〜1588 行目）。
-3. **先頭の位置が 100 を超え、かつ配列の半分を超えていたら**、残りの要素を前に詰めて、配列を縮めます（1592〜1598 行目）。
+```ts:line-numbers=1581
+    function dequeue(): T {
+        if (isEmpty()) {
+            throw new Error("Queue is empty");
+        }
+
+        const result = elements[headIndex] as T;
+        elements[headIndex] = undefined; // Don't keep referencing dequeued item
+        headIndex++;
+
+        // If more than half of the queue is empty, copy the remaining elements to the
+        // front and shrink the array (unless we'd be saving fewer than 100 slots)
+        if (headIndex > 100 && headIndex > (elements.length >> 1)) {
+            const newLength = elements.length - headIndex;
+            elements.copyWithin(/*target*/ 0, /*start*/ headIndex);
+
+            elements.length = newLength;
+            headIndex = 0;
+        }
+
+        return result;
+    }
+```
+1. 空ならエラー。
+
+```ts:line-numbers=1582
+        if (isEmpty()) {
+            throw new Error("Queue is empty");
+        }
+```
+
+2. 先頭の位置の値を取り出し、その場所を `undefined` にして、先頭の位置を 1 進めます。
+
+```ts:line-numbers=1586
+        const result = elements[headIndex] as T;
+        elements[headIndex] = undefined; // Don't keep referencing dequeued item
+        headIndex++;
+```
+
+3. **先頭の位置が 100 を超え、かつ配列の半分を超えていたら**、残りの要素を前に詰めて、配列を縮めます。
+
+```ts:line-numbers=1592
+        if (headIndex > 100 && headIndex > (elements.length >> 1)) {
+            const newLength = elements.length - headIndex;
+            elements.copyWithin(/*target*/ 0, /*start*/ headIndex);
+
+            elements.length = newLength;
+            headIndex = 0;
+        }
+```
+
 
 ```
 elements: [a, b, c, d]  headIndex: 0
@@ -93,7 +189,7 @@ copyWithin で [c, d, …] に詰め直し、headIndex = 0
 
 - **取り出しはほぼいつも O(1)**: ふだんは位置の数字を進めるだけです。詰め直しは時々起きるだけなので、全体を平均すると、1 回の取り出しにかかる時間は要素数に関係なく一定になります（「償却 O(1)」と呼ばれます）。
 - **詰め直しの条件が絶妙**: 「半分を超えたら」という条件なので、詰め直しのコピーの量は、それまでに取り出した数より必ず少なくなります。また「100 を超えたら」という条件で、小さなキューで頻繁に詰め直す無駄を避けています。
-- **取り出した場所を `undefined` に**: 1587 行目のコメントのとおり、取り出したあとも配列が値を参照し続けると、そのオブジェクトがメモリから解放されません（ガベージコレクションの対象にならない）。明示的に消すことで、メモリリークを防いでいます。
+- **取り出した場所を `undefined` に**: `// Don't keep referencing dequeued item`（取り出した要素を参照し続けない）というコメントのとおり、取り出したあとも配列が値を参照し続けると、そのオブジェクトがメモリから解放されません（ガベージコレクションの対象にならない）。明示的に消すことで、メモリリークを防いでいます。
 - **配列のまま**: 連結リストと違ってノードのオブジェクトを作らないので、メモリの使い方がコンパクトです。
 
 ## まとめ

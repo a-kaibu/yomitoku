@@ -11,6 +11,7 @@ file: src/function/curry.ts
 lines: [159, 179]
 function: "curry"
 difficulty: 2
+format: 2
 tags: [関数型, 再帰, クロージャ]
 ---
 
@@ -63,17 +64,54 @@ function makeCurry<F extends (...args: any) => any>(origin: F, argsLength: numbe
 
 ## 何をしているか
 
-### 1. 引数が 0 個か 1 個なら何もしない（160〜162 行目）
+### 1. 引数が 0 個か 1 個なら何もしない
 
+```ts:line-numbers=160
+  if (func.length === 0 || func.length === 1) {
+    return func;
+  }
+```
 もともと 1 つずつしか引数を取らないので、変換は不要です。そのまま返します。
 
-### 2. 最初の引数を受け取る関数を返す（164〜166 行目）
+### 2. 最初の引数を受け取る関数を返す
 
+```ts:line-numbers=164
+  return function (arg: any) {
+    return makeCurry(func, func.length, [arg]);
+  };
+```
 最初の引数 `arg` を受け取ったら、`makeCurry` に「元の関数」「必要な引数の数」「ここまでの引数 `[arg]`」を渡します。
 
-### 3. 揃ったら実行、まだなら次を待つ（169〜179 行目）
+### 3. 揃ったら実行、まだなら次を待つ
 
-`makeCurry` は、集まった引数が必要な数に達していれば元の関数を呼びます（170〜171 行目）。足りなければ、次の引数を受け取って `[...args, arg]` で 1 つ増やし、自分自身をもう一度呼ぶ関数を返します（173〜177 行目）。
+```ts:line-numbers=169
+function makeCurry<F extends (...args: any) => any>(origin: F, argsLength: number, args: any[]) {
+  if (args.length === argsLength) {
+    return origin(...args);
+  } else {
+    const next = function (arg: Parameters<F>[0]) {
+      return makeCurry(origin, argsLength, [...args, arg]);
+    };
+
+    return next;
+  }
+}
+```
+`makeCurry` は、集まった引数が必要な数に達していれば元の関数を呼びます。足りなければ、次の引数を受け取って `[...args, arg]` で 1 つ増やし、自分自身をもう一度呼ぶ関数を返します。
+
+```ts:line-numbers=170
+  if (args.length === argsLength) {
+    return origin(...args);
+```
+
+```ts:line-numbers=173
+    const next = function (arg: Parameters<F>[0]) {
+      return makeCurry(origin, argsLength, [...args, arg]);
+    };
+
+    return next;
+```
+
 
 `curried(1)(2)(3)` の流れは次のとおりです。
 

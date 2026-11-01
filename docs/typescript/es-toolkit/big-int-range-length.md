@@ -11,6 +11,7 @@ file: src/_internal/bigIntRangeLength.ts
 lines: [12, 20]
 function: "bigIntRangeLength"
 difficulty: 2
+format: 2
 tags: [数値計算, イディオム, ハック]
 ---
 
@@ -48,10 +49,18 @@ export function bigIntRangeLength(start: bigint, end: bigint, step: bigint): num
 
 ## 何をしているか
 
-### 1. 差を求める（13 行目）
+### 1. 差を求める
 
-### 2. 刻み幅が正の場合（15〜17 行目）
+```ts:line-numbers=13
+  const difference = end - start;
+```
+### 2. 刻み幅が正の場合
 
+```ts:line-numbers=15
+  if (step > 0n) {
+    return difference <= 0n ? 0 : Number((difference + step - 1n) / step);
+  }
+```
 差が 0 以下なら範囲が空なので 0 個です。そうでなければ `(差 + step - 1) / step` を計算します。
 
 ```
@@ -59,8 +68,11 @@ export function bigIntRangeLength(start: bigint, end: bigint, step: bigint): num
 差 9,  step 3: (9 + 3 - 1) / 3 = 11 / 3 = 3    ← ちょうど割り切れるときは 3 のまま
 ```
 
-### 3. 刻み幅が負の場合（19 行目）
+### 3. 刻み幅が負の場合
 
+```ts:line-numbers=19
+  return difference >= 0n ? 0 : Number((difference + step + 1n) / step);
+```
 `end` が `start` より小さくないと範囲が空です。差も刻み幅も負なので、割り算の結果は正になります。今度は `step + 1`（たとえば `step = -3` なら `-2`）を足します。
 
 ```

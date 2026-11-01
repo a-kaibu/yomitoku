@@ -11,6 +11,7 @@ file: src/array/shuffle.ts
 lines: [15, 27]
 function: "shuffle"
 difficulty: 1
+format: 2
 tags: [アルゴリズム, 乱数, イディオム]
 ---
 
@@ -23,7 +24,25 @@ tags: [アルゴリズム, 乱数, イディオム]
 
 ## コード
 
-```ts:line-numbers=15
+::: code-group
+
+```ts:line-numbers=15 [日本語訳]
+export function shuffle<T>(arr: readonly T[]): T[] {
+  const result = arr.slice();
+
+  /**
+   * * 出典（Wikipedia）: https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+   */
+  for (let i = result.length - 1; i >= 1; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
+}
+```
+
+```ts:line-numbers=15 [原文]
 export function shuffle<T>(arr: readonly T[]): T[] {
   const result = arr.slice();
 
@@ -39,6 +58,8 @@ export function shuffle<T>(arr: readonly T[]): T[] {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`function shuffle<T>(arr: readonly T[]): T[]`**: TypeScript の関数宣言です。`<T>` は「ジェネリクス（型を後から決められる仕組み）」で、数値の配列を渡せば数値の配列が、文字列の配列を渡せば文字列の配列が返ることを表します。
@@ -49,16 +70,35 @@ export function shuffle<T>(arr: readonly T[]): T[] {
 
 ## 何をしているか
 
-### 1. コピーを作る（16 行目）
+### 1. コピーを作る
 
+```ts:line-numbers=16
+  const result = arr.slice();
+```
 `arr.slice()` でコピーを作り、以降はコピーだけを操作します。呼び出し元の配列はそのまま残ります。
 
-### 2. 後ろから順に「くじ引き」をする（21〜24 行目）
+### 2. 後ろから順に「くじ引き」をする
 
+```ts:line-numbers=21
+  for (let i = result.length - 1; i >= 1; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+```
 `i` を配列の最後の位置から 1 まで 1 つずつ減らしながら、次のことを繰り返します。
 
-1. `0` 以上 `i` 以下の位置 `j` をランダムに選ぶ（22 行目）。`Math.random() * (i + 1)` は 0 以上 `i + 1` 未満なので、切り捨てると `0`〜`i` の整数になります。
-2. 位置 `i` と位置 `j` の要素を入れ替える（23 行目）。
+1. `0` 以上 `i` 以下の位置 `j` をランダムに選ぶ。`Math.random() * (i + 1)` は 0 以上 `i + 1` 未満なので、切り捨てると `0`〜`i` の整数になります。
+
+```ts:line-numbers=22
+    const j = Math.floor(Math.random() * (i + 1));
+```
+
+2. 位置 `i` と位置 `j` の要素を入れ替える。
+
+```ts:line-numbers=23
+    [result[i], result[j]] = [result[j], result[i]];
+```
+
 
 `[a, b, c, d]` で追ってみます。
 
@@ -75,7 +115,7 @@ i = 1: 0〜1 から j = 0 を選ぶ → [d, a, c, b]   （位置 1 と 0 が確�
 - **偏りがない**: 各ステップで「残りの中から公平に 1 つ選ぶ」ので、`n` 個の要素なら `n × (n-1) × … × 1 = n!` 通りの選び方がそれぞれ 1 回ずつ起こり、全部の並びが同じ確率になります。よくある間違いは `j` を毎回 `0〜n-1` の全体から選ぶ書き方で、これだと `n^n` 通りの結果を `n!` 個の並びに割り振ることになり、割り切れないので必ず偏りが出ます。
 - **`sort(() => Math.random() - 0.5)` を使わない**: 「ランダムな比較でソートする」書き方もよく見かけますが、ソートの比較関数が矛盾した答えを返すため、結果の偏りがエンジンの実装次第になります。フィッシャー–イェーツ法は理論的に正しいことが証明されている方法です。
 - **速い**: ループは 1 回だけで、計算量は `O(n)` です。ソートを使う方法（`O(n log n)`）より速く、追加のメモリもコピー 1 つぶんだけです。
-- **出典を書いている**: 18〜20 行目のコメントで、Wikipedia のアルゴリズムの項目を示しています。読む人が「なぜこれで正しいのか」をすぐ調べられます。
+- **出典を書いている**: ループの直前のコメントで、Wikipedia のアルゴリズムの項目を示しています。読む人が「なぜこれで正しいのか」をすぐ調べられます。
 
 ## まとめ
 

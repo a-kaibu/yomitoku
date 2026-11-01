@@ -11,6 +11,7 @@ file: src/promise/delay.ts
 lines: [39, 61]
 function: "delay"
 difficulty: 2
+format: 2
 tags: [非同期, エラー処理, イディオム]
 ---
 
@@ -56,29 +57,53 @@ export function delay(ms: number, { signal }: DelayOptions = {}): Promise<void> 
 - **`setTimeout(fn, ms)`**: `ms` ミリ秒後に `fn` を実行する予約をし、予約の ID を返します。`clearTimeout(id)` で予約を取り消せます。
 - **`AbortSignal`**: 処理を外から中断するための合図です。`aborted` が `true` なら中断済み、`'abort'` イベントで中断を知ることができます。
 - **`{ signal }: DelayOptions = {}`**: 第 2 引数をオブジェクトで受け取り、そこから `signal` を取り出します。省略されたら空のオブジェクトが使われます。
-- **`const` の巻き上げとクロージャ**: 45〜48 行目の関数は、54 行目で作る `timeoutId` を使っています。関数が実際に呼ばれるのは `timeoutId` が作られたあとなので問題ありません。
+- **`const` の巻き上げとクロージャ**: `abortHandler` は、そのあとで作る `timeoutId` を使っています。関数が実際に呼ばれるのは `timeoutId` が作られたあとなので問題ありません。
 
 ## 何をしているか
 
-### 1. 取り消し用の関数を用意（41〜48 行目）
+### 1. 取り消し用の関数を用意
 
+```ts:line-numbers=41
+    const abortError = () => {
+      reject(new AbortError());
+    };
+
+    const abortHandler = () => {
+      clearTimeout(timeoutId);
+      abortError();
+    };
+```
 `abortError` は失敗させるだけ、`abortHandler` はタイマーを消してから失敗させます。
 
-### 2. すでに取り消されていたら即失敗（50〜52 行目）
+### 2. すでに取り消されていたら即失敗
 
+```ts:line-numbers=50
+    if (signal?.aborted) {
+      return abortError();
+    }
+```
 タイマーを仕掛ける前に確認し、無駄な予約をしないようにしています。
 
-### 3. タイマーを仕掛ける（54〜57 行目）
+### 3. タイマーを仕掛ける
 
+```ts:line-numbers=54
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', abortHandler);
+      resolve();
+    }, ms);
+```
 時間が来たら、取り消しの監視を外してから成功させます。
 
-### 4. 取り消しを監視する（59 行目）
+### 4. 取り消しを監視する
 
+```ts:line-numbers=59
+    signal?.addEventListener('abort', abortHandler, { once: true });
+```
 `once: true` なので、合図を受け取ったら登録は自動で外れます。
 
 ## ここがすごい
 
-- **後片付けが対称になっている**: 時間どおり終わった場合はイベントの監視を外し（55 行目）、取り消された場合はタイマーを消します（46 行目）。どちらの道を通っても、もう一方が残りません。イベントの監視が残ると、長く使い回される `signal` にリスナーが溜まっていき、メモリが解放されなくなります。
+- **後片付けが対称になっている**: 時間どおり終わった場合は `removeEventListener` でイベントの監視を外し、取り消された場合は `clearTimeout` でタイマーを消します。どちらの道を通っても、もう一方が残りません。イベントの監視が残ると、長く使い回される `signal` にリスナーが溜まっていき、メモリが解放されなくなります。
 - **事前チェックで無駄を省く**: すでに中断済みの `signal` を渡された場合はタイマーも登録もせず、すぐに失敗させます。中断済みの `signal` には `'abort'` イベントがもう来ないので、このチェックがないと永遠に待ってしまいます。
 - **Web 標準の作法に沿う**: 中断を `AbortSignal` で受け取り、`AbortError` で知らせるのは `fetch` などの Web 標準 API と同じ作法です。`fetch` と同じ `signal` を渡せば、通信と待ち時間をまとめて取り消せます。
 

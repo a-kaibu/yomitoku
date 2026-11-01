@@ -11,6 +11,7 @@ file: src/compiler/path.ts
 lines: [1096, 1110]
 function: "forEachAncestorDirectory"
 difficulty: 1
+format: 2
 tags: [ファイル, イディオム, 探索]
 ---
 
@@ -55,10 +56,38 @@ export function forEachAncestorDirectory<T, P extends string>(directory: P, call
 
 ## 何をしているか
 
-1. 今のディレクトリで `callback` を呼び、値が返ればそれを返す（1098〜1101 行目）。
-2. 親ディレクトリを求める（1103 行目）。
-3. **親が自分と同じなら**、ルートに着いたということなので、見つからなかったとして `undefined` を返す（1104〜1106 行目）。
-4. 親に移って繰り返す（1108 行目）。
+### 処理の流れ
+
+
+1. 今のディレクトリで `callback` を呼び、値が返ればそれを返す。
+
+```ts:line-numbers=1098
+        const result = callback(directory);
+        if (result !== undefined) {
+            return result;
+        }
+```
+
+2. 親ディレクトリを求める。
+
+```ts:line-numbers=1103
+        const parentPath = getDirectoryPath(directory) as P;
+```
+
+3. **親が自分と同じなら**、ルートに着いたということなので、見つからなかったとして `undefined` を返す。
+
+```ts:line-numbers=1104
+        if (parentPath === directory) {
+            return undefined;
+        }
+```
+
+4. 親に移って繰り返す。
+
+```ts:line-numbers=1108
+        directory = parentPath;
+```
+
 
 `tsconfig.json` を探す使い方の例です。
 

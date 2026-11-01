@@ -11,6 +11,7 @@ file: src/promise/withTimeout.ts
 lines: [45, 62]
 function: "withTimeout"
 difficulty: 3
+format: 2
 tags: [非同期, エラー処理, 設計パターン]
 ---
 
@@ -59,16 +60,32 @@ export async function withTimeout<T>(
 
 ## 何をしているか
 
-### 1. 内部用のコントローラを作る（50 行目）
+### 1. 内部用のコントローラを作る
 
+```ts:line-numbers=50
+  const controller = new AbortController();
+```
 この関数の中だけで使う `controller` を作ります。
 
-### 2. 呼び出し元の中断を中継する（52〜55 行目）
+### 2. 呼び出し元の中断を中継する
 
+```ts:line-numbers=52
+  if (signal?.aborted) {
+    controller.abort();
+  }
+  signal?.addEventListener('abort', () => controller.abort(), { once: true, signal: controller.signal });
+```
 呼び出し元から `signal` が渡されていて、すでに中断済みなら内部もすぐ中断します。まだなら、呼び出し元の中断を内部に中継するリスナーを登録します。このリスナー自体にも `signal: controller.signal` を指定しているので、内部が中断されると **リスナーの登録も自動で外れます**。
 
-### 3. 競争させて、必ず片付ける（57〜61 行目）
+### 3. 競争させて、必ず片付ける
 
+```ts:line-numbers=57
+  try {
+    return await Promise.race([run(), timeout(ms, { signal: controller.signal })]);
+  } finally {
+    controller.abort();
+  }
+```
 `run()` と `timeout(…)` を競争させます。`run` が先に終わればその結果が、時間切れならタイムアウトのエラーが返ります。どちらの場合も、`finally` で `controller.abort()` を呼びます。
 
 この 1 回の `abort` で、次の 2 つが同時に片付きます。

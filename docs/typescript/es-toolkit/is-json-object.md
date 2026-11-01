@@ -11,6 +11,7 @@ file: src/predicate/isJSONValue.ts
 lines: [82, 103]
 function: "isJSONObject"
 difficulty: 2
+format: 2
 tags: [再帰, リフレクション, 防御的プログラミング]
 ---
 
@@ -64,18 +65,54 @@ export function isJSONObject(obj: unknown): obj is Record<string, any> {
 
 ## 何をしているか
 
-### 1. 素のオブジェクトか（83〜85 行目）
+### 1. 素のオブジェクトか
 
+```ts:line-numbers=83
+  if (!isPlainObject(obj)) {
+    return false;
+  }
+```
 日付やクラスのインスタンス、配列はここで除外されます。配列は別の関数 `isJSONArray` が担当します。
 
-### 2. すべてのキーを取り出す（87 行目）
+### 2. すべてのキーを取り出す
 
+```ts:line-numbers=87
+  const keys = Reflect.ownKeys(obj);
+```
 `Object.keys` ではなく `Reflect.ownKeys` を使っています。
 
-### 3. キーと値を 1 つずつ確かめる（89〜100 行目）
+### 3. キーと値を 1 つずつ確かめる
 
-- キーが文字列でなければ（シンボルなら）`false`（93〜95 行目）。
-- 値を `isJSONValue` に渡し、JSON の値でなければ `false`（97〜99 行目）。`isJSONValue` は値がオブジェクトなら `isJSONObject` を、配列なら `isJSONArray` を呼ぶので、入れ子の奥まで確認が進みます。
+```ts:line-numbers=89
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const value = obj[key];
+
+    if (typeof key !== 'string') {
+      return false;
+    }
+
+    if (!isJSONValue(value)) {
+      return false;
+    }
+  }
+```
+- キーが文字列でなければ（シンボルなら）`false`。
+
+```ts:line-numbers=93
+    if (typeof key !== 'string') {
+      return false;
+    }
+```
+
+- 値を `isJSONValue` に渡し、JSON の値でなければ `false`。`isJSONValue` は値がオブジェクトなら `isJSONObject` を、配列なら `isJSONArray` を呼ぶので、入れ子の奥まで確認が進みます。
+
+```ts:line-numbers=97
+    if (!isJSONValue(value)) {
+      return false;
+    }
+```
+
 
 ```
 { a: { b: [1, () => {}] } }

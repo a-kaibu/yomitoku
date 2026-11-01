@@ -11,6 +11,7 @@ file: src/promise/timeout.ts
 lines: [39, 58]
 function: "timeout"
 difficulty: 3
+format: 2
 tags: [非同期, エラー処理, 防御的プログラミング]
 ---
 
@@ -23,7 +24,32 @@ tags: [非同期, エラー処理, 防御的プログラミング]
 
 ## コード
 
-```ts:line-numbers=39
+::: code-group
+
+```ts:line-numbers=39 [日本語訳]
+export function timeout(ms: number, { signal }: TimeoutOptions = {}): Promise<never> {
+  return new Promise<never>((_resolve, reject) => {
+    const abortHandler = () => {
+      // // 解除されたタイマーは決して決着してはならない。さもないと、降りるはずだった競争に勝ってしまう。
+      // // そのため、タイマーを消したうえで、わざと未決のまま残す。
+      clearTimeout(timeoutId);
+    };
+
+    if (signal?.aborted) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', abortHandler);
+      reject(new TimeoutError());
+    }, ms);
+
+    signal?.addEventListener('abort', abortHandler, { once: true });
+  });
+}
+```
+
+```ts:line-numbers=39 [原文]
 export function timeout(ms: number, { signal }: TimeoutOptions = {}): Promise<never> {
   return new Promise<never>((_resolve, reject) => {
     const abortHandler = () => {
@@ -46,6 +72,8 @@ export function timeout(ms: number, { signal }: TimeoutOptions = {}): Promise<ne
 }
 ```
 
+:::
+
 `TimeoutError` は同じライブラリで定義されたエラーのクラスです。
 
 ## 前提知識
@@ -59,22 +87,52 @@ export function timeout(ms: number, { signal }: TimeoutOptions = {}): Promise<ne
 
 ## 何をしているか
 
-### 1. 中断されたときの処理（41〜45 行目）
+### 1. 中断されたときの処理
 
+```ts:line-numbers=41
+    const abortHandler = () => {
+      // A disarmed timeout must never settle, otherwise it could win the race it was
+      // meant to drop out of. Clear the timer and intentionally leave it pending.
+      clearTimeout(timeoutId);
+    };
+```
 中断の合図が来たらタイマーを取り消すだけです。`reject` も `resolve` も呼びません。
 
-### 2. すでに中断済みなら何もしない（47〜49 行目）
+### 2. すでに中断済みなら何もしない
 
+```ts:line-numbers=47
+    if (signal?.aborted) {
+      return;
+    }
+```
 タイマーも仕掛けずに戻ります。この Promise は永遠に決着しません。
 
-### 3. タイマーを仕掛ける（51〜56 行目）
+### 3. タイマーを仕掛ける
 
-時間が来たら、中断の監視を外してから `TimeoutError` で失敗させます（52〜53 行目）。あわせて、中断の合図を 1 回だけ受け取るように登録します（56 行目）。
+```ts:line-numbers=51
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', abortHandler);
+      reject(new TimeoutError());
+    }, ms);
+
+    signal?.addEventListener('abort', abortHandler, { once: true });
+```
+時間が来たら、中断の監視を外してから `TimeoutError` で失敗させます。あわせて、中断の合図を 1 回だけ受け取るように登録します。
+
+```ts:line-numbers=52
+      signal?.removeEventListener('abort', abortHandler);
+      reject(new TimeoutError());
+```
+
+```ts:line-numbers=56
+    signal?.addEventListener('abort', abortHandler, { once: true });
+```
+
 
 ## ここがすごい
 
-- **決着させないことで競争から降りる**: `Promise.race` は最初に決着したものを採用します。もし中断時に `reject` してしまうと、その中断エラーが競争に勝ってしまい、本来の処理の結果が捨てられるおそれがあります。42〜43 行目のコメントのとおり、「解除されたタイマーは決して決着してはならない。さもないと、降りるはずだった競争に勝ってしまう」のです。
-- **後片付けを両方向で**: 時間切れのときは中断の監視を外し（52 行目）、中断のときはタイマーを消します（44 行目）。どちらで終わっても、もう片方が残り続けることはありません。タイマーが残るとプログラムが終了しにくくなり、イベント登録が残るとメモリが解放されません。
+- **決着させないことで競争から降りる**: `Promise.race` は最初に決着したものを採用します。もし中断時に `reject` してしまうと、その中断エラーが競争に勝ってしまい、本来の処理の結果が捨てられるおそれがあります。`abortHandler` の中のコメントのとおり、「解除されたタイマーは決して決着してはならない。さもないと、降りるはずだった競争に勝ってしまう」のです。
+- **後片付けを両方向で**: 時間切れのときは `removeEventListener` で中断の監視を外し、中断のときは `clearTimeout` でタイマーを消します。どちらで終わっても、もう片方が残り続けることはありません。タイマーが残るとプログラムが終了しにくくなり、イベント登録が残るとメモリが解放されません。
 - **型で性質を表す**: 戻り値を `Promise<never>` にしているので、`Promise.race([fetchUser(), timeout(1000)])` の結果の型は `fetchUser` の型だけになります。タイムアウト側が値を返すことはないと TypeScript が理解してくれるからです。
 
 ## まとめ

@@ -11,6 +11,7 @@ file: src/compiler/path.ts
 lines: [732, 749]
 function: "simpleNormalizePath"
 difficulty: 2
+format: 2
 tags: [最適化, 正規表現, ファイル]
 ---
 
@@ -18,11 +19,34 @@ tags: [最適化, 正規表現, ファイル]
 
 TypeScript コンパイラはファイルのパスを何万回も扱います。`simpleNormalizePath` は、パスの正規化（`a/./b/../c` を `a/c` にするなど）の **前に試す近道** です。
 
-733 行目のコメントのとおり、「ほとんどのパスは正規化を必要としない」ので、まず正規表現 1 回でそれを確かめます。直す必要がなければそのまま、簡単な置換で済めば置換して返します。本格的な処理が必要なときだけ `undefined` を返し、呼び出し側に任せます。
+関数の先頭のコメントのとおり、「ほとんどのパスは正規化を必要としない」ので、まず正規表現 1 回でそれを確かめます。直す必要がなければそのまま、簡単な置換で済めば置換して返します。本格的な処理が必要なときだけ `undefined` を返し、呼び出し側に任せます。
 
 ## コード
 
-```ts:line-numbers=732
+::: code-group
+
+```ts:line-numbers=732 [日本語訳]
+function simpleNormalizePath(path: string): string | undefined {
+    // // ほとんどのパスは正規化を必要としない
+    if (!relativePathSegmentRegExp.test(path)) {
+        return path;
+    }
+    // // 「/./」や先頭の「./」だけの後始末が必要なパスもある
+    let simplified = path.replace(/\/\.\//g, "/");
+    if (simplified.startsWith("./")) {
+        simplified = simplified.slice(2);
+    }
+    if (simplified !== path) {
+        path = simplified;
+        if (!relativePathSegmentRegExp.test(path)) {
+            return path;
+        }
+    }
+    return undefined;
+}
+```
+
+```ts:line-numbers=732 [原文]
 function simpleNormalizePath(path: string): string | undefined {
     // Most paths don't require normalization
     if (!relativePathSegmentRegExp.test(path)) {
@@ -43,9 +67,11 @@ function simpleNormalizePath(path: string): string | undefined {
 }
 ```
 
-`relativePathSegmentRegExp` は同じファイルで次のように定義されています（882 行目）。
+:::
 
-```ts
+`relativePathSegmentRegExp` は同じファイルで次のように定義されています。
+
+```ts:line-numbers=882
 const relativePathSegmentRegExp = /\/\/|(?:^|\/)\.\.?(?:$|\/)/;
 ```
 
@@ -59,20 +85,42 @@ const relativePathSegmentRegExp = /\/\/|(?:^|\/)\.\.?(?:$|\/)/;
 
 ## 何をしているか
 
-### 1. 直す必要がなければそのまま（734〜736 行目）
+### 1. 直す必要がなければそのまま
 
+```ts:line-numbers=734
+    if (!relativePathSegmentRegExp.test(path)) {
+        return path;
+    }
+```
 `src/compiler/core.ts` のような普通のパスは、ここで終わります。
 
-### 2. `/./` と先頭の `./` を消す（738〜741 行目）
+### 2. `/./` と先頭の `./` を消す
 
+```ts:line-numbers=738
+    let simplified = path.replace(/\/\.\//g, "/");
+    if (simplified.startsWith("./")) {
+        simplified = simplified.slice(2);
+    }
+```
 `./src/./a.ts` → `src/a.ts` のように、`.` の部品だけは置換で消せます。
 
-### 3. 消したあとにもう一度確かめる（742〜747 行目）
+### 3. 消したあとにもう一度確かめる
 
+```ts:line-numbers=742
+    if (simplified !== path) {
+        path = simplified;
+        if (!relativePathSegmentRegExp.test(path)) {
+            return path;
+        }
+    }
+```
 置換で何か変わったら、もう一度正規表現で調べ、もう直すところがなければ返します。`..` や `//` が残っていれば、ここでは処理できません。
 
-### 4. 本格的な処理が必要（748 行目）
+### 4. 本格的な処理が必要
 
+```ts:line-numbers=748
+    return undefined;
+```
 `undefined` を返して、呼び出し側の重い正規化に任せます。
 
 ```

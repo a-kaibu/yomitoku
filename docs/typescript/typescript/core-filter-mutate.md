@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [299, 308]
 function: "filterMutate"
 difficulty: 1
+format: 2
 tags: [アルゴリズム, メモリ管理, イディオム]
 ---
 
@@ -49,11 +50,32 @@ export function filterMutate<T>(array: T[], f: (x: T, i: number, array: T[]) => 
 
 ## 何をしているか
 
+### 処理の流れ
+
+
 `outIndex` は「次に残す要素を書き込む位置」、`i` は「今読んでいる位置」です。
 
-1. `i` を 0 から最後まで進める（301 行目）。
-2. 残す要素なら、`outIndex` の位置に書き込んで `outIndex` を 1 進める（302〜305 行目）。
-3. 最後に `length` を `outIndex` に縮めて、後ろの不要な部分を切り捨てる（307 行目）。
+1. `i` を 0 から最後まで進める。
+
+```ts:line-numbers=301
+    for (let i = 0; i < array.length; i++) {
+```
+
+2. 残す要素なら、`outIndex` の位置に書き込んで `outIndex` を 1 進める。
+
+```ts:line-numbers=302
+        if (f(array[i], i, array)) {
+            array[outIndex] = array[i];
+            outIndex++;
+        }
+```
+
+3. 最後に `length` を `outIndex` に縮めて、後ろの不要な部分を切り捨てる。
+
+```ts:line-numbers=307
+    array.length = outIndex;
+```
+
 
 `[1, 2, 3, 4, 5]` から奇数だけを残す例です。
 

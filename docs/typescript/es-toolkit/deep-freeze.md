@@ -11,6 +11,7 @@ file: src/object/deepFreeze.ts
 lines: [17, 35]
 function: "deepFreeze"
 difficulty: 2
+format: 2
 tags: [再帰, 防御的プログラミング, リフレクション]
 ---
 
@@ -64,16 +65,35 @@ export function deepFreeze<T>(obj: T): T {
 
 ## 何をしているか
 
-### 1. オブジェクト以外はそのまま（18〜20 行目）
+### 1. オブジェクト以外はそのまま
 
+```ts:line-numbers=18
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+```
 数値や文字列などは凍らせる必要がないので、そのまま返します。
 
-### 2. まず自分を凍らせる（22 行目）
+### 2. まず自分を凍らせる
 
+```ts:line-numbers=22
+  Object.freeze(obj);
+```
 子を処理する **前に** 自分を凍らせます。
 
-### 3. 子をたどる（24〜32 行目）
+### 3. 子をたどる
 
+```ts:line-numbers=24
+  const keys = Reflect.ownKeys(obj) as Array<keyof T>;
+
+  for (let i = 0; i < keys.length; i++) {
+    const value = obj[keys[i]];
+
+    if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+      deepFreeze(value);
+    }
+  }
+```
 すべてのキーの値を見て、オブジェクトで、**まだ凍っていないもの** にだけ再帰します。
 
 循環参照の例で追ってみます。

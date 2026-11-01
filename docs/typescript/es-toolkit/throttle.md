@@ -11,6 +11,7 @@ file: src/function/throttle.ts
 lines: [51, 88]
 function: "throttle"
 difficulty: 2
+format: 2
 tags: [非同期, 設計パターン, クロージャ]
 ---
 
@@ -75,15 +76,67 @@ export function throttle<F extends (...args: any[]) => void>(
 
 ## 何をしているか
 
-### 1. 実際の実行を debounce に包む（58〜65 行目）
+### 1. 実際の実行を debounce に包む
 
+```ts:line-numbers=58
+  const debounced = debounce(
+    function (this: any, ...args: Parameters<F>) {
+      pendingAt = Date.now();
+      func.apply(this, args);
+    },
+    throttleMs,
+    { signal, edges }
+  );
+```
 `debounce` に渡す関数は、実行の直前に「最後に実行した時刻」`pendingAt` を記録してから `func` を呼びます。debounce 経由で遅れて実行された場合も、時刻が正しく更新されるわけです。
 
-### 2. 呼ばれるたびに経過時間を見る（67〜82 行目）
+### 2. 呼ばれるたびに経過時間を見る
 
-- 初めて呼ばれたときは `pendingAt` に今の時刻を入れます（68〜70 行目）。
-- 前回の実行から `throttleMs` 以上経っていたら、**その場ですぐ実行** します（72〜79 行目）。そのあと debounce の予約をいったん消して（`cancel`）、改めてタイマーだけを仕掛け直します（`schedule`）。
-- まだ時間が経っていなければ、debounce に任せます（81 行目）。debounce は「最後の呼び出し」を覚えておいて、待ち時間のあとに実行してくれます。
+```ts:line-numbers=67
+  const throttled = function (this: any, ...args: Parameters<F>) {
+    if (pendingAt == null) {
+      pendingAt = Date.now();
+    }
+
+    if (Date.now() - pendingAt >= throttleMs) {
+      pendingAt = Date.now();
+      func.apply(this, args);
+
+      debounced.cancel();
+      debounced.schedule();
+      return;
+    }
+
+    debounced.apply(this, args);
+  };
+```
+- 初めて呼ばれたときは `pendingAt` に今の時刻を入れます。
+
+```ts:line-numbers=68
+    if (pendingAt == null) {
+      pendingAt = Date.now();
+    }
+```
+
+- 前回の実行から `throttleMs` 以上経っていたら、**その場ですぐ実行** します。そのあと debounce の予約をいったん消して（`cancel`）、改めてタイマーだけを仕掛け直します（`schedule`）。
+
+```ts:line-numbers=72
+    if (Date.now() - pendingAt >= throttleMs) {
+      pendingAt = Date.now();
+      func.apply(this, args);
+
+      debounced.cancel();
+      debounced.schedule();
+      return;
+    }
+```
+
+- まだ時間が経っていなければ、debounce に任せます。debounce は「最後の呼び出し」を覚えておいて、待ち時間のあとに実行してくれます。
+
+```ts:line-numbers=81
+    debounced.apply(this, args);
+```
+
 
 100 ミリ秒の throttle で、10 ミリ秒ごとに呼ぶと次のように動きます。
 
@@ -98,7 +151,7 @@ export function throttle<F extends (...args: any[]) => void>(
 ## ここがすごい
 
 - **似た機能の上に組み立てる**: 「最後の呼び出しを覚えて、あとで実行する」「キャンセル」「今すぐ実行（flush）」といった面倒な部分はすべて debounce が持っています。throttle に固有なのは「一定時間が経ったら途中でも実行する」だけなので、そこだけを数行で書いています。
-- **キャンセルの仕組みもそのまま使える**: 84〜85 行目で `cancel` と `flush` を debounce のものに差し替えるだけで、throttle にも同じ機能が付きます。`AbortSignal` によるキャンセル対応も debounce に渡すだけで済んでいます。
+- **キャンセルの仕組みもそのまま使える**: 最後に `throttled.cancel = debounced.cancel` のように `cancel` と `flush` を debounce のものに差し替えるだけで、throttle にも同じ機能が付きます。`AbortSignal` によるキャンセル対応も debounce に渡すだけで済んでいます。
 - **最後の 1 回を取りこぼさない**: 間引くだけの単純な実装だと、連続した呼び出しの最後の値（スクロールが止まった位置など）が捨てられがちです。debounce の trailing 実行があるので、最後の状態が必ず反映されます。
 
 ## まとめ

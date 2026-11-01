@@ -11,6 +11,7 @@ file: src/function/memoize.ts
 lines: [74, 100]
 function: "memoize"
 difficulty: 2
+format: 2
 tags: [キャッシュ, 設計パターン, ジェネリクス]
 ---
 
@@ -54,7 +55,7 @@ export function memoize<F extends (...args: any) => any>(
 }
 ```
 
-`MemoizeCache` は同じファイルの 108 行目以降で定義されたインターフェースで、`set`・`get`・`has`・`delete`・`clear` と `size` を持つことだけを決めています。
+`MemoizeCache` は同じファイルの後半で定義されたインターフェースで、`set`・`get`・`has`・`delete`・`clear` と `size` を持つことだけを決めています。
 
 ## 前提知識
 
@@ -67,18 +68,60 @@ export function memoize<F extends (...args: any) => any>(
 
 ## 何をしているか
 
-### 1. オプションを取り出す（81 行目）
+### 1. オプションを取り出す
 
+```ts:line-numbers=81
+  const { cache = new Map<unknown, ReturnType<F>>(), getCacheKey } = options;
+```
 `cache` が渡されなければ新しい `Map` を使います。`getCacheKey` は引数からキャッシュのキーを作る関数で、省略すると引数そのものがキーになります。
 
-### 2. メモ化した関数（83〜95 行目）
+### 2. メモ化した関数
 
-1. 引数からキーを作る（84 行目）。
-2. キャッシュにあればそれを返す（86〜88 行目）。
-3. なければ本来の `fn` を呼び、結果を保存してから返す（90〜94 行目）。`fn.call(this, arg)` で、呼び出し元の `this` もそのまま引き継ぎます。
+```ts:line-numbers=83
+  const memoizedFn = function (this: unknown, arg: Parameters<F>[0]): ReturnType<F> {
+    const key = getCacheKey ? getCacheKey(arg) : arg;
 
-### 3. キャッシュを外から触れるようにする（97 行目）
+    if (cache.has(key)) {
+      return cache.get(key)!;
+    }
 
+    const result = fn.call(this, arg);
+
+    cache.set(key, result);
+
+    return result;
+  };
+```
+1. 引数からキーを作る。
+
+```ts:line-numbers=84
+    const key = getCacheKey ? getCacheKey(arg) : arg;
+```
+
+2. キャッシュにあればそれを返す。
+
+```ts:line-numbers=86
+    if (cache.has(key)) {
+      return cache.get(key)!;
+    }
+```
+
+3. なければ本来の `fn` を呼び、結果を保存してから返す。`fn.call(this, arg)` で、呼び出し元の `this` もそのまま引き継ぎます。
+
+```ts:line-numbers=90
+    const result = fn.call(this, arg);
+
+    cache.set(key, result);
+
+    return result;
+```
+
+
+### 3. キャッシュを外から触れるようにする
+
+```ts:line-numbers=97
+  memoizedFn.cache = cache;
+```
 作った関数に `cache` プロパティとして入れ物を付けます。使う側は `memoized.cache.clear()` でキャッシュを空にしたり、`size` で溜まった数を確認したりできます。
 
 ## ここがすごい
