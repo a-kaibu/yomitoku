@@ -9,6 +9,4 @@ next: false
 
 # Python の関数
 
-有名 OSS から選んだ Python の関数を、プロジェクトごとに並べています。キーワード・難易度・タグで絞り込めます。
-
 <EntryList />

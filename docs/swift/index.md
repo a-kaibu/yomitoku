@@ -9,6 +9,4 @@ next: false
 
 # Swift の関数
 
-有名 OSS から選んだ Swift の関数を、プロジェクトごとに並べています。キーワード・難易度・タグで絞り込めます。
-
 <EntryList />

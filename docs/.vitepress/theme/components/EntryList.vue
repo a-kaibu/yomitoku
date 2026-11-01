@@ -50,12 +50,12 @@ function reset() { q.value = ''; level.value = ''; tag.value = '' }
       </select>
     </div>
     <p class="entry-list__summary">
-      {{ filtered.length.toLocaleString() }} / {{ items.length.toLocaleString() }} 関数
+      {{ filtered.length.toLocaleString() }} / {{ items.length.toLocaleString() }} 記事
       <button v-if="filtering" class="link-button" @click="reset">条件をクリア</button>
     </p>
 
     <p v-if="!items.length" class="entry-list__empty">この言語の記事は準備中です。</p>
-    <p v-else-if="!groups.length" class="entry-list__empty">条件に合う関数がありません。</p>
+    <p v-else-if="!groups.length" class="entry-list__empty">条件に合う記事がありません。</p>
 
     <section v-for="g in groups" :key="g.slug" class="entry-group">
       <h2 :id="`p-${g.slug}`" tabindex="-1">

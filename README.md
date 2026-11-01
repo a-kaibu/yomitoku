@@ -23,7 +23,7 @@ npm run preview
 
 ```
 docs/
-├─ index.md / about.md        ハブ
+├─ index.md                   ハブ（トップ）
 ├─ <言語>/index.md            言語トップ（一覧は frontmatter から自動生成）
 ├─ <言語>/<プロジェクト>/<関数>.md   記事
 └─ .vitepress/

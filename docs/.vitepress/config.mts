@@ -10,8 +10,8 @@ const docsDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 // ---- 分割ビルド -----------------------------------------------------------
 // 1 万ページ超を 1 回の VitePress ビルドで処理するとメモリが足りないため、
-// 本番ビルドは「ハブ（トップ・about）」と「言語ごと」に分けて行い、出力を 1 つにまとめる。
-//   YK_SITE=hub  → index.md / about.md だけ
+// 本番ビルドは「ハブ（トップ）」と「言語ごと」に分けて行い、出力を 1 つにまとめる。
+//   YK_SITE=hub  → index.md だけ
 //   YK_SITE=go   → docs/go/** だけ
 //   未指定       → 全部（npm run dev 用。dev サーバーは必要なページだけ変換するので重くない）
 // 別ビルドのページへのリンクは SPA ルーターでは開けないので、必ず target: '_self'（通常のページ遷移）にする。
@@ -201,7 +201,6 @@ export default defineConfig({
         text: '言語',
         items: LANGUAGES.map((l) => ({ text: l.name, link: `/${l.id}/`, target: self, activeMatch: `^/${l.id}/` })),
       },
-      { text: 'このサイトについて', link: '/about', target: self },
     ],
     logoLink: { link: process.env.BASE ?? '/yokuyomu/', target: self },
     sidebar,
