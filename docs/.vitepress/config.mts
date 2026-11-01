@@ -119,6 +119,26 @@ export default defineConfig({
     codeTransformers: styleToClass ? [styleToClass] : [],
     codeCopyButtonTitle: 'コードをコピー',
     config(md) {
+      // 記事ページでは、本文中の生 HTML（例: 地の文に書いた List<T>）をただの文字として扱い、
+      // {{ }} も Vue に解釈させない（v-pre）。1 本の記事の書き方ミスで言語全体のビルドが落ちないようにする。
+      const isEntry = (env: any) => /^[a-z]+\/[a-z0-9-]+\/[a-z0-9-]+\.md$/.test(env?.relativePath ?? '')
+      md.core.ruler.push('yk-escape-html', (state) => {
+        if (!isEntry(state.env)) return
+        const walk = (tokens: any[]) => {
+          for (const t of tokens) {
+            if ((t.type === 'html_inline' || t.type === 'html_block') && !/^\s*<!--[\s\S]*-->\s*$/.test(t.content)) {
+              t.type = 'text'
+            }
+            if (t.children) walk(t.children)
+          }
+        }
+        walk(state.tokens)
+      })
+      const render = md.render.bind(md)
+      md.render = (src: string, env?: any) => {
+        const html = render(src, env)
+        return isEntry(env) ? `<div v-pre>${html}</div>` : html
+      }
       // すべてのコードブロックを自動でデデントし、折り返し切り替えボタンを付ける。
       // ハイライト自体は VitePress 標準の Shiki のまま（ここではテキストとラッパーだけ触る）。
       const fence = md.renderer.rules.fence!
@@ -183,7 +203,7 @@ export default defineConfig({
       },
       { text: 'このサイトについて', link: '/about', target: self },
     ],
-    logoLink: { link: '/', target: self },
+    logoLink: { link: process.env.BASE ?? '/yokuyomu/', target: self },
     sidebar,
     outline: { label: 'このページの内容', level: [2, 3] },
     docFooter: { prev: '前の関数', next: '次の関数' },

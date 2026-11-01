@@ -33,7 +33,8 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      # 1 言語のビルドが落ちても、ほかの言語は公開する（失敗した言語はログで確認して直す）
+      fail-fast: false
       matrix:
         site: [hub, c, cpp, go, rust, csharp, typescript, swift, kotlin, java, shell, python, ruby]
     steps:
@@ -52,6 +53,8 @@ jobs:
 
   deploy:
     needs: build
+    # 一部の言語が失敗しても、ハブがビルドできていればデプロイする
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
