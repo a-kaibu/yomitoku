@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [1447, 1484]
 function: "nvm_normalize_lts"
 difficulty: 2
+format: 2
 tags: [ファイル, 文字列処理, CLI]
 ---
 ## ひとことで
@@ -21,7 +22,50 @@ LTS（長期サポート版）には `hydrogen`、`iron`、`jod` などのコー
 
 ## コード
 
-```sh:line-numbers=1447
+::: code-group
+
+```sh:line-numbers=1447 [日本語訳]
+nvm_normalize_lts() {
+  local LTS
+  LTS="${1-}"
+
+  case "${LTS}" in
+    lts/-[123456789] | lts/-[123456789][0123456789]*)
+      local N
+      N="$(echo "${LTS}" | cut -d '-' -f 2)"
+      N=$((N+1))
+      # shellcheck: SC2181 の警告を無効化
+      if [ $? -ne 0 ]; then
+        nvm_echo "${LTS}"
+        return 0
+      fi
+      local NVM_ALIAS_DIR
+      NVM_ALIAS_DIR="$(nvm_alias_path)"
+      local RESULT
+      RESULT="$(command ls "${NVM_ALIAS_DIR}/lts" | command tail -n "${N}" | command head -n 1)"
+      if [ "${RESULT}" != '*' ]; then
+        nvm_echo "lts/${RESULT}"
+      else
+        nvm_err 'That many LTS releases do not exist yet.'
+        return 2
+      fi
+    ;;
+    *)
+      case "${LTS}" in
+        lts/*)
+          if [ "${LTS}" != "$(echo "${LTS}" | command tr '[:upper:]' '[:lower:]')" ]; then
+            nvm_err 'LTS names must be lowercase'
+            return 3
+          fi
+        ;;
+      esac
+      nvm_echo "${LTS}"
+    ;;
+  esac
+}
+```
+
+```sh:line-numbers=1447 [原文]
 nvm_normalize_lts() {
   local LTS
   LTS="${1-}"
@@ -62,6 +106,8 @@ nvm_normalize_lts() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **LTS**: Long Term Support の略。長く保守される安定版の Node.js です。
@@ -75,7 +121,7 @@ nvm_normalize_lts() {
 
 ## 何をしているか
 
-### 1. 相対指定のとき（1452〜1471 行目）
+### 1. 相対指定のとき
 
 `lts/-1` なら `N=1`、そこに 1 を足して `N=2` にします。
 
@@ -83,9 +129,9 @@ nvm_normalize_lts() {
 
 Node.js の LTS のコードネームは、元素名をアルファベット順に付けていく決まりがあります。そのため **名前順に並べるとリリース順になり**、最後が最新の LTS です。`tail -n 2` で最後の 2 つ（`iron`、`jod`）を取り、`head -n 1` でその最初の `iron` を選びます。これが「1 つ前の LTS」です。
 
-数えすぎてリストの先頭の `*` まで来てしまったら、そこまで古い LTS は無いのでエラーにします（1465〜1470 行目）。
+数えすぎてリストの先頭の `*` まで来てしまったら、そこまで古い LTS は無いのでエラーにします。
 
-### 2. それ以外（1472〜1482 行目）
+### 2. それ以外
 
 `lts/` で始まる名前が大文字を含んでいたらエラーにし（エイリアス名は小文字で保存されているため）、問題なければそのまま返します。
 

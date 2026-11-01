@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [3282, 3352]
 function: "nvm_get_os"
 difficulty: 2
+format: 2
 tags: [移植性, ファイル, 最適化]
 ---
 ## ひとことで
@@ -21,7 +22,83 @@ tags: [移植性, ファイル, 最適化]
 
 ## コード
 
-```sh:line-numbers=3282
+::: code-group
+
+```sh:line-numbers=3282 [日本語訳]
+nvm_get_os() {
+  # dash の `local` は呼び出し元の値を引き継ぐので、空から始める必要がある
+  local NVM_OS
+  NVM_OS=''
+  local NVM_UNAME
+  local NVM_OS_RELEASE_PATH
+  local NVM_OS_RELEASE_LINE
+  local NVM_OS_RELEASE_ID
+  NVM_OS_RELEASE_ID=''
+  local NVM_OS_KERNEL_PATH
+  local NVM_OS_KERNEL_TYPE
+  NVM_OS_KERNEL_TYPE=''
+
+  # `/etc/os-release` は Linux、FreeBSD 13.2 以降、MSYS2 と
+  # Cygwin の環境にある。読めるなら、その `ID` で
+  # `uname` を起動せずに OS がわかる。ファイルは source せずに読むので、中身は実行されない。
+  # このファイルが無いシステム（macOS、OpenBSD など）や `ID` が無いファイルは、
+  # 下の `uname -a` に任せる。
+  NVM_OS_RELEASE_PATH="${NVM_OS_RELEASE:-/etc/os-release}"
+  if [ -r "${NVM_OS_RELEASE_PATH}" ]; then
+    while IFS= read -r NVM_OS_RELEASE_LINE || [ -n "${NVM_OS_RELEASE_LINE}" ]; do
+      case "${NVM_OS_RELEASE_LINE}" in
+        ID=*)
+          NVM_OS_RELEASE_ID="${NVM_OS_RELEASE_LINE#ID=}"
+          break
+        ;;
+      esac
+    done < "${NVM_OS_RELEASE_PATH}"
+    # `ID` は 1 つの単語だが、クォートされていたり、後ろに
+    # 空白（CR を含む）やコメントが続いたりすることがある
+    NVM_OS_RELEASE_ID="${NVM_OS_RELEASE_ID%%[[:space:]#]*}"
+    NVM_OS_RELEASE_ID="${NVM_OS_RELEASE_ID#[\"\']}"
+    NVM_OS_RELEASE_ID="${NVM_OS_RELEASE_ID%[\"\']}"
+    case "${NVM_OS_RELEASE_ID}" in
+      freebsd) NVM_OS=freebsd ;;
+      cygwin* | mingw* | msys*) NVM_OS=win ;;
+      # illumos 系のディストリビューションと Oracle Solaris は `uname -a` で
+      # `SunOS` と答え、GhostBSD は `FreeBSD` と答える。`uname` を起動せずに
+      # ここで直接対応づける
+      solaris | omnios | openindiana | smartos | illumos) NVM_OS=sunos ;;
+      ghostbsd) NVM_OS=freebsd ;;
+      # `ID` が無い、または nvm に対応する OS の名前が無い（DragonFly BSD）なら、
+      # `uname -a` に決めさせる
+      '' | dragonfly) NVM_OS='' ;;
+      # それ以外の `ID` は、カーネルが Linux と言うときだけ Linux ディストリビューションとみなす。
+      # 一覧に無い BSD や illumos の派生（HardenedBSD、Helios など）は
+      # `uname -a` に決めさせる
+      *)
+        NVM_OS_KERNEL_PATH="${NVM_OS_KERNEL_OSTYPE:-/proc/sys/kernel/ostype}"
+        if [ -r "${NVM_OS_KERNEL_PATH}" ] && IFS= read -r NVM_OS_KERNEL_TYPE < "${NVM_OS_KERNEL_PATH}" && [ "${NVM_OS_KERNEL_TYPE}" = 'Linux' ]; then
+          NVM_OS=linux
+        fi
+      ;;
+    esac
+  fi
+
+  if [ -z "${NVM_OS-}" ]; then
+    NVM_UNAME="$(command uname -a)"
+    case "${NVM_UNAME}" in
+      Linux\ *) NVM_OS=linux ;;
+      Darwin\ *) NVM_OS=darwin ;;
+      SunOS\ *) NVM_OS=sunos ;;
+      FreeBSD\ *) NVM_OS=freebsd ;;
+      OpenBSD\ *) NVM_OS=openbsd ;;
+      AIX\ *) NVM_OS=aix ;;
+      CYGWIN* | MSYS* | MINGW*) NVM_OS=win ;;
+    esac
+  fi
+
+  nvm_echo "${NVM_OS-}"
+}
+```
+
+```sh:line-numbers=3282 [原文]
 nvm_get_os() {
   # dash's `local` keeps the caller's value, so these must start empty
   local NVM_OS
@@ -95,6 +172,8 @@ nvm_get_os() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`/etc/os-release`**: Linux などで OS の情報が書かれたファイルです。`ID=ubuntu` のような `キー=値` の行が並んでいます。
@@ -108,21 +187,21 @@ nvm_get_os() {
 
 ## 何をしているか
 
-### 1. 変数を空で初期化（3283〜3293 行目）
+### 1. 変数を空で初期化
 
-3283 行目のコメントのとおり、dash の `local` は呼び出し元の値を引き継ぐため、明示的に空にしています。
+コメントのとおり、dash の `local` は呼び出し元の値を引き継ぐため、明示的に空にしています。
 
-### 2. os-release から ID を読む（3300〜3314 行目）
+### 2. os-release から ID を読む
 
-ファイルを 1 行ずつ読み、`ID=` で始まる行を見つけたら値を取り出して `break` します。ファイルは **`source` せずに読む** ので、中に何が書かれていても実行されません（3297 行目）。
+ファイルを 1 行ずつ読み、`ID=` で始まる行を見つけたら値を取り出して `break` します。ファイルは **`source` せずに読む** ので、中に何が書かれていても実行されません。
 
 値は `"ubuntu"` のようにクォートされていたり、後ろにコメントや `\r` が付いていたりするので、順に取り除きます。
 
-### 3. ID から OS を決める（3315〜3335 行目）
+### 3. ID から OS を決める
 
 `freebsd`、`cygwin` などの既知の ID はそのまま対応する名前にします。それ以外の ID（`ubuntu`、`fedora` など）は、Linux の可能性が高いですが、念のため `/proc/sys/kernel/ostype` を読んで `Linux` と書かれているときだけ `linux` にします。
 
-### 4. 決まらなければ uname（3338〜3349 行目）
+### 4. 決まらなければ uname
 
 macOS など os-release が無い環境では、`uname -a` の出力の先頭で判定します。
 

@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [3887, 3938]
 function: "nvm_get_make_jobs"
 difficulty: 2
+format: 2
 tags: [移植性, 並行処理, CLI]
 ---
 ## ひとことで
@@ -21,7 +22,64 @@ tags: [移植性, 並行処理, CLI]
 
 ## コード
 
-```sh:line-numbers=3887
+::: code-group
+
+```sh:line-numbers=3887 [日本語訳]
+nvm_get_make_jobs() {
+  if nvm_is_natural_num "${1-}"; then
+    NVM_MAKE_JOBS="$1"
+    nvm_echo "number of \`make\` jobs: ${NVM_MAKE_JOBS}"
+    return
+  elif [ -n "${1-}" ]; then
+    unset NVM_MAKE_JOBS
+    nvm_err "$1 is invalid for number of \`make\` jobs, must be a natural number"
+  fi
+  local NVM_OS
+  NVM_OS="$(nvm_get_os)"
+  local NVM_CPU_CORES
+  case "_${NVM_OS}" in
+    "_linux")
+      NVM_CPU_CORES="$(nvm_grep -c -E '^processor.+: [0-9]+' /proc/cpuinfo)"
+    ;;
+    "_freebsd" | "_darwin" | "_openbsd")
+      NVM_CPU_CORES="$(sysctl -n hw.ncpu)"
+    ;;
+    "_sunos")
+      # `wc` によっては数の前後に空白を付ける
+      NVM_CPU_CORES="$(psrinfo | wc -l | command tr -d '[:space:]')"
+    ;;
+    "_aix")
+      NVM_CPU_CORES="$(pmcycles -m | wc -l | command tr -d '[:space:]')"
+    ;;
+    *)
+      # glibc、FreeBSD、macOS、Cygwin では `_NPROCESSORS_ONLN` という名前。
+      # 前置きの無い名前は POSIX.1-2024 で標準化されたもので、NetBSD と
+      # Solaris はこちらに答える。Windows のシェルは `NUMBER_OF_PROCESSORS` を受け継ぐ。
+      # 最小限の環境には `getconf` も `nproc` も無い。
+      NVM_CPU_CORES="$(command getconf _NPROCESSORS_ONLN 2>/dev/null \
+        || command getconf NPROCESSORS_ONLN 2>/dev/null \
+        || command nproc 2>/dev/null \
+        || nvm_echo "${NUMBER_OF_PROCESSORS-}")"
+    ;;
+  esac
+  if ! nvm_is_natural_num "${NVM_CPU_CORES}"; then
+    nvm_err 'Can not determine how many core(s) are available, running in single-threaded mode.'
+    nvm_err 'Please report an issue on GitHub to help us make nvm run faster on your computer!'
+    NVM_MAKE_JOBS=1
+  else
+    nvm_echo "Detected that you have ${NVM_CPU_CORES} CPU core(s)"
+    if [ "${NVM_CPU_CORES}" -gt 2 ]; then
+      NVM_MAKE_JOBS=$((NVM_CPU_CORES - 1))
+      nvm_echo "Running with ${NVM_MAKE_JOBS} threads to speed up the build"
+    else
+      NVM_MAKE_JOBS=1
+      nvm_echo 'Number of CPU core(s) less than or equal to 2, running in single-threaded mode'
+    fi
+  fi
+}
+```
+
+```sh:line-numbers=3887 [原文]
 nvm_get_make_jobs() {
   if nvm_is_natural_num "${1-}"; then
     NVM_MAKE_JOBS="$1"
@@ -76,6 +134,8 @@ nvm_get_make_jobs() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`make -j N`**: ビルドを N 個並列で実行するオプションです。CPU のコア数に合わせると速くなります。
@@ -90,19 +150,19 @@ nvm_get_make_jobs() {
 
 ## 何をしているか
 
-### 1. ユーザーの指定（3888〜3895 行目）
+### 1. ユーザーの指定
 
 引数が正しい数ならそれを使って終わります。数以外が渡されたらエラーを表示し、自動判定に進みます。
 
-### 2. OS ごとにコア数を数える（3899〜3923 行目）
+### 2. OS ごとにコア数を数える
 
 - **Linux**: `/proc/cpuinfo` の `processor : 数字` の行を数えます。
 - **FreeBSD・macOS・OpenBSD**: `sysctl -n hw.ncpu` を使います。
-- **Solaris**: `psrinfo` の出力行数を数えます。`wc` が付ける空白は `tr` で消します（3907 行目）。
+- **Solaris**: `psrinfo` の出力行数を数えます。`wc` が付ける空白は `tr` で消します。
 - **AIX**: `pmcycles -m` の行数を数えます。
 - **それ以外**: `getconf` の 2 種類の名前、`nproc`、Windows の環境変数 `NUMBER_OF_PROCESSORS` を順に試します。
 
-### 3. 並列数を決める（3924〜3937 行目）
+### 3. 並列数を決める
 
 数えられなければ 1 にします。3 コア以上なら「コア数 − 1」、2 コア以下なら 1 です。
 
@@ -110,7 +170,7 @@ nvm_get_make_jobs() {
 
 - **1 つ残す配慮**: 全コアを使うとビルドは最速ですが、その間マシン全体が重くなります。1 つ空けておくことで、ビルド中も端末やエディタを操作できます。
 - **`||` の連鎖でフォールバック**: 「この方法がだめなら次」を `||` で 1 行にまとめています。どれか 1 つでも成功すればその出力が使われます。
-- **細かい実装差を知っている**: `getconf` の名前に `_` が付くかどうか（3914〜3917 行目のコメント）や、`wc` の空白など、OS ごとの細かい違いまで押さえています。
+- **細かい実装差を知っている**: `getconf` の名前に `_` が付くかどうか（コメント）や、`wc` の空白など、OS ごとの細かい違いまで押さえています。
 - **うまくいかなくても止まらない**: コア数がわからなくても、1 並列で確実にビルドを続けます。さらに「issue を報告してください」と伝え、改善につなげています。
 
 ## まとめ

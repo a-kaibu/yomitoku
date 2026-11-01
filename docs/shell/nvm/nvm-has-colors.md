@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [110, 116]
 function: "nvm_has_colors"
 difficulty: 1
+format: 2
 tags: [CLI, 入出力, イディオム]
 ---
 ## ひとことで
@@ -44,11 +45,11 @@ nvm_has_colors() {
 
 ## 何をしているか
 
-### 1. 色数を調べる（112〜114 行目）
+### 1. 色数を調べる
 
 `nvm_has tput` で `tput` コマンドがあるか確認し、あれば `tput -T "${TERM:-vt100}" colors` の結果を `NVM_NUM_COLORS` に入れます。`TERM=xterm-256color` の環境なら `256` が入ります。`tput` が無ければ変数は空のままです。
 
-### 2. 3 つの条件をまとめて判定する（115 行目）
+### 2. 3 つの条件をまとめて判定する
 
 最後の 1 行は、3 つのテストを `&&` でつないでいます。
 

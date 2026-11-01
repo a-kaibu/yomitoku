@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [4382, 4399]
 function: "nvm_check_file_permissions"
 difficulty: 2
+format: 2
 tags: [ファイル, 再帰, 移植性]
 ---
 ## ひとことで
@@ -21,7 +22,30 @@ nvm は、Node.js のディレクトリを削除する前などにこれを使�
 
 ## コード
 
-```sh:line-numbers=4382
+::: code-group
+
+```sh:line-numbers=4382 [日本語訳]
+nvm_check_file_permissions() {
+  nvm_is_zsh && setopt local_options nonomatch
+  for FILE in "$1"/* "$1"/.[!.]* "$1"/..?* ; do
+    if [ -d "$FILE" ]; then
+      if [ -n "${NVM_DEBUG-}" ]; then
+        nvm_err "${FILE}"
+      fi
+      if [ ! -L "${FILE}" ] && ! nvm_check_file_permissions "${FILE}"; then
+        return 2
+      fi
+    elif [ -e "$FILE" ] && [ ! -w "$FILE" ] && [ -z "$(command find "${FILE}" -prune -user "$(command id -u)")" ]; then
+      # ^ ファイルの持ち主の確認方法は https://www.shellcheck.net/wiki/SC3067 による
+      nvm_err "file is not writable or self-owned: $(nvm_sanitize_path "$FILE")"
+      return 1
+    fi
+  done
+  return 0
+}
+```
+
+```sh:line-numbers=4382 [原文]
 nvm_check_file_permissions() {
   nvm_is_zsh && setopt local_options nonomatch
   for FILE in "$1"/* "$1"/.[!.]* "$1"/..?* ; do
@@ -42,6 +66,8 @@ nvm_check_file_permissions() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **グロブ（ワイルドカード）**: `*` は「任意の文字列」、`?` は「任意の 1 文字」、`[!.]` は「`.` 以外の 1 文字」です。シェルがファイル名に展開します。
@@ -54,11 +80,11 @@ nvm_check_file_permissions() {
 
 ## 何をしているか
 
-### 1. zsh の設定（4383 行目）
+### 1. zsh の設定
 
 zsh なら、一致しないグロブがエラーにならないようにします。
 
-### 2. 全ファイルを列挙（4384 行目）
+### 2. 全ファイルを列挙
 
 次の 3 つのパターンで、`.` と `..` を除くすべての名前を列挙します。
 
@@ -70,11 +96,11 @@ zsh なら、一致しないグロブがエラーにならないようにしま�
 
 `.*` と書くと `.` と `..`（自分自身と親ディレクトリ）にも一致してしまい、親へさかのぼって無限にたどることになります。3 つに分けることで、それを避けつつ隠しファイルを全部拾っています。
 
-### 3. ディレクトリなら再帰（4385〜4391 行目）
+### 3. ディレクトリなら再帰
 
 ディレクトリなら、自分自身を呼び出して中を調べます。ただしシンボリックリンクは追いかけません。リンク先が別の場所だったり、ループしていたりするかもしれないからです。
 
-### 4. ファイルの検査（4392〜4396 行目）
+### 4. ファイルの検査
 
 存在していて、書き込めず、持ち主も自分でなければ、問題のあるファイルです。`nvm_sanitize_path` でホームディレクトリなどを `${HOME}` に置き換えて表示し、失敗を返します。
 

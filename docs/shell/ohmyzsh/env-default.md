@@ -11,6 +11,7 @@ file: "lib/functions.zsh"
 lines: [143, 146]
 function: "env_default"
 difficulty: 2
+format: 2
 tags: [イディオム, パース]
 ---
 ## ひとことで
@@ -42,11 +43,11 @@ function env_default() {
 
 ## 何をしているか
 
-### 1. export 済みか調べる（144 行目）
+### 1. export 済みか調べる
 
 `${parameters[$1]}` で変数の種類を取り出し、`*-export*` に一致するかを調べます。`PAGER` がすでに export されていれば `scalar-export` なので一致し、`return 0` で終わります。
 
-### 2. 設定して export（145 行目）
+### 2. 設定して export
 
 一致しなければ `export "PAGER=less"` を実行し、`return 3` で終わります。
 

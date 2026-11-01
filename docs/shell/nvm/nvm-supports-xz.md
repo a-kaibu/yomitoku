@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [6583, 6635]
 function: "nvm_supports_xz"
 difficulty: 1
+format: 2
 tags: [移植性, ファイル]
 ---
 ## ひとことで
@@ -21,7 +22,65 @@ xz は gzip よりよく縮むので、ダウンロードが速くなります�
 
 ## コード
 
-```sh:line-numbers=6583
+::: code-group
+
+```sh:line-numbers=6583 [日本語訳]
+nvm_supports_xz() {
+  if [ -z "${1-}" ]; then
+    return 1
+  fi
+
+  local NVM_OS
+  NVM_OS="$(nvm_get_os)"
+  if [ "_${NVM_OS}" = '_darwin' ]; then
+    local MACOS_VERSION
+    MACOS_VERSION="$(sw_vers -productVersion)"
+    if nvm_version_greater "10.9.0" "${MACOS_VERSION}"; then
+      # macOS 10.8 以前の tar は xz 圧縮の tar ファイルを展開できない
+      return 1
+    fi
+  elif [ "_${NVM_OS}" = '_freebsd' ]; then
+    if ! [ -e '/usr/lib/liblzma.so' ]; then
+      # /usr/lib/liblzma.so の無い FreeBSD の tar は xz 圧縮の tar ファイルを展開できない
+      return 1
+    fi
+  else
+    if ! command which xz >/dev/null 2>&1; then
+      # PATH に xz が無いほとんどの OS では、tar で xz 圧縮の tar ファイルを展開できない
+      # （Linux、SmartOS などで正しく動くはず）
+      return 1
+    fi
+  fi
+
+  # v4.0.0 以降の node はすべて xz 版がある
+  if nvm_is_merged_node_version "${1}"; then
+    return 0
+  fi
+
+  # 0.12 系: node v0.12.10 以降には xz 版がある
+  if nvm_version_greater_than_or_equal_to "${1}" "0.12.10" && nvm_version_greater "0.13.0" "${1}"; then
+    return 0
+  fi
+
+  # 0.10 系: node v0.10.42 以降には xz 版がある
+  if nvm_version_greater_than_or_equal_to "${1}" "0.10.42" && nvm_version_greater "0.11.0" "${1}"; then
+    return 0
+  fi
+
+  case "${NVM_OS}" in
+    darwin)
+      # darwin では io.js v2.3.2 以降にしか xz 版が無い
+      nvm_version_greater_than_or_equal_to "${1}" "2.3.2"
+    ;;
+    *)
+      nvm_version_greater_than_or_equal_to "${1}" "1.0.0"
+    ;;
+  esac
+  return $?
+}
+```
+
+```sh:line-numbers=6583 [原文]
 nvm_supports_xz() {
   if [ -z "${1-}" ]; then
     return 1
@@ -77,6 +136,8 @@ nvm_supports_xz() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **xz / gzip**: どちらもファイルの圧縮形式です。Node.js は `.tar.gz` と `.tar.xz` の両方で配布されています。
@@ -88,7 +149,7 @@ nvm_supports_xz() {
 
 ## 何をしているか
 
-### 1. このマシンで展開できるか（4588〜4608 行目）
+### 1. このマシンで展開できるか
 
 OS ごとに確かめ方が違います。
 
@@ -96,7 +157,7 @@ OS ごとに確かめ方が違います。
 - **FreeBSD**: xz のライブラリ `/usr/lib/liblzma.so` が無ければ失敗。
 - **それ以外**: `xz` コマンドが無ければ失敗。
 
-### 2. そのバージョンに xz 版があるか（4611〜4633 行目）
+### 2. そのバージョンに xz 版があるか
 
 Node.js の歴史に沿って判定します。
 

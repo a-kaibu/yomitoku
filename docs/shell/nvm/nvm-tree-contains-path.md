@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [774, 814]
 function: "nvm_tree_contains_path"
 difficulty: 2
+format: 2
 tags: [ファイル, 文字列処理, 防御的プログラミング]
 ---
 ## ひとことで
@@ -21,7 +22,53 @@ tags: [ファイル, 文字列処理, 防御的プログラミング]
 
 ## コード
 
-```sh:line-numbers=774
+::: code-group
+
+```sh:line-numbers=774 [日本語訳]
+nvm_tree_contains_path() {
+  local tree
+  tree="${1-}"
+  local node_path
+  node_path="${2-}"
+
+  if [ "@${tree}@" = "@@" ] || [ "@${node_path}@" = "@@" ]; then
+    nvm_err "both the tree and the node path are required"
+    return 2
+  fi
+
+  local clean_tree
+  clean_tree="${tree}"
+
+  # 末尾のスラッシュをシェルの中だけで取り除く（例: "dir//" -> "dir"）
+  while [ "${clean_tree}" != "${clean_tree%/}" ]; do
+    clean_tree="${clean_tree%/}"
+  done
+  if [ -z "${clean_tree}" ]; then
+    clean_tree='/'
+  fi
+
+  # 存在しないパスでも、グロブ文字を含めて文字どおりに比較する
+  local pathdir
+  pathdir="${node_path}"
+  while [ "${pathdir}" != '' ] && [ "${pathdir}" != '.' ] && [ "${pathdir}" != '/' ] &&
+      [ "${pathdir}" != "${clean_tree}" ] && ! [ "${pathdir}" -ef "${clean_tree}" ]; do
+    case "${pathdir}" in
+      */*)
+        pathdir="${pathdir%/*}"
+        if [ -z "${pathdir}" ]; then
+          pathdir='/'
+        fi
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+  [ "${pathdir}" = "${clean_tree}" ] || [ "${pathdir}" -ef "${clean_tree}" ]
+}
+```
+
+```sh:line-numbers=774 [原文]
 nvm_tree_contains_path() {
   local tree
   tree="${1-}"
@@ -65,6 +112,8 @@ nvm_tree_contains_path() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`${1-}` / `${2-}`**: 1 番目・2 番目の引数。無いときは空文字になります。
@@ -80,15 +129,15 @@ nvm_tree_contains_path() {
 
 `tree=/home/me/.nvm/`、`node_path=/home/me/.nvm/versions/node/v20/bin/node` で追ってみます。
 
-### 1. 引数チェック（780〜783 行目）
+### 1. 引数チェック
 
 どちらかが空なら、エラーを表示して `return 2` します。
 
-### 2. 末尾のスラッシュを取る（789〜794 行目）
+### 2. 末尾のスラッシュを取る
 
-`clean_tree` の末尾から `/` を取り除くことを、取れなくなるまで繰り返します。`dir//` のように複数付いていても全部消えます。`/home/me/.nvm/` は `/home/me/.nvm` になります。もし `tree` が `/` だけだった場合は全部消えて空になるので、794 行目で `/` に戻しています。
+`clean_tree` の末尾から `/` を取り除くことを、取れなくなるまで繰り返します。`dir//` のように複数付いていても全部消えます。`/home/me/.nvm/` は `/home/me/.nvm` になります。もし `tree` が `/` だけだった場合は全部消えて空になるので、`clean_tree='/'` で `/` に戻しています。
 
-### 3. 親へさかのぼる（799〜812 行目）
+### 3. 親へさかのぼる
 
 `pathdir` に `node_path` を入れ、1 階層ずつ親へ移動していきます。
 
@@ -103,13 +152,13 @@ nvm_tree_contains_path() {
 
 ループを止める条件は、空・`.`・`/` に達したとき、`clean_tree` と文字列として一致したとき、または `-ef` で同じディレクトリだとわかったときです。`/` を含まない相対パス（`node` など）になったら `break` で抜けます。
 
-### 4. 判定（813 行目）
+### 4. 判定
 
 最後に、たどり着いた `pathdir` が `clean_tree` と一致するか、同じ実体を指すかを調べ、その結果を返します。
 
 ## ここがすごい
 
-- **文字列の前方一致で済ませない**: 素直に書くと `case "$node_path" in "$tree"/*)` のような前方一致になります。しかしそれだと、`~/.nvm` が実はシンボリックリンクだった場合や、`tree` にワイルドカード文字（`*` や `[`）が含まれていた場合に誤判定します。この関数は 1 階層ずつ比べるので、パターンとして解釈される心配がありません（796 行目のコメント）。
+- **文字列の前方一致で済ませない**: 素直に書くと `case "$node_path" in "$tree"/*)` のような前方一致になります。しかしそれだと、`~/.nvm` が実はシンボリックリンクだった場合や、`tree` にワイルドカード文字（`*` や `[`）が含まれていた場合に誤判定します。この関数は 1 階層ずつ比べるので、パターンとして解釈される心配がありません（コメント）。
 - **`-ef` で実体を比べる**: 文字列が違っても同じ場所を指す場合（シンボリックリンク経由など）を拾えます。逆に、まだ存在しないパスでも文字列一致で判定できるよう、両方を `||` で組み合わせています。
 - **外部コマンドを使わない**: `dirname` や `realpath` を呼ばずにパラメータ展開だけで親をたどるので、どのシェルでも速く動きます。
 - **終わりの条件を丁寧に網羅**: `/`、`.`、空文字のどれに行き着いても無限ループしないようにしています。

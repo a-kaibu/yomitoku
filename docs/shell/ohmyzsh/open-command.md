@@ -11,6 +11,7 @@ file: "lib/functions.zsh"
 lines: [16, 44]
 function: "open_command"
 difficulty: 2
+format: 2
 tags: [移植性, CLI, 文字列処理]
 ---
 ## ひとことで
@@ -21,7 +22,41 @@ Oh My Zsh のほかの機能（Web 検索のプラグインなど）は、この
 
 ## コード
 
-```zsh:line-numbers=16
+::: code-group
+
+```zsh:line-numbers=16 [日本語訳]
+function open_command() {
+  local open_cmd
+
+  # 開くためのコマンドを決める
+  case "$OSTYPE" in
+    darwin*)  open_cmd='open' ;;
+    cygwin*)  open_cmd='cygstart' ;;
+    linux*)   [[ "$(uname -r)" != *icrosoft* ]] && open_cmd='nohup xdg-open' || {
+                open_cmd='cmd.exe /c start ""'
+                [[ -e "$1" ]] && { 1="$(wslpath -w "${1:a}")" || return 1 }
+                [[ "$1" = (http|https)://* ]] && {
+                  1="$(echo "$1" | sed -E 's/([&|()<>^])/^\1/g')" || return 1
+                }
+              } ;;
+    msys*)    open_cmd='start ""' ;;
+    *)        echo "Platform $OSTYPE not supported"
+              return 1
+              ;;
+  esac
+
+  # URL が渡されたとき、SSH 先などでは $BROWSER に手元のブラウザが設定されていることがある。
+  # 参照: https://github.com/ohmyzsh/ohmyzsh/issues/11098
+  if [[ -n "$BROWSER" && "$1" = (http|https)://* ]]; then
+    "$BROWSER" "$@"
+    return
+  fi
+
+  ${=open_cmd} "$@" &>/dev/null
+}
+```
+
+```zsh:line-numbers=16 [原文]
 function open_command() {
   local open_cmd
 
@@ -53,6 +88,8 @@ function open_command() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`$OSTYPE`**: zsh が用意する、OS の種類を表す変数です（`darwin23.0`、`linux-gnu` など）。
@@ -67,22 +104,22 @@ function open_command() {
 
 ## 何をしているか
 
-### 1. OS ごとにコマンドを決める（20〜34 行目）
+### 1. OS ごとにコマンドを決める
 
 - **macOS**: `open`
 - **Cygwin**: `cygstart`
 - **Linux**: 普通は `nohup xdg-open`。`nohup` で、ターミナルを閉じてもアプリが終了しないようにします。
 - **WSL**（Linux だが中身は Windows）: `cmd.exe /c start ""` を使います。
-  - ファイルなら、`wslpath -w` で `/home/me/a.pdf` を `\\wsl$\...\a.pdf` のような Windows のパスに変換します（25 行目）。
-  - URL なら、`&` `|` `(` `)` `<` `>` `^` の前に `^` を付けます（27 行目）。これらは `cmd.exe` で特別な意味を持つ記号で、`^` が cmd.exe のエスケープ文字だからです。
+  - ファイルなら、`wslpath -w` で `/home/me/a.pdf` を `\\wsl$\...\a.pdf` のような Windows のパスに変換します。
+  - URL なら、`&` `|` `(` `)` `<` `>` `^` の前に `^` を付けます。これらは `cmd.exe` で特別な意味を持つ記号で、`^` が cmd.exe のエスケープ文字だからです。
 - **MSYS2**: `start ""`
 - **それ以外**: 対応していないと表示して失敗します。
 
-### 2. SSH 先でのブラウザ（38〜41 行目）
+### 2. SSH 先でのブラウザ
 
 URL で、しかも `$BROWSER` が設定されていれば、そちらを使います。SSH でつないだ先などでは、`xdg-open` よりユーザーが指定したブラウザのほうが適切だからです。
 
-### 3. 実行（43 行目）
+### 3. 実行
 
 `${=open_cmd}` で `cmd.exe /c start ""` を単語に分けてから実行します。出力は捨てます。
 
