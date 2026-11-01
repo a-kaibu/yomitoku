@@ -12,6 +12,7 @@ lines: [278, 296]
 function: "StateFlowSlot.makePending"
 difficulty: 3
 tags: [並行処理, ロック不要, 状態機械]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,32 @@ tags: [並行処理, ロック不要, 状態機械]
 
 ## コード
 
-```kotlin:line-numbers=278
+
+::: code-group
+
+```kotlin:line-numbers=278 [日本語訳]
+    @Suppress("UNCHECKED_CAST")
+    fun makePending() {
+        _state.loop { state ->
+            when {
+                state == null -> return // このスロットは空いている。飛ばす
+                state === PENDING -> return // すでに保留中。何もしない
+                state === NONE -> { // 保留中の印を付ける
+                    if (_state.compareAndSet(state, PENDING)) return
+                }
+                else -> { // 中断中の継続が入っている
+                    // 継続はいつでもキャンセルされてスロットを手放すかもしれないので、ここでも CAS を使う
+                    if (_state.compareAndSet(state, NONE)) {
+                        (state as CancellableContinuationImpl<Unit>).resume(Unit)
+                        return
+                    }
+                }
+            }
+        }
+    }
+```
+
+```kotlin:line-numbers=278 [原文]
     @Suppress("UNCHECKED_CAST")
     fun makePending() {
         _state.loop { state ->
@@ -45,7 +71,9 @@ tags: [並行処理, ロック不要, 状態機械]
     }
 ```
 
-スロットの状態は、同じクラスのコメント（248〜252 行目）で次のように説明されています。
+:::
+
+スロットの状態は、同じクラスのコメントで次のように説明されています。
 
 | `_state` の値 | 意味 |
 | --- | --- |
@@ -66,10 +94,33 @@ tags: [並行処理, ロック不要, 状態機械]
 
 状態ごとに分岐します。
 
-- **空き（`null`）**: 購読者がいないので何もしない（282 行目）。
-- **すでに `PENDING`**: もう印が付いているので何もしない（283 行目）。通知が何回来ても、1 回分の印にまとまります。
-- **`NONE`**: `PENDING` に変えて終わり（284〜286 行目）。購読者は起きているので、次に確認したときに気づきます。
-- **継続オブジェクト（眠っている）**: `NONE` に戻してから、その継続を `resume` して起こします（287〜293 行目）。
+### 空き（`null`）と保留中（`PENDING`）
+
+```kotlin:line-numbers=282
+                state == null -> return // このスロットは空いている。飛ばす
+                state === PENDING -> return // すでに保留中。何もしない
+```
+
+購読者がいないスロットは何もしません。すでに `PENDING` なら印が付いているので何もしません。通知が何回来ても、印は 1 つにまとまります。
+
+### 待機なし（`NONE`）
+
+```kotlin:line-numbers=285
+                    if (_state.compareAndSet(state, PENDING)) return
+```
+
+`PENDING` に変えて終わります。購読者は起きているので、次に確認したときに気づきます。
+
+### 眠っている購読者（継続）
+
+```kotlin:line-numbers=289
+                    if (_state.compareAndSet(state, NONE)) {
+                        (state as CancellableContinuationImpl<Unit>).resume(Unit)
+                        return
+                    }
+```
+
+`NONE` に戻してから、その継続を `resume` して起こします。
 
 CAS が失敗したとき（他のスレッドが同時に状態を変えたとき）は、`loop` が最新の状態でもう一度判定します。
 
@@ -77,8 +128,8 @@ CAS が失敗したとき（他のスレッドが同時に状態を変えたと�
 
 - **型の違いを状態の違いに使う**: 「空き」「待機なし」「通知あり」「眠っている」を別々のフラグで持つと、それらの組み合わせを同時に正しく更新するのが大変です。1 つの変数に入れる「もの」を変えるだけで状態を表せば、CAS 1 回で状態が切り替わります。しかも「眠っている」状態では、起こす相手（継続）そのものを持っています。
 - **通知を自然にまとめる**: すでに `PENDING` なら何もしないので、購読者が忙しい間に 100 回更新があっても、印は 1 つだけです。購読者は起きたときに最新の値を読めばよいので、これで十分です。
-- **キャンセルとの競合にも安全**: 288 行目のコメントの通り、眠っている購読者はいつキャンセルされてスロットを手放すか分かりません。だから継続を起こす前にも CAS で状態を確認しています。
-- **`null` を「空き」にする理由**: 253〜254 行目のコメントにある通り、スロットの新規確保と `makePending` が競合しても、既定値の `null` なら「空き」として安全にスキップできます。
+- **キャンセルとの競合にも安全**: 眠っている購読者はいつキャンセルされてスロットを手放すか分かりません。だから継続を起こす前にも CAS で状態を確認しています。
+- **`null` を「空き」にする理由**: スロットの新規確保と `makePending` が競合しても、既定の `null` なら「空き」として安全にスキップできます。
 
 ## まとめ
 
