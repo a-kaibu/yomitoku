@@ -11,8 +11,10 @@ file: Lib/functools.py
 lines: [738, 763]
 function: _c3_merge
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 型システム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `_c3_merge` は、複数の「親クラスの並び」を 1 本の並びに合流させる関数です。これは **C3 線形化** と呼ばれるアルゴリズムで、Python が多重継承のときに「どの親クラスのメソッドから先に探すか」（MRO: Method Resolution Order）を決めるのと同じ方法です。
@@ -20,7 +22,38 @@ tags: [アルゴリズム, 型システム, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=738
+::: code-group
+
+```python:line-numbers=738 [日本語訳]
+def _c3_merge(sequences):
+    """C3 アルゴリズムで、*sequences* の MRO を 1 つの MRO にまとめる。
+
+    公式の MRO 解説（https://docs.python.org/3/howto/mro.html）をもとにしている。
+
+    """
+    result = []
+    while True:
+        sequences = [s for s in sequences if s]   # 空の並びを取り除く
+        if not sequences:
+            return result
+        for s1 in sequences:   # 各並びの先頭から候補を探す
+            candidate = s1[0]
+            for s2 in sequences:
+                if candidate in s2[1:]:
+                    candidate = None
+                    break      # この先頭は後ろに出てくるので却下
+            else:
+                break
+        if candidate is None:
+            raise RuntimeError("Inconsistent hierarchy")
+        result.append(candidate)
+        # 選んだ候補を取り除く
+        for seq in sequences:
+            if seq[0] == candidate:
+                del seq[0]
+```
+
+```python:line-numbers=738 [原文]
 def _c3_merge(sequences):
     """Merges MROs in *sequences* to a single MRO using the C3 algorithm.
 
@@ -49,6 +82,8 @@ def _c3_merge(sequences):
                 del seq[0]
 ```
 
+:::
+
 ## 前提知識
 
 - **継承と多重継承**: クラスは親クラスの機能を引き継げます。Python では `class C(A, B)` のように親を複数持てます。
@@ -66,27 +101,56 @@ def _c3_merge(sequences):
 - `[C, A]`（C の MRO）
 - `[B, C]`（D の親の並び）
 
-### 1. 空の並びを捨てる（746〜748 行目）
+### 1. 空の並びを捨てて、終わりを判定する
+
+```python:line-numbers=745
+    while True:
+        sequences = [s for s in sequences if s]   # 空の並びを取り除く
+        if not sequences:
+            return result
+```
 
 全部空になったら完成なので `result` を返します。
 
-### 2. 先頭の候補を探す（749〜756 行目）
+### 2. 先頭の候補を探す
+
+```python:line-numbers=749
+        for s1 in sequences:   # 各並びの先頭から候補を探す
+            candidate = s1[0]
+            for s2 in sequences:
+                if candidate in s2[1:]:
+                    candidate = None
+                    break      # この先頭は後ろに出てくるので却下
+            else:
+                break
+```
 
 各並びの **先頭** を候補にして、「その候補が、どの並びでも 2 番目以降に出てこないか」を調べます。2 番目以降に出てくるなら、まだ前に来てはいけないクラスなので却下（`candidate = None` で `break`）し、次の並びの先頭を試します。
 内側のループが最後まで回った（どこにも 2 番目以降に出てこなかった）ら、`else: break` で外側のループも抜けて、候補が確定します。
 
 1 回目: 候補 `B` は、どの並びでも 2 番目以降にない → 採用。
 
-### 3. 採用して取り除く（759〜763 行目）
+### 3. 採用して取り除く
 
-`result` に `B` を追加し、先頭が `B` の並びから `B` を削除します。
+```python:line-numbers=759
+        result.append(candidate)
+        # 選んだ候補を取り除く
+        for seq in sequences:
+            if seq[0] == candidate:
+                del seq[0]
+```
 
-- `[A]`, `[C, A]`, `[C]`
+`result` に `B` を追加し、先頭が `B` の並びから `B` を削除します。残りは `[A]`, `[C, A]`, `[C]` です。
 
 2 回目: 候補 `A` は `[C, A]` の 2 番目に出てくる → 却下。次の候補 `C` → 採用。→ `[A]`, `[A]`, `[]`
 3 回目: 候補 `A` → 採用。最終結果は `[B, C, A]` で、`D` を頭に付ければ `D → B → C → A` です。
 
-### 4. 候補が見つからなければエラー（757〜758 行目）
+### 4. 候補が見つからなければエラー
+
+```python:line-numbers=757
+        if candidate is None:
+            raise RuntimeError("Inconsistent hierarchy")
+```
 
 どの先頭も却下されたら、矛盾した継承なので `RuntimeError` を出します。
 
@@ -108,7 +172,7 @@ C3 の考え方は「**ある並びの途中にあるクラスは、まだ先に
 
 ### 公式ドキュメントの説明をそのままコードに
 
-741 行目のコメントにある通り、この実装は Python 公式の MRO 解説文書のアルゴリズムを素直に写したものです。インタプリタ本体は C で同じことをしていますが、`singledispatch` は「抽象基底クラス」も含めた独自の並びを作る必要があるため、Python 版を持っています。
+コメント `Adapted from https://docs.python.org/3/howto/mro.html.` が示すとおり、この実装は Python 公式の MRO 解説文書のアルゴリズムを素直に写したものです。インタプリタ本体は C で同じことをしていますが、`singledispatch` は「抽象基底クラス」も含めた独自の並びを作る必要があるため、Python 版を持っています。
 
 ## まとめ
 

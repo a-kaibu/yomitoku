@@ -11,17 +11,53 @@ file: Lib/functools.py
 lines: [237, 265]
 function: reduce
 difficulty: 1
+format: 2
 tags: [関数型, イテレータ, イディオム, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `reduce` は、リストなどの要素を左から順に 2 つずつ関数に通し、最後に 1 つの値にまとめる（たたみ込む）関数です。
-`reduce(lambda x, y: x + y, [1, 2, 3, 4, 5])` は `((((1 + 2) + 3) + 4) + 5)`、つまり `15` を返します。
+`reduce(lambda x, y: x+y, [1, 2, 3, 4, 5])` は `((((1 + 2) + 3) + 4) + 5)`、つまり `15` を返します。
 短い関数ですが、「引数が省略されたか」の判定と、イテレータの使い方にお手本になる工夫があります。
 
 ## コード
 
-```python:line-numbers=237
+::: code-group
+
+```python:line-numbers=237 [日本語訳]
+def reduce(function, sequence, /, initial=_initial_missing):
+    """
+    reduce(function, iterable, /[, initial]) -> 値
+
+    2 引数の関数を、イテラブルの要素に左から順に累積して適用する。
+
+    これにより、イテラブルは実質的に 1 つの値にまとめられる。initial があるときは、
+    計算ではイテラブルの要素より前に置かれ、
+    イテラブルが空のときの既定値になる。
+
+    例えば、reduce(lambda x, y: x+y, [1, 2, 3, 4, 5]) は
+    ((((1 + 2) + 3) + 4) + 5) を計算する。
+    """
+
+    it = iter(sequence)
+
+    if initial is _initial_missing:
+        try:
+            value = next(it)
+        except StopIteration:
+            raise TypeError(
+                "reduce() of empty iterable with no initial value") from None
+    else:
+        value = initial
+
+    for element in it:
+        value = function(value, element)
+
+    return value
+```
+
+```python:line-numbers=237 [原文]
 def reduce(function, sequence, /, initial=_initial_missing):
     """
     reduce(function, iterable, /[, initial]) -> value
@@ -53,7 +89,9 @@ def reduce(function, sequence, /, initial=_initial_missing):
     return value
 ```
 
-`_initial_missing` は、この関数の直前（235 行目）で `_initial_missing = sentinel('_initial_missing')` として作られている「目印専用」のオブジェクトです。`sentinel()` は新しい Python に入った組み込み関数で、ほかのどの値とも区別できる名前付きの目印を作ります（古い版では `object()` が使われていました）。
+:::
+
+`_initial_missing` は、この関数の直前で `_initial_missing = sentinel('_initial_missing')` として作られている「目印専用」のオブジェクトです。`sentinel()` は、ほかのどの値とも区別できる名前付きの目印を作る組み込み関数です（古い版では `object()` が使われていました）。
 
 ## 前提知識
 
@@ -66,16 +104,38 @@ def reduce(function, sequence, /, initial=_initial_missing):
 
 ## 何をしているか
 
-### 1. イテレータを作る（251 行目）
+### 1. イテレータを作る
+
+```python:line-numbers=251
+    it = iter(sequence)
+```
 
 `it = iter(sequence)` で、リストでもジェネレータでも同じように 1 つずつ取り出せるようにします。
 
-### 2. 初期値を決める（253〜260 行目）
+### 2. 初期値を決める
+
+```python:line-numbers=253
+    if initial is _initial_missing:
+        try:
+            value = next(it)
+        except StopIteration:
+            raise TypeError(
+                "reduce() of empty iterable with no initial value") from None
+    else:
+        value = initial
+```
 
 `initial` が渡されなかったとき（`_initial_missing` のまま）は、**イテレータから最初の 1 個を取り出して初期値にします**。空だったら取り出せないので、`TypeError` を出します。
 `initial` が渡されたときは、それを初期値にします。
 
-### 3. 残りを順番にたたみ込む（262〜265 行目）
+### 3. 残りを順番にたたみ込む
+
+```python:line-numbers=262
+    for element in it:
+        value = function(value, element)
+
+    return value
+```
 
 `[1, 2, 3, 4, 5]` を足し算で追うと、`value` は次のように変わります。
 
@@ -92,7 +152,7 @@ def reduce(function, sequence, /, initial=_initial_missing):
 ### `None` ではなく専用のセンチネルを使う
 
 「引数が省略されたか」を調べるとき、`initial=None` をデフォルトにする書き方がよく使われます。しかしそれだと、**利用者が本当に `None` を初期値にしたい場合** と区別できません。
-`sentinel()` や `object()` で作った、ほかのどこにも存在しないオブジェクトをデフォルト値にし、`is` で同一性を比べれば、どんな値が渡されても誤判定しません。このような「目印専用の値」をセンチネル（番兵）と呼びます。
+`sentinel()`（または `object()`）で作った、ほかのどこにも存在しないオブジェクトをデフォルト値にし、`is` で同一性を比べれば、どんな値が渡されても誤判定しません。このような「目印専用の値」をセンチネル（番兵）と呼びます。
 
 ### 先頭だけを `next()` で取り出す
 
