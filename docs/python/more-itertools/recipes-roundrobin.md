@@ -1,6 +1,6 @@
 ---
-title: cycle と islice を入れ子にして、尽きた入力を自然に脱落させる
-description: more_itertools.roundrobin は、複数のデータから 1 つずつ順番に取り出す。尽きた入力を取り除くために、cycle を「1 つ減らして作り直す」という巧妙な方法を使っている。
+title: 複数の列を、順番に 1 つずつ交互に取り出す
+description: more_itertools.roundrobin は、いくつかの列から 1 つずつ順に値を取り出して並べる。空になった列は外しながら、残りの列を循環させる。cycle と islice を組み合わせて、列の数が減っていく処理を短く書いている。
 language: python
 project: more-itertools
 repo: https://github.com/more-itertools/more-itertools
@@ -12,14 +12,13 @@ lines: [391, 406]
 function: roundrobin
 difficulty: 3
 format: 2
-tags: [イテレータ, ハック, 遅延評価]
+tags: [イテレータ, アルゴリズム, 遅延評価]
 ---
 
 ## ひとことで
 
-`roundrobin(*iterables)` は、複数のデータから **順番に 1 つずつ** 取り出す関数です。トランプを配るように、1 周ごとに各入力から 1 つずつ出します。
-`roundrobin('ABC', 'D', 'EF')` は `A, D, E, B, F, C` になります。
-途中で尽きた入力は飛ばされ、すべてが尽きたら終わります。数行のコードの中に、イテレータの性質を突いた技が詰まっています。
+`roundrobin(*iterables)` は、**複数の列から 1 つずつ順番に値を取り出して並べる** 関数です。
+`roundrobin('ABC', 'D', 'EF')` は `A`、`D`、`E`、`B`、`F`、`C` の順に値を出します。ある列が先に終わっても、残りの列だけで続けます。
 
 ## コード
 
@@ -27,17 +26,17 @@ tags: [イテレータ, ハック, 遅延評価]
 
 ```python:line-numbers=391 [日本語訳]
 def roundrobin(*iterables):
-    """入力のイテラブルを順番に巡り、それぞれが尽きるまで続ける。
+    """入力の列を順番に回り、どの列も尽きるまで値を取り出す。
 
         >>> list(roundrobin('ABC', 'D', 'EF'))
         ['A', 'D', 'E', 'B', 'F', 'C']
 
-    This function produces the same output as :func:`interleave_longest`, but
-    may perform better for some inputs (in particular when the number of
-    iterables is small).
+    この関数は :func:`interleave_longest` と同じ結果を返すが、
+    入力によっては速く動くことがある（特に、列の数が
+    少ないとき）。
 
     """
-    # アルゴリズムは George Sakkis による
+    # このアルゴリズムは George Sakkis による
     iterators = map(iter, iterables)
     for num_active in range(len(iterables), 0, -1):
         iterators = cycle(islice(iterators, num_active))
@@ -65,79 +64,56 @@ def roundrobin(*iterables):
 
 :::
 
-`cycle`、`islice` は `itertools` の関数です。
-
 ## 前提知識
 
-- **`map(iter, iterables)`**: 各入力をイテレータに変換します。
-- **`cycle(x)`**: `x` の要素を **無限に繰り返し** 出すイテレータです。最初の 1 周で出した値を覚えておき、2 周目以降はそれを使います。
-- **`islice(x, k)`**: `x` の先頭から k 個だけを取り出すイテレータです。
-- **`map(next, iterators)`**: `iterators` から 1 つずつイテレータを取り出し、それぞれに `next()` を呼んだ結果を出します。どれかの `next()` が `StopIteration` を出すと、`map` 自体がそこで終わります。
-- **`yield from`**: 別のイテレータが出す値を、すべて自分の値として出します。
-- **`range(n, 0, -1)`**: n, n-1, ..., 1 と逆向きに数えます。
+- **ラウンドロビン**: 順番に持ち回って、1 回ずつ仕事を割り当てる方法です。
+- **`cycle`**: 渡された列を、終わりなく繰り返すイテレータを作る関数です。
+- **`islice`**: 列の先頭から一部だけを切り出すイテレータです。
+- **`map(next, ...)`**: 複数のイテレータから、順に次の値を取り出す書き方です。
 
 ## 何をしているか
 
-入力 `'ABC'`, `'D'`, `'EF'` のイテレータを `I1`, `I2`, `I3` とします。
-
-### 1. 入力を準備する
+### 1. 全部のイテレータを用意する
 
 ```python:line-numbers=403
     iterators = map(iter, iterables)
 ```
 
-`map(iter, iterables)` で、それぞれの入力をイテレータにします。
+各入力を `iter` で、値を順に読むイテレータに変えます。元の入力は、ここで読み始められます。
 
-### 2. 本数を減らしながら回す
+### 2. 残りの数だけを循環させる
 
 ```python:line-numbers=404
     for num_active in range(len(iterables), 0, -1):
         iterators = cycle(islice(iterators, num_active))
+```
+
+最初は全部の列を使います。`num_active` は、まだ残っている列の数です。`islice` で、その数だけ先頭から取り出し、`cycle` で循環させます。
+
+### 3. 1 つずつ次の値を出す
+
+```python:line-numbers=406
         yield from map(next, iterators)
 ```
 
-まず 3 本で回し、尽きた入力が出たら、その時点の `cycle` の続きから残りの本数ぶんを切り出して作り直します。
-
-3 本の段階（`num_active = 3`）では、`cycle(islice(iterators, 3))` が `I1, I2, I3, I1, ...` と回ります。`map(next, ...)` で順に `next()` を呼ぶと、
-
-`A`（I1）、`D`（I2）、`E`（I3）、`B`（I1）、ここで I2 の `next()` が `StopIteration` を出す
-
-ので、`map` が終わります。ここで大事なのは、**cycle の現在位置が「I2 の次」で止まっている** ことです。
-
-2 本の段階（`num_active = 2`）では、`islice(iterators, 2)` が止まっていた cycle の続きから `I3, I1` を取り出します。**尽きた I2 は自然に外れています。** `F`（I3）、`C`（I1）と出て、I3 が尽きて終わります。
-
-1 本の段階では、cycle の続きから `I1` だけを取り出し、残りを流して終わります。
-
-結果は `A, D, E, B, F, C` です。
+循環させたイテレータから、`next` で順に値を取り出して出します。ある列が尽きたら、次の周回では、その列を外した数だけで続けます。
 
 ## ここがすごい
 
-### 尽きたものの「直後」から作り直す
+### 列の数が減っても続く
 
-`map(next, ...)` が止まるのは、ちょうど尽きたイテレータに `next()` を呼んだときです。そのとき cycle は、尽きたイテレータの **次** を指しています。そこから「残りの本数ぶん」を `islice` で切り出すと、尽きたものだけがきれいに抜け、しかも **順番も崩れません**。尽きたイテレータを探して削除する処理は 1 行もありません。
+`num_active` を 1 つずつ減らしながら、残りの列だけを回します。短い列が先に終わっても、ループの形を変えずに処理できます。
 
-### 素直な書き方との比較
+### 短く書けている
 
-素直に書くと、
+ループの中に、「この列は終わったか」の判定を書いていません。`range` で数を減らす仕組みと、`cycle` の組み合わせで、判定を省いています。
 
-```python
-iters = [iter(x) for x in iterables]
-while iters:
-    for it in list(iters):
-        try:
-            yield next(it)
-        except StopIteration:
-            iters.remove(it)
-```
+### 大きな入力でも全部をコピーしない
 
-のように、リストのコピーや削除、例外処理が必要です。Sakkis 氏の方法は、これらをすべて `cycle` と `islice` の性質に任せています。
-
-### すべてが遅延評価
-
-どの部品もイテレータなので、入力が巨大でも、無限に続くものが混ざっていても、必要な分だけ取り出されます。
+入力を全部リストにせず、イテレータのまま読みます。長い列を交互に並べるときも、メモリを多く使いません。
 
 ## まとめ
 
-- `cycle` は回り続け、止まった位置を覚えている。その性質を使うと、「続きから作り直す」ことができる。
-- `map(next, ...)` は、最初に尽きたイテレータのところで止まる。
-- 削除や例外処理を書かずに、部品の性質だけで複雑な振る舞いを作れることがある。
+- 列を循環させ、尽きた列を外すと、交互に並べる処理が短く書ける。
+- 残りの列の数を減らす書き方で、列の長さが違っても扱える。
+- イテレータのまま読むので、大きな入力にも向いている。
