@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/enumerable.rb
 lines: [219, 225]
 function: "Enumerable#in_order_of"
 difficulty: 2
+format: 2
 tags: [ソート, ハッシュ, イディオム]
 ---
 
@@ -44,8 +45,12 @@ tags: [ソート, ハッシュ, イディオム]
 
 ## 何をしているか
 
-### 1. フィルタありの場合（220〜221 行目）
+### 1. フィルタありの場合
 
+```ruby:line-numbers=220
+    if filter
+      group_by(&key).values_at(*series).compact.flatten(1)
+```
 ID が 5, 3, 1 の人を `[1, 5, 3]` の順に並べる例です。
 
 1. `group_by(&:id)` → `{5 => [p5], 3 => [p3], 1 => [p1]}`
@@ -55,8 +60,12 @@ ID が 5, 3, 1 の人を `[1, 5, 3]` の順に並べる例です。
 
 `series` に含まれない ID の要素は、そもそも取り出されないので結果に入りません。
 
-### 2. フィルタなしの場合（222〜223 行目）
+### 2. フィルタなしの場合
 
+```ruby:line-numbers=222
+    else
+      sort_by { |v| series.index(v.public_send(key)) || series.size }
+```
 `filter: false` なら、`series` の中での位置を並べ替えのキーにします。`series` にない要素は `series.size`（どの位置よりも大きい値）になり、**末尾にまとめて** 置かれます。
 
 ## ここがすごい

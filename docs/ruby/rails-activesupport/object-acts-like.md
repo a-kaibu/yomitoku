@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/object/acts_like.rb
 lines: [38, 49]
 function: "Object#acts_like?"
 difficulty: 2
+format: 2
 tags: [型システム, メタプログラミング, 最適化]
 ---
 
@@ -47,12 +48,25 @@ Rails では `Time` だけでなく、タイムゾーン付きの `ActiveSupport
 
 ## 何をしているか
 
-### 1. よく使う 3 種類は名前を直接書く（39〜45 行目）
+### 1. よく使う 3 種類は名前を直接書く
 
+```ruby:line-numbers=39
+    case duck
+    when :time
+      respond_to? :acts_like_time?
+    when :date
+      respond_to? :acts_like_date?
+    when :string
+      respond_to? :acts_like_string?
+```
 `:time`、`:date`、`:string` のときは、それぞれ `acts_like_time?` などのメソッドを持っているかを調べます。
 
-### 2. それ以外は名前を組み立てる（46〜47 行目）
+### 2. それ以外は名前を組み立てる
 
+```ruby:line-numbers=46
+    else
+      respond_to? :"acts_like_#{duck}?"
+```
 たとえば `acts_like?(:duration)` なら、`:"acts_like_duration?"` というシンボルを作って調べます。
 
 自分で作ったクラスに `def acts_like_string?; true; end` を定義しておけば、`MyText.new.acts_like?(:string)` は `true` になります。
@@ -66,7 +80,7 @@ Rails では `Time` だけでなく、タイムゾーン付きの `ActiveSupport
 
 ### よくある名前は文字列を作らない
 
-46〜47 行目だけでもすべてのケースに対応できます。それなのに `:time`、`:date`、`:string` だけを特別に書いているのはなぜでしょうか。
+`else` の側だけでもすべてのケースに対応できます。それなのに `:time`、`:date`、`:string` だけを特別に書いているのはなぜでしょうか。
 `:"acts_like_#{duck}?"` は、呼ぶたびに文字列を組み立て、それをシンボルに変換する処理が走ります。`acts_like?(:time)` は日付や時刻の計算の中で非常によく呼ばれるので、**よく使う名前だけは組み立てずに済むよう、あらかじめ書いておく** という最適化です。
 
 ### 汎用の道を残している

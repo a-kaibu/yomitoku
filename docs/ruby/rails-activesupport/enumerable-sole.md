@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/enumerable.rb
 lines: [236, 254]
 function: "Enumerable#sole"
 difficulty: 1
+format: 2
 tags: [防御的プログラミング, エラー処理, イテレータ]
 ---
 
@@ -54,19 +55,40 @@ tags: [防御的プログラミング, エラー処理, イテレータ]
 
 ## 何をしているか
 
-### 1. 状態を用意する（237〜238 行目）
+### 1. 状態を用意する
 
+```ruby:line-numbers=237
+    result = nil
+    found = false
+```
 見つけた要素を入れる `result` と、すでに 1 つ見つけたかを表す `found` を用意します。
 
-### 2. 1 つずつ見る（240〜247 行目）
+### 2. 1 つずつ見る
 
+```ruby:line-numbers=240
+    each do |*element|
+      if found
+        raise SoleItemExpectedError, "multiple items found"
+      end
+
+      result = element.size == 1 ? element[0] : element
+      found = true
+    end
+```
 - 1 つ目の要素: `found` は偽なので、`result` に入れて `found = true` にします。
 - 2 つ目の要素: `found` がすでに真なので、すぐに「multiple items found」のエラーにします。
 
-245 行目は、ブロックに渡された値が 1 つなら `element[0]`、2 つ以上（ハッシュのキーと値など）なら配列のまま保存します。`{ a: 1 }.sole` は `[:a, 1]` になります。
+`element.size == 1 ? element[0] : element` は、ブロックに渡された値が 1 つなら `element[0]`、2 つ以上（ハッシュのキーと値など）なら配列のまま保存します。`{ a: 1 }.sole` は `[:a, 1]` になります。
 
-### 3. 最後に確認する（249〜253 行目）
+### 3. 最後に確認する
 
+```ruby:line-numbers=249
+    if found
+      result
+    else
+      raise SoleItemExpectedError, "no item found"
+    end
+```
 ループを抜けたとき、1 つ見つけていればそれを返し、1 つもなければ「no item found」のエラーにします。
 
 ## ここがすごい

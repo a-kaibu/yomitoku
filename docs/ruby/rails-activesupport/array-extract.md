@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/array/extract.rb
 lines: [12, 22]
 function: "Array#extract!"
 difficulty: 2
+format: 2
 tags: [イディオム, イテレータ, クロージャ]
 ---
 
@@ -47,12 +48,22 @@ tags: [イディオム, イテレータ, クロージャ]
 
 ## 何をしているか
 
-### 1. ブロックがないとき（13 行目）
+### 1. ブロックがないとき
 
+```ruby:line-numbers=13
+    return to_enum(:extract!) { size } unless block_given?
+```
 `numbers.extract!` のようにブロックなしで呼ばれたら、Enumerator を返します。`numbers.extract!.with_index { |x, i| i.even? }` のように、ほかのメソッドとつなげて使えます。Ruby 標準の `select` や `reject` も同じ振る舞いをします。
 
-### 2. 取り除きながら集める（15〜19 行目）
+### 2. 取り除きながら集める
 
+```ruby:line-numbers=15
+    extracted_elements = []
+
+    reject! do |element|
+      extracted_elements << element if yield(element)
+    end
+```
 `[1, 2, 3, 4]` に `&:odd?` を渡した場合で追います。
 
 | 要素 | `yield` の結果 | ブロックの値 | reject! の判断 |
@@ -62,10 +73,13 @@ tags: [イディオム, イテレータ, クロージャ]
 | 3 | 真 | 配列（真） | 取り除く |
 | 4 | 偽 | `nil` | 残す |
 
-18 行目の後置 if は、条件が真のときに要素を `extracted_elements` に追加し、その配列（真の値）を返します。偽のときは `nil` を返します。この値をそのまま `reject!` が「取り除くかどうか」に使います。
+`extracted_elements << element if yield(element)` の後置 if は、条件が真のときに要素を `extracted_elements` に追加し、その配列（真の値）を返します。偽のときは `nil` を返します。この値をそのまま `reject!` が「取り除くかどうか」に使います。
 
-### 3. 集めたものを返す（21 行目）
+### 3. 集めたものを返す
 
+```ruby:line-numbers=21
+    extracted_elements
+```
 `extracted_elements` は `[1, 3]` です。
 
 ## ここがすごい

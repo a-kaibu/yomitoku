@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/object/inclusion.rb
 lines: [19, 28]
 function: "Object#in?"
 difficulty: 1
+format: 2
 tags: [可読性, エラー処理, API設計]
 ---
 
@@ -45,16 +46,28 @@ tags: [可読性, エラー処理, API設計]
 
 ## 何をしているか
 
-### 1. Range のときは cover?（21〜22 行目）
+### 1. Range のときは cover?
 
+```ruby:line-numbers=21
+    when Range
+      another_object.cover?(self)
+```
 `25.in?(18..30)` は `(18..30).cover?(25)` になり、`18 <= 25 && 25 <= 30` の比較だけで `true` を返します。
 
-### 2. それ以外は include?（23〜24 行目）
+### 2. それ以外は include?
 
+```ruby:line-numbers=23
+    else
+      another_object.include?(self)
+```
 配列、ハッシュ、文字列、Set など、`include?` を持つものなら何でも使えます。`"lo".in?("hello")` は `"hello".include?("lo")` です。
 
-### 3. include? がなければ説明付きのエラー（26〜27 行目）
+### 3. include? がなければ説明付きのエラー
 
+```ruby:line-numbers=26
+  rescue NoMethodError
+    raise ArgumentError.new("The parameter passed to #in? must respond to #include?")
+```
 `1.in?(5)` のように、整数（`include?` を持たない）を渡すと `NoMethodError` が起きます。それを受け止めて、「`#in?` の引数は `#include?` を持つ必要があります」という `ArgumentError` に変換します。
 
 ## ここがすごい

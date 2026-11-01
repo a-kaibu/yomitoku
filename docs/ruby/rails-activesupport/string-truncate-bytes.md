@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/string/filters.rb
 lines: [134, 159]
 function: "String#truncate_bytes"
 difficulty: 2
+format: 2
 tags: [文字列処理, Unicode]
 ---
 
@@ -62,20 +63,46 @@ tags: [文字列処理, Unicode]
 
 ## 何をしているか
 
-### 1. 特別なケースを先に片付ける（135〜143 行目）
+### 1. 特別なケースを先に片付ける
 
+```ruby:line-numbers=135
+    omission ||= ""
+
+    case
+    when bytesize <= truncate_to
+      dup
+    when omission.bytesize > truncate_to
+      raise ArgumentError, "Omission #{omission.inspect} is #{omission.bytesize}, larger than the truncation length of #{truncate_to} bytes"
+    when omission.bytesize == truncate_to
+      omission.dup
+```
 - `omission` に `nil` が渡されたら空文字として扱います。
 - もともと n バイト以下なら、コピーを返します。
 - 省略記号だけで n バイトを超えるなら、条件を満たせないのでエラーにします。
 - 省略記号がちょうど n バイトなら、省略記号だけを返します。
 
-### 2. 空の文字列に 1 文字ずつ詰める（145〜154 行目）
+### 2. 空の文字列に 1 文字ずつ詰める
 
+```ruby:line-numbers=145
+      self.class.new.force_encoding(encoding).tap do |cut|
+        cut_at = truncate_to - omission.bytesize
+
+        each_grapheme_cluster do |grapheme|
+          if cut.bytesize + grapheme.bytesize <= cut_at
+            cut << grapheme
+          else
+            break
+          end
+        end
+```
 元と同じクラス・同じエンコーディングの空文字列 `cut` を作ります。本文に使えるのは `n - 省略記号のバイト数` です。
 `"🔪" * 20` を 20 バイトに切る場合、`"…"` は 3 バイトなので本文は 17 バイトまでです。🔪 は 4 バイトなので、4 個（16 バイト）入れたところで、5 個目を入れると 20 バイトになりはみ出します。そこで `break` します。
 
-### 3. 省略記号を付ける（156 行目）
+### 3. 省略記号を付ける
 
+```ruby:line-numbers=156
+        cut << omission
+```
 `"🔪🔪🔪🔪…"`（19 バイト）ができあがり、`tap` によってこの `cut` が返されます。
 
 ## ここがすごい

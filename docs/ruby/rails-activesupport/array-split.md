@@ -11,6 +11,7 @@ file: activesupport/lib/active_support/core_ext/array/grouping.rb
 lines: [115, 130]
 function: "Array#split"
 difficulty: 1
+format: 2
 tags: [イディオム, クロージャ]
 ---
 
@@ -48,16 +49,33 @@ tags: [イディオム, クロージャ]
 - **`index(値)` と `index { 条件 }`**: 配列の中で、その値（または条件に合う要素）が最初に現れる位置を返します。見つからなければ `nil` です。
 - **`shift(n)`**: 配列の先頭から n 個を **取り除いて** 返します。引数なしの `shift` は先頭 1 個を取り除きます。
 - **`while (idx = ...)`**: 代入した値が `nil` でない間だけ繰り返します。Ruby では `nil` と `false` だけが偽です。
-- **最後の式が戻り値**: Ruby のメソッドは最後に評価した式の値を返します。129 行目の `result << arr` は、`result` 自身を返します。
+- **最後の式が戻り値**: Ruby のメソッドは最後に評価した式の値を返します。`result << arr` は、`result` 自身を返します。
 
 ## 何をしているか
 
-### 1. 作業用のコピーを作る（116〜117 行目）
+### 1. 作業用のコピーを作る
 
+```ruby:line-numbers=116
+    arr = dup
+    result = []
+```
 `arr = dup` で元の配列をコピーします。この後 `shift` でどんどん削っていくので、元の配列を守るためです。
 
-### 2. 区切りを探しては切り出す（118〜128 行目）
+### 2. 区切りを探しては切り出す
 
+```ruby:line-numbers=118
+    if block_given?
+      while (idx = arr.index(&block))
+        result << arr.shift(idx)
+        arr.shift
+      end
+    else
+      while (idx = arr.index(value))
+        result << arr.shift(idx)
+        arr.shift
+      end
+    end
+```
 `[1, 2, 3, 4, 5].split(3)` で追ってみます。
 
 1. `arr.index(3)` は 2（0 から数えて 3 番目）なので、`arr.shift(2)` で `[1, 2]` を取り出して `result` に入れます。`arr` は `[3, 4, 5]` になります。
@@ -66,8 +84,11 @@ tags: [イディオム, クロージャ]
 
 ブロックの場合も、`index(&block)` で「条件に合う最初の位置」を探すだけで、流れはまったく同じです。
 
-### 3. 残りを最後のグループにする（129 行目）
+### 3. 残りを最後のグループにする
 
+```ruby:line-numbers=129
+    result << arr
+```
 残った `[4, 5]` を追加して `[[1, 2], [4, 5]]` を返します。区切りが最後の要素だった場合は、残りが `[]` なので末尾に空の配列が入ります（文字列の split とは少し違う点です）。
 
 ## ここがすごい
