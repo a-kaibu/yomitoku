@@ -67,6 +67,11 @@ function git_previous_branch() {
 
 ### 1. 1 つ前の場所を完全な名前で得る
 
+```zsh:line-numbers=316
+  ref=$(__git_prompt_git rev-parse --quiet --symbolic-full-name @{-1} 2> /dev/null)
+```
+
+
 `git rev-parse --quiet --symbolic-full-name @{-1}` を実行し、結果と終了ステータスを保存します。
 
 ### 2. 使えないなら終わる

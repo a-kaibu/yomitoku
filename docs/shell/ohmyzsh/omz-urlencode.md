@@ -184,9 +184,19 @@ function omz_urlencode() {
 
 ### 2. UTF-8 に変換
 
+```zsh:line-numbers=195
+    str=$(echo -E "$str" | iconv -f $encoding -t UTF-8)
+```
+
+
 URL は UTF-8 で表すのが決まりです。今のロケールが UTF-8 か ASCII でなければ、`iconv` で UTF-8 に変換します。
 
 ### 3. エスケープしない文字を決める
+
+```zsh:line-numbers=205
+  local i byte ord LC_ALL=C
+```
+
 
 `LC_ALL=C` にして、1 バイトずつ処理できるようにします。エスケープしない文字の集まりを `[A-Za-z0-9…]` の形で作ります。`-r` が無ければ予約文字（`;/?:@&=+$,`）を、`-m` が無ければ記号（`_.!~*'()-`）を足します。コメントのとおり、`-` を含む `$mark` は範囲指定と誤解されないよう最後に足します。
 

@@ -46,9 +46,19 @@ function default() {
 
 ### 1. あれば何もしない
 
+```zsh:line-numbers=130
+    (( $+parameters[$1] )) && return 0
+```
+
+
 `(( $+parameters[$1] ))` で変数があるか調べ、あれば `return 0` で終わります。
 
 ### 2. 無ければ作る
+
+```zsh:line-numbers=131
+    typeset -g "$1"="$2"   && return 3
+```
+
 
 `typeset -g "$1"="$2"` で、グローバル変数を作って値を入れます。成功したら `return 3` で終わります。
 

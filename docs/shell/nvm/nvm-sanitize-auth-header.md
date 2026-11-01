@@ -70,6 +70,11 @@ nvm_sanitize_auth_header() {
 
 ### 1. 値を出力する
 
+```sh:line-numbers=348
+    nvm_echo "$1" | command tr -cd 'a-zA-Z0-9 :_.+/=~-'
+```
+
+
 `nvm_echo "$1"` で値を出力し、パイプで `tr` に渡します。
 
 ### 2. 許可した文字以外を消す

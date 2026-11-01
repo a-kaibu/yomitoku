@@ -100,6 +100,11 @@ function parse_git_dirty() {
 
 ### 1. オプションを組み立てる
 
+```zsh:line-numbers=242
+  FLAGS=('--porcelain')
+```
+
+
 基本は `--porcelain` です。
 
 - リポジトリの設定 `oh-my-zsh.hide-dirty` が `1` なら、調べること自体をやめます。大きなリポジトリで遅いときのための逃げ道です。
@@ -108,9 +113,19 @@ function parse_git_dirty() {
 
 ### 2. 1 行だけ読む
 
+```zsh:line-numbers=240
+  local STATUS
+```
+
+
 `git status ... | read -r STATUS` で、出力の最初の行だけを `STATUS` に入れます。コメント「空でないかどうかだけが大事なので、リスト全体ではなく 1 行だけ持つ」のとおりです。
 
 ### 3. 印を出す
+
+```zsh:line-numbers=240
+  local STATUS
+```
+
 
 `STATUS` が空でなければ変更あり、空なら変更なしの印を表示します。
 

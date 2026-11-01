@@ -74,9 +74,19 @@ nvm_wrap_with_color_code() {
 
 ### 1. 色コードを得る
 
+```sh:line-numbers=1649
+  CODE="$(nvm_print_color_code "${1}" 2>/dev/null ||:)"
+```
+
+
 `nvm_print_color_code` で色名をコードに変えます。不正な色名で失敗しても `||:` で止まらず、`CODE` は空になります。
 
 ### 2. 色を使ってよいか判定
+
+```sh:line-numbers=1652
+  # `nvm_has_colors` cannot answer for itself inside a command substitution,
+```
+
 
 次のどちらかなら色を使います。
 

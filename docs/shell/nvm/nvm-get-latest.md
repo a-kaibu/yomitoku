@@ -67,13 +67,28 @@ https://github.com/nvm-sh/nvm/releases/tag/v0.40.3
 
 ### 2. wget しかない場合
 
+```sh:line-numbers=138
+    NVM_LATEST_URL="$(command curl -q ${CURL_COMPRESSED_FLAG:-} -w "%{url_effective}\\n" -L -s -S https://latest.nvm.sh -o /dev/null)"
+```
+
+
 wget には `url_effective` のような機能が無いので、`--server-response` でサーバーの返事のヘッダを表示させ、それを awk で読みます。リダイレクトが何段もあると `Location:` 行が複数出るので、**最後の行の値** を `END` で表示します。wget はヘッダをエラー出力に出すため、`2>&1` で標準出力にまとめてから awk に渡しています。
 
 ### 3. どちらも無い・結果が空のとき
 
+```sh:line-numbers=143
+    return 1
+```
+
+
 curl も wget も無ければ `return 1`、URL が取れなければ `return 2` と、**原因ごとに違う番号** で失敗を返します。
 
 ### 4. 末尾を切り出す
+
+```sh:line-numbers=149
+  nvm_echo "${NVM_LATEST_URL##*/}"
+```
+
 
 `${NVM_LATEST_URL##*/}` で最後の `/` までを削り、`v0.40.3` だけを表示します。
 

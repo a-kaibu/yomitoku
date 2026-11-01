@@ -73,6 +73,11 @@ NVM_URL_REST = user@example.com:8080/dist/v20/node.tar.gz
 
 ### 4. つなげる
 
+```sh:line-numbers=242
+  nvm_echo "${1%%://*}://${NVM_URL_REST%%/*}"
+```
+
+
 最後に `https` + `://` + `user@example.com:8080` をつなげて `nvm_echo` で表示します。
 
 ## ここがすごい

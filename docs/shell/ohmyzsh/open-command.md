@@ -106,6 +106,11 @@ function open_command() {
 
 ### 1. OS ごとにコマンドを決める
 
+```zsh:line-numbers=22
+    cygwin*)  open_cmd='cygstart' ;;
+```
+
+
 - **macOS**: `open`
 - **Cygwin**: `cygstart`
 - **Linux**: 普通は `nohup xdg-open`。`nohup` で、ターミナルを閉じてもアプリが終了しないようにします。
@@ -117,9 +122,19 @@ function open_command() {
 
 ### 2. SSH 先でのブラウザ
 
+```zsh:line-numbers=36
+  # If a URL is passed, $BROWSER might be set to a local browser within SSH.
+```
+
+
 URL で、しかも `$BROWSER` が設定されていれば、そちらを使います。SSH でつないだ先などでは、`xdg-open` よりユーザーが指定したブラウザのほうが適切だからです。
 
 ### 3. 実行
+
+```zsh:line-numbers=43
+  ${=open_cmd} "$@" &>/dev/null
+```
+
 
 `${=open_cmd}` で `cmd.exe /c start ""` を単語に分けてから実行します。出力は捨てます。
 

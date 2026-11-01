@@ -204,13 +204,28 @@ nvm_download() {
 
 ### 1. 認証ヘッダを付けるか決める
 
+```sh:line-numbers=158
+  if [ -n "${NVM_AUTH_HEADER:-}" ]; then
+```
+
+
 `NVM_AUTH_HEADER` が設定されていても、すぐには使いません。引数の URL がすべて設定したミラーの配下のときだけ付けます。1 つでも外の URL があれば付けません。値は `nvm_sanitize_auth_header` で危険な文字を取り除きます。
 
 ### 2. curl の場合
 
+```sh:line-numbers=183
+    set -- --fail "$@"
+```
+
+
 `--fail`（HTTP エラーで失敗する）、`--compressed`（使えれば）、`-q` を先頭に足します。コメントのとおり、`-q`（`.curlrc` を読まない）は **最初の引数でないと効かない** ので、最後に `set --` で先頭に入れています。
 
 ### 3. wget の場合
+
+```sh:line-numbers=203
+        '--progress-bar') set -- "$@" '--progress=bar' ;;
+```
+
 
 元の引数の数を覚えてから、1 つずつ見て wget 用の引数を **後ろに** 追加していきます。
 
@@ -227,6 +242,11 @@ nvm_download() {
 `-C` は「途中から再開」で、curl では `-C -` と値を伴います。wget の `-c` は値を取らないので、次の引数を読み飛ばすフラグを立てています。最後に `shift` で元の引数を捨てれば、翻訳済みの引数だけが残ります。
 
 ### 4. 実行
+
+```sh:line-numbers=224
+      nvm_wget_same_origin "${sanitized_header}" "$@"
+```
+
 
 どちらも無ければ何もしません。ヘッダがあり、ダウンローダーが GNU wget なら、リダイレクトを安全にたどる `nvm_wget_same_origin` に任せます。それ以外はヘッダを付けて実行します。
 

@@ -61,6 +61,11 @@ nvm_get_colors() {
 
 ### 1. 設定を読む
 
+```sh:line-numbers=1626
+  local COLORS
+```
+
+
 `COLORS` に `NVM_COLORS` の値、無ければ `bygre` を入れます。
 
 ### 2. N 番目の文字を色コードに

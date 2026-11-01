@@ -123,6 +123,11 @@ nvm_normalize_lts() {
 
 ### 1. 相対指定のとき
 
+```sh:line-numbers=1464
+      RESULT="$(command ls "${NVM_ALIAS_DIR}/lts" | command tail -n "${N}" | command head -n 1)"
+```
+
+
 `lts/-1` なら `N=1`、そこに 1 を足して `N=2` にします。
 
 `~/.nvm/alias/lts/` に `argon`、`boron`、…、`hydrogen`、`iron`、`jod` と `*`（最新の LTS を指すエイリアス）が並んでいるとします。`ls` は名前順に並べるので、記号の `*` が先頭に来て、ほかはアルファベット順です。

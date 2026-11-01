@@ -123,9 +123,19 @@ nvm_is_valid_version() {
 
 ### 1. 特別な名前は無条件で OK
 
+```sh:line-numbers=1403
+    "stable" | "unstable" | "iojs" | "node")
+```
+
+
 `stable`、`unstable`、`iojs`、`node` は正しい名前として成功を返します。
 
 ### 2. 前置きを取る
+
+```sh:line-numbers=1409
+      VERSION="${VERSION#iojs-}"
+```
+
 
 `iojs-` と `v` を取り除き、数字の部分 `NVM_VERSION_CORE` を取り出します。`v22.0.0-rc.1` なら `22.0.0-rc.1` です。
 

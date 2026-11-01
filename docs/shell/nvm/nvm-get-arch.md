@@ -166,21 +166,46 @@ nvm_get_arch() {
 
 ### 1. 生の名前を得る
 
+```sh:line-numbers=3366
+    if HOST_ARCH=$(pkg_info -Q MACHINE_ARCH pkg_install); then
+```
+
+
 Solaris 系では `pkg_info` か `isainfo`、AIX では固定で `ppc64`、それ以外は `uname -m` を使います。あわせて `getconf LONG_BIT` も調べます。
 
 ### 2. Node.js の名前に変換
+
+```sh:line-numbers=3380
+    x86_64 | amd64) NVM_ARCH="x64" ;;
+```
+
 
 `x86_64`/`amd64` → `x64`、`i386`〜`i686` → `x86`、`aarch64` → `arm64` のように変換します。`i*86` というパターン 1 つで `i386`、`i486`、`i586`、`i686` をまとめて扱っています。
 
 ### 3. 32 ビットのコンテナ
 
+```sh:line-numbers=3374
+    HOST_ARCH="$(command uname -m)"
+```
+
+
 64 ビットのホストで 32 ビットの Docker コンテナを動かすと、`uname -m` はホストのカーネルの `x86_64` を返します。そこで `LONG_BIT` が 32 なら `x86` に直します。
 
 ### 4. 32 ビット ARM の環境
 
+```sh:line-numbers=3394
+  # change ARCH to 32bit ARM (armv7l) if /sbin/init is 32bit executable
+```
+
+
 Raspberry Pi などでは、カーネルは 64 ビット ARM でも、OS は 32 ビットのことがあります。ここでは `/sbin/init`（最初に起動するプログラム）の 5 バイト目を読み、`01`（32 ビット）なら `armv7l` にします。`od` の出力は先頭に空白が付くので、比較する値は `' 01'` です。
 
 ### 5. Alpine
+
+```sh:line-numbers=3407
+      x64) NVM_ARCH=x64-musl ;;
+```
+
 
 Alpine Linux なら musl 用のビルドの名前（`x64-musl` など）に変えます。
 

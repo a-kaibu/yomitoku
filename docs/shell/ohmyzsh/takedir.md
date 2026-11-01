@@ -63,6 +63,11 @@ function mkcd takedir() {
 
 ### 3. 失敗したら移動しない
 
+```zsh:line-numbers=50
+  mkdir -p $@ && cd ${@:$#}
+```
+
+
 `&&` でつないでいるので、権限が無いなどで `mkdir` が失敗したら `cd` はしません。
 
 ## ここがすごい

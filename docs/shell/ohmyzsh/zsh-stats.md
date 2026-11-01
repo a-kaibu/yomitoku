@@ -56,6 +56,11 @@ function zsh_stats() {
 
 ### 2. 数える
 
+```zsh:line-numbers=3
+    | awk '{ CMD[$2]++; count++; } END { for (a in CMD) print CMD[a] " " CMD[a]*100/count "% " a }' \
+```
+
+
 awk が 1 行ごとに `CMD[$2]++` を実行します。`$2` は `git` なので `CMD["git"]` が 1 増えます。同時に総数 `count` も数えます。最後に `回数 割合% コマンド名` を全コマンド分出力します。
 
 ### 3. 余計なものを除く
@@ -67,6 +72,11 @@ awk が 1 行ごとに `CMD[$2]++` を実行します。`$2` は `git` なので
 回数の大きい順に並べ、上位 20 個を残します。
 
 ### 5. 整形する
+
+```zsh:line-numbers=4
+    | grep -v "./" | sort -nr | head -n 20 | column -c3 -s " " -t | nl
+```
+
 
 `column` で表の形にそろえ、`nl` で順位の番号を付けます。
 

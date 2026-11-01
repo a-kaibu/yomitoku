@@ -55,6 +55,11 @@ nvm_replace_literal() {
 
 ### 1. 値を環境変数で渡す
 
+```sh:line-numbers=4320
+  nvm_echo "${1-}" | NVM_FROM="${2-}" NVM_TO="${3-}" command awk '
+```
+
+
 探す文字列と置き換える文字列を `NVM_FROM`、`NVM_TO` という環境変数で awk に渡し、`BEGIN` で読み込みます。探す文字列の長さ `n` も計算しておきます。
 
 ### 2. 見つかるたびに置き換える

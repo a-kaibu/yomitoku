@@ -131,9 +131,19 @@ nvm_tree_contains_path() {
 
 ### 1. 引数チェック
 
+```sh:line-numbers=782
+    return 2
+```
+
+
 どちらかが空なら、エラーを表示して `return 2` します。
 
 ### 2. 末尾のスラッシュを取る
+
+```sh:line-numbers=785
+  local clean_tree
+```
+
 
 `clean_tree` の末尾から `/` を取り除くことを、取れなくなるまで繰り返します。`dir//` のように複数付いていても全部消えます。`/home/me/.nvm/` は `/home/me/.nvm` になります。もし `tree` が `/` だけだった場合は全部消えて空になるので、`clean_tree='/'` で `/` に戻しています。
 
@@ -153,6 +163,11 @@ nvm_tree_contains_path() {
 ループを止める条件は、空・`.`・`/` に達したとき、`clean_tree` と文字列として一致したとき、または `-ef` で同じディレクトリだとわかったときです。`/` を含まない相対パス（`node` など）になったら `break` で抜けます。
 
 ### 4. 判定
+
+```sh:line-numbers=797
+  local pathdir
+```
+
 
 最後に、たどり着いた `pathdir` が `clean_tree` と一致するか、同じ実体を指すかを調べ、その結果を返します。
 

@@ -43,9 +43,19 @@ function alias_value() {
 
 ### 1. キーがあるか調べる
 
+```zsh:line-numbers=102
+    (( $+aliases[$1] )) && echo $aliases[$1]
+```
+
+
 `(( $+aliases[$1] ))` で、引数 `$1` という名前のエイリアスがあるかを調べます。`ll` があれば `(( 1 ))` で成功、無ければ `(( 0 ))` で失敗です。
 
 ### 2. あれば値を表示
+
+```zsh:line-numbers=102
+    (( $+aliases[$1] )) && echo $aliases[$1]
+```
+
 
 成功したときだけ `echo $aliases[$1]` で中身を表示します。
 

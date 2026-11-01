@@ -75,10 +75,20 @@ function git_remote_status() {
 
 ### 2. 先行と遅延を数える
 
+```zsh:line-numbers=272
+        ahead=$(__git_prompt_git rev-list ${hook_com[branch]}@{upstream}..HEAD 2>/dev/null | wc -l)
+```
+
+
 - `@{upstream}..HEAD` の数 → `ahead`（先行）
 - `HEAD..@{upstream}` の数 → `behind`（遅延）
 
 ### 3. 4 通りに分ける
+
+```zsh:line-numbers=269
+    local remote ahead behind git_remote_status git_remote_status_detailed
+```
+
 
 `ahead` と `behind` が 0 かどうかで、一致・先行・遅延・分岐のどれかにします。テーマが「詳細表示」を望んでいれば、数と色も付けた文字列も作ります。`$((ahead))` は、`wc -l` が付けることのある空白を取り除いて数だけにする効果もあります。
 

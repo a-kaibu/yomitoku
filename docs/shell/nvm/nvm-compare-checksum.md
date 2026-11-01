@@ -111,6 +111,11 @@ nvm_compare_checksum() {
 
 ### 2. 計算する
 
+```sh:line-numbers=2875
+  COMPUTED_SUM="$(nvm_compute_checksum "${FILE}")"
+```
+
+
 `nvm_compute_checksum` でハッシュ値を計算して `COMPUTED_SUM` に入れます。
 
 ### 3. 期待値の確認
@@ -126,6 +131,11 @@ nvm_compare_checksum() {
 計算結果が期待値と違えば、両方の値を表示して `1` を返します。ただし、計算結果が「`\` + 期待値」の場合も一致とみなします。GNU の `sha256sum` は、ファイル名に `\` や改行などの特殊な文字が含まれていると、出力の先頭に `\` を付ける仕様があるためと考えられます。
 
 ### 6. 一致
+
+```sh:line-numbers=2892
+  nvm_err 'Checksums matched!'
+```
+
 
 `Checksums matched!` を表示して終わります。
 

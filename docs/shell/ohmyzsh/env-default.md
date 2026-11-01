@@ -45,9 +45,19 @@ function env_default() {
 
 ### 1. export 済みか調べる
 
+```zsh:line-numbers=144
+    [[ ${parameters[$1]} = *-export* ]] && return 0
+```
+
+
 `${parameters[$1]}` で変数の種類を取り出し、`*-export*` に一致するかを調べます。`PAGER` がすでに export されていれば `scalar-export` なので一致し、`return 0` で終わります。
 
 ### 2. 設定して export
+
+```zsh:line-numbers=145
+    export "$1=$2" && return 3
+```
+
 
 一致しなければ `export "PAGER=less"` を実行し、`return 3` で終わります。
 

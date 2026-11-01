@@ -156,6 +156,11 @@ nvm_get_make_jobs() {
 
 ### 2. OS ごとにコア数を数える
 
+```sh:line-numbers=3901
+      NVM_CPU_CORES="$(nvm_grep -c -E '^processor.+: [0-9]+' /proc/cpuinfo)"
+```
+
+
 - **Linux**: `/proc/cpuinfo` の `processor : 数字` の行を数えます。
 - **FreeBSD・macOS・OpenBSD**: `sysctl -n hw.ncpu` を使います。
 - **Solaris**: `psrinfo` の出力行数を数えます。`wc` が付ける空白は `tr` で消します。

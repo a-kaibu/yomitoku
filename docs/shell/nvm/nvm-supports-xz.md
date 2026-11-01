@@ -151,6 +151,11 @@ nvm_supports_xz() {
 
 ### 1. このマシンで展開できるか
 
+```sh:line-numbers=6598
+    if ! [ -e '/usr/lib/liblzma.so' ]; then
+```
+
+
 OS ごとに確かめ方が違います。
 
 - **macOS**: 10.8 以前の `tar` は xz を展開できないので、バージョンが 10.9.0 より古ければ失敗。
