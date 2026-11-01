@@ -11,6 +11,7 @@ file: library/core/src/num/uint_macros.rs
 lines: [3193, 3205]
 function: abs_diff
 difficulty: 2
+format: 2
 tags: [最適化, 数値計算, ハック]
 ---
 
@@ -23,7 +24,25 @@ tags: [最適化, 数値計算, ハック]
 
 ## コード
 
-```rust:line-numbers=3193
+::: code-group
+
+```rust:line-numbers=3193 [日本語訳]
+        pub const fn abs_diff(self, other: Self) -> Self {
+            if size_of::<Self>() == 1 {
+                // SSE2 が使えて、u8 でこの関数が自動ベクトル化されるとき、
+                // LLVM に psadbw 命令を生成させるための書き方。
+                (self as i32).wrapping_sub(other as i32).unsigned_abs() as Self
+            } else {
+                if self < other {
+                    other - self
+                } else {
+                    self - other
+                }
+            }
+        }
+```
+
+```rust:line-numbers=3193 [原文]
         pub const fn abs_diff(self, other: Self) -> Self {
             if size_of::<Self>() == 1 {
                 // Trick LLVM into generating the psadbw instruction when SSE2
@@ -39,6 +58,8 @@ tags: [最適化, 数値計算, ハック]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **マクロで生成されるコード**: このコードは `u8`・`u16`・`u32`・`u64` など、すべての符号なし整数型に対して同じ関数を作るマクロの一部です。`Self` は「いまの型（例: `u8`）」を指します。
@@ -49,11 +70,19 @@ tags: [最適化, 数値計算, ハック]
 
 ## 何をしているか
 
-### 1. 型の大きさで分岐する（3194 行目）
+### 1. 型の大きさで分岐する
+
+```rust:line-numbers=3194
+            if size_of::<Self>() == 1 {
+```
 
 `size_of::<Self>() == 1` はコンパイル時に決まる値です。`u8` 版ではつねに真、それ以外ではつねに偽なので、コンパイラは使わないほうの枝を完全に消します。実行時に分岐が残ることはありません。
 
-### 2. `u8` の場合: いったん `i32` に広げる（3197 行目）
+### 2. `u8` の場合: いったん `i32` に広げる
+
+```rust:line-numbers=3197
+                (self as i32).wrapping_sub(other as i32).unsigned_abs() as Self
+```
 
 `self = 3`、`other = 10` とすると、
 
@@ -66,7 +95,15 @@ tags: [最適化, 数値計算, ハック]
 
 となります。`i32` は負の数を表せるので、そのまま引いて絶対値を取れば OK です。`u8` の範囲（0〜255）なら差は -255〜255 なので、`i32` でオーバーフローすることもありません（`wrapping_sub` は念のための書き方です）。
 
-### 3. それ以外の型: 大きいほうから小さいほうを引く（3199〜3203 行目）
+### 3. それ以外の型: 大きいほうから小さいほうを引く
+
+```rust:line-numbers=3199
+                if self < other {
+                    other - self
+                } else {
+                    self - other
+                }
+```
 
 `self < other` なら `other - self`、そうでなければ `self - other`。これなら結果がつねに 0 以上になり、オーバーフローしません。
 
