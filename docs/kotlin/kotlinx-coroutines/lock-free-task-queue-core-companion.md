@@ -1,6 +1,6 @@
 ---
 title: "64 ビットに先頭・末尾・フラグを詰めるビットの区画割り"
-description: "ロックなし待ち行列の状態を 1 つの Long に収めるための定数と補助関数。30 ビットずつの区画とフラグのビットを定義し、拡張関数で読み書きを読みやすくしている。"
+description: "待ち行列の状態を 1 つの Long に詰めるための定数とビット操作の関数。先頭・末尾の位置を 30 ビットずつ、凍結と閉鎖を 1 ビットずつに割り当てる。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -11,18 +11,62 @@ file: kotlinx-coroutines-core/common/src/internal/LockFreeTaskQueue.kt
 lines: [266, 302]
 function: "LockFreeTaskQueueCore.Companion (withState / updateHead)"
 difficulty: 2
-tags: [ビット演算, 並行処理, 可読性]
+tags: [ビット演算, データ構造, 低レイヤ]
+format: 2
 ---
 
 ## ひとことで
 
-ロックを使わない待ち行列 `LockFreeTaskQueueCore` は、**先頭の位置・末尾の位置・凍結フラグ・閉鎖フラグ** の 4 つを、1 つの 64 ビット整数（`Long`）に詰めて持っています。こうすると、4 つをまとめて CAS（不可分な書き換え）1 回で更新できるからです。
+`LockFreeTaskQueueCore` の `companion object` には、キューの状態を **1 つの 64 ビット整数（`Long`）に詰め込む** ための定数と関数が集まっています。
 
-この `companion object` は、その「区画割り」を定める定数と、区画を読み書きするための補助関数をまとめたものです。
+先頭の位置（head）、末尾の位置（tail）、凍結フラグ、閉鎖フラグを、それぞれ決まったビットの位置に置きます。`withState` で取り出し、`updateHead` や `updateTail` で一部だけ書き換えた新しい値を作ります。
 
 ## コード
 
-```kotlin:line-numbers=266
+
+::: code-group
+
+```kotlin:line-numbers=266 [日本語訳]
+    @Suppress("PrivatePropertyName", "MemberVisibilityCanBePrivate")
+    internal companion object {
+        const val INITIAL_CAPACITY = 8
+
+        const val CAPACITY_BITS = 30
+        const val MAX_CAPACITY_MASK = (1 shl CAPACITY_BITS) - 1
+        const val HEAD_SHIFT = 0
+        const val HEAD_MASK = MAX_CAPACITY_MASK.toLong() shl HEAD_SHIFT
+        const val TAIL_SHIFT = HEAD_SHIFT + CAPACITY_BITS
+        const val TAIL_MASK = MAX_CAPACITY_MASK.toLong() shl TAIL_SHIFT
+
+        const val FROZEN_SHIFT = TAIL_SHIFT + CAPACITY_BITS
+        const val FROZEN_MASK = 1L shl FROZEN_SHIFT
+        const val CLOSED_SHIFT = FROZEN_SHIFT + 1
+        const val CLOSED_MASK = 1L shl CLOSED_SHIFT
+
+        const val MIN_ADD_SPIN_CAPACITY = 1024
+
+        @JvmField val REMOVE_FROZEN = Symbol("REMOVE_FROZEN")
+
+        const val ADD_SUCCESS = 0
+        const val ADD_FROZEN = 1
+        const val ADD_CLOSED = 2
+
+        infix fun Long.wo(other: Long) = this and other.inv()
+        fun Long.updateHead(newHead: Int) = (this wo HEAD_MASK) or (newHead.toLong() shl HEAD_SHIFT)
+        fun Long.updateTail(newTail: Int) = (this wo TAIL_MASK) or (newTail.toLong() shl TAIL_SHIFT)
+
+        inline fun <T> Long.withState(block: (head: Int, tail: Int) -> T): T {
+            val head = ((this and HEAD_MASK) shr HEAD_SHIFT).toInt()
+            val tail = ((this and TAIL_MASK) shr TAIL_SHIFT).toInt()
+            return block(head, tail)
+        }
+
+        // FROZEN | CLOSED（凍結と閉鎖のフラグ）
+        fun Long.addFailReason(): Int = if (this and CLOSED_MASK != 0L) ADD_CLOSED else ADD_FROZEN
+    }
+```
+
+```kotlin:line-numbers=266 [原文]
     @Suppress("PrivatePropertyName", "MemberVisibilityCanBePrivate")
     internal companion object {
         const val INITIAL_CAPACITY = 8
@@ -62,57 +106,71 @@ tags: [ビット演算, 並行処理, 可読性]
     }
 ```
 
+:::
+
 ## 前提知識
 
-- **`companion object`**: クラスに属する「静的な」メンバーを置く場所です。Java の `static` にあたります。
+- **ビット演算**: 整数の各ビット（0 か 1）を個別に扱う演算です。`and` は両方が 1 のビットだけ 1、`or` はどちらかが 1 なら 1、`inv()` は全ビットを反転、`shl` / `shr` はビットを左右にずらします。
+- **マスク（mask）**: 「ここのビットだけ見る」ための値です。`HEAD_MASK` は head のビットだけが 1 の値で、`and` でそこだけを取り出せます。
 - **`const val`**: コンパイル時に決まる定数です。
-- **ビット演算**: `shl`（左シフト）、`shr`（右シフト）、`and`（AND）、`or`（OR）、`inv()`（全ビット反転）です。Kotlin では記号ではなく名前で書きます。
-- **マスク**: 欲しいビットだけ 1 にした値です。`x and MASK` でその部分だけを取り出せます。
-- **拡張関数 `fun Long.updateHead(...)`**: `Long` 型に外から関数を生やす書き方です。`state.updateHead(5)` のように呼べます。
-- **`infix fun`**: 中置記法で呼べる関数です。`a wo b` のように、演算子のように書けます。
-- **`inline fun <T> Long.withState(block: (head: Int, tail: Int) -> T): T`**: head と tail を取り出してブロックに渡す関数です。`inline` なので、ラムダのオブジェクトは作られません。
+- **`companion object`**: クラスに付随する、クラス名で直接使えるオブジェクトです。`LockFreeTaskQueueCore.ADD_SUCCESS` のように使います。
+- **`infix fun`**: `a wo b` のように、中置の形で呼べる関数です。
+- **`Symbol`**: 名前付きの番兵オブジェクトです。
 
 ## 何をしているか
 
-### 1. 区画を定義する（270〜280 行目）
+### 1. ビットの区画割り
 
-64 ビットを、下から次のように割り当てています。
+64 ビットの中を、次のように分けています。
 
-| ビット | 内容 | 定数 |
+| 項目 | ビットの位置 | 幅 |
 | --- | --- | --- |
-| 0〜29 | head（30 ビット） | `HEAD_MASK` |
-| 30〜59 | tail（30 ビット） | `TAIL_MASK` |
-| 60 | 凍結フラグ | `FROZEN_MASK` |
-| 61 | 閉鎖フラグ | `CLOSED_MASK` |
+| head（先頭） | 0〜29 | 30 ビット |
+| tail（末尾） | 30〜59 | 30 ビット |
+| FROZEN（凍結） | 60 | 1 ビット |
+| CLOSED（閉鎖） | 61 | 1 ビット |
 
-`MAX_CAPACITY_MASK = (1 shl 30) - 1` は 30 ビットすべてが 1 の値で、位置の上限です。
+head と tail は、どちらも `MAX_CAPACITY_MASK`（`(1 shl 30) - 1`）で切り出せる範囲です。それぞれの位置は、シフト量を定数で決めています。
 
-### 2. 区画を書き換える（290〜292 行目）
+```kotlin:line-numbers=270
+        const val CAPACITY_BITS = 30
+        const val MAX_CAPACITY_MASK = (1 shl CAPACITY_BITS) - 1
+```
 
-`updateHead(newHead)` は、
+```kotlin:line-numbers=277
+        const val FROZEN_SHIFT = TAIL_SHIFT + CAPACITY_BITS
+        const val FROZEN_MASK = 1L shl FROZEN_SHIFT
+```
 
-1. `this wo HEAD_MASK` で head の区画を 0 にする
-2. `newHead` を正しい位置にずらして `or` で入れる
+### 2. 一部だけを書き換える
 
-という手順で、他の区画を壊さずに head だけを書き換えます。
+`updateHead` は、head の部分だけを消してから新しい値を入れます。`wo`（〜なし）で指定ビットを 0 にしてから `or` で足します。
 
-### 3. 区画を読む（294〜298 行目）
+```kotlin:line-numbers=291
+        fun Long.updateHead(newHead: Int) = (this wo HEAD_MASK) or (newHead.toLong() shl HEAD_SHIFT)
+```
 
-`withState` は、マスクで区画を取り出し、右にずらして `Int` にしてから、ブロックに渡します。使う側は `state.withState { head, tail -> ... }` と書くだけで、ビット演算を意識せずに済みます。
+### 3. 取り出す
 
-### 4. 失敗の理由（301 行目）
+`withState` は、head と tail を取り出してブロックに渡します。値を `Int` に変換してから返すので、呼び出す側は普通の整数として扱えます。
 
-追加に失敗したとき、閉鎖フラグが立っていれば「閉じている」、そうでなければ「凍結」を返します。
+```kotlin:line-numbers=294
+        inline fun <T> Long.withState(block: (head: Int, tail: Int) -> T): T {
+            val head = ((this and HEAD_MASK) shr HEAD_SHIFT).toInt()
+            val tail = ((this and TAIL_MASK) shr TAIL_SHIFT).toInt()
+            return block(head, tail)
+        }
+```
 
 ## ここがすごい
 
-- **CAS 1 回で全部を守る**: 「凍結されていない」「満杯でない」を確認しながら tail を進める、という操作は、4 つの値が 1 つの整数に入っているからこそ CAS 1 回で済みます。別々の変数だと、確認と更新の間に他の値が変わってしまいます。
-- **定数を積み上げて定義**: `TAIL_SHIFT = HEAD_SHIFT + CAPACITY_BITS` のように、前の区画の位置から次の位置を計算しています。区画の幅を変えたくなっても、`CAPACITY_BITS` を 1 か所変えるだけで済みます。
-- **補助関数で読みやすく**: ビット演算を直接書くと、本体のアルゴリズムが読めなくなります。`updateHead`、`withState`、`wo` のような名前付きの関数にしたことで、本体は「head を進める」「head と tail を取り出す」と読めるようになっています。
-- **`inline` でコストなし**: `withState` は頻繁に呼ばれますが、`inline` なのでラムダも関数呼び出しも消え、ビット演算そのものと同じ速さで動きます。
+- **1 回の CAS で全部を更新できる**: head・tail・フラグを 1 つの整数に入れておくと、どれか 1 つを変えるのも全部まとめて確認するのも、原子操作 1 回で済みます。
+- **定数で区画を決める**: シフト量とマスクを定数から計算しているので、区画を変えるときは `CAPACITY_BITS` を直すだけです。
+- **`inline` で関数呼び出しを省く**: `withState` は `inline` なので、ブロックは呼び出し元に展開され、ラムダのための余分な処理がかかりません。何度も呼ばれる処理なので、この差は効きます。
+- **`Symbol` で番兵を作る**: `REMOVE_FROZEN` のような特別な戻り値を、普通の値と区別できる専用のオブジェクトにしています。
 
 ## まとめ
 
-- 一緒に更新したい複数の値は、1 つの整数にビットの区画を割り当てて詰める。
-- 区画の位置は前の区画から計算して定義すると、変更に強い。
-- ビット演算は名前付きの小さな関数に閉じ込めると、本体のアルゴリズムが読みやすくなる。
+- 複数の状態を 1 つの整数に詰めると、まとめて原子操作できる。
+- 区画の位置は定数で決め、シフトとマスクを組み合わせて取り出す。
+- 頻繁に呼ぶ小さな関数は `inline` にすると、余分なコストを省ける。

@@ -12,6 +12,7 @@ lines: [210, 238]
 function: "LockFreeTaskQueueCore.next / allocateNextCopy"
 difficulty: 3
 tags: [並行処理, ロック不要, データ構造, メモリ管理]
+format: 2
 ---
 
 ## ひとことで
@@ -27,7 +28,42 @@ tags: [並行処理, ロック不要, データ構造, メモリ管理]
 
 ## コード
 
-```kotlin:line-numbers=210
+
+::: code-group
+
+```kotlin:line-numbers=210 [日本語訳]
+    fun next(): LockFreeTaskQueueCore<E> = allocateOrGetNextCopy(markFrozen())
+
+    private fun markFrozen(): Long =
+        _state.updateAndGet { state ->
+            if (state and FROZEN_MASK != 0L) return state // already marked
+            state or FROZEN_MASK
+        }
+
+    private fun allocateOrGetNextCopy(state: Long): Core<E> {
+        _next.loop { next ->
+            if (next != null) return next // already allocated & copied
+            _next.compareAndSet(null, allocateNextCopy(state))
+        }
+    }
+
+    private fun allocateNextCopy(state: Long): Core<E> {
+        val next = LockFreeTaskQueueCore<E>(capacity * 2, singleConsumer)
+        state.withState { head, tail ->
+            var index = head
+            while (index and mask != tail and mask) {
+                // コピーのとき、null を Placeholder に置き換える
+                val value = array[index and mask].value ?: Placeholder(index)
+                next.array[index and next.mask].value = value
+                index++
+            }
+            next._state.value = state wo FROZEN_MASK
+        }
+        return next
+    }
+```
+
+```kotlin:line-numbers=210 [原文]
     fun next(): LockFreeTaskQueueCore<E> = allocateOrGetNextCopy(markFrozen())
 
     private fun markFrozen(): Long =
@@ -59,33 +95,46 @@ tags: [並行処理, ロック不要, データ構造, メモリ管理]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **`_state`**: キューの先頭・末尾の位置と、凍結フラグなどを詰め込んだ 64 ビット整数です。`FROZEN_MASK` はその中の凍結フラグのビットです。
 - **`updateAndGet { ... }`**: 原子変数の値をブロックで計算した値に書き換え、新しい値を返します。内部で CAS ループを回します。ブロック内の `return state` は、書き換えずに関数ごと抜けます。
 - **`_next`**: 次の配列を指す原子変数です。最初は `null` です。
 - **`_next.loop { next -> ... }`**: 今の値を読んでブロックを実行することを、`return` するまで繰り返します。
-- **`state wo FROZEN_MASK`**: `wo` は同じクラスで定義された中置関数（290 行目）で、`this and other.inv()`、つまり「指定したビットを 0 にする」です。名前は without（〜なし）の略です。
+- **`state wo FROZEN_MASK`**: `wo` は同じクラスで定義された中置関数で、`this and other.inv()`、つまり「指定したビットを 0 にする」です。名前は without（〜なし）の略です。
 - **Placeholder**: 「この位置は追加途中で、値はまだ」という印のクラスです。本当の位置（`index`）を持っています。
 - **`?:`**: 左が `null` なら右を使う演算子です。
 
 ## 何をしているか
 
-### 1. 凍結フラグを立てる（212〜216 行目）
+### 1. 凍結フラグを立てる
 
 すでに立っていればそのまま、なければ立てます。これ以降、この配列への追加・取り出しは失敗し、みんな次の配列へ向かいます。
 
-### 2. 次の配列を一度だけ作る（218〜223 行目）
+```kotlin:line-numbers=215
+            state or FROZEN_MASK
+```
 
-`_next` がすでにあればそれを返します。なければ新しい配列を作って `null` からの CAS で設定を試み、ループで読み直します。2 つのスレッドが同時に作っても、CAS に勝った 1 つだけが採用され、負けた側が作ったものは捨てられます。
+### 2. 次の配列を一度だけ作る
 
-### 3. 中身をコピーする（225〜238 行目）
+`_next` がすでにあればそれを返します。なければ新しい配列を作って、`null` からの CAS で設定を試み、ループで読み直します。2 つのスレッドが同時に作っても、CAS に勝った 1 つだけが採用され、負けた側が作ったものは捨てられます。
 
-容量を 2 倍にした新しい配列に、head から tail までの要素を移します。
+```kotlin:line-numbers=221
+            _next.compareAndSet(null, allocateNextCopy(state))
+```
 
-- 位置は `index and next.mask` で新しい配列の中の場所に変換します。
-- 値が `null`（追加の途中で、まだ書かれていない）なら、代わりに `Placeholder(index)` を置きます（231 行目）。追加した側は後でこの印を見つけ、自分の値で埋めます。
-- 最後に、凍結フラグを外した状態を新しい配列に設定します。
+### 3. 中身をコピーする
+
+容量を 2 倍にした新しい配列に、head から tail までの要素を移します。位置は `index and next.mask` で新しい配列の中の場所に変換します。
+
+```kotlin:line-numbers=231
+                val value = array[index and mask].value ?: Placeholder(index)
+                next.array[index and next.mask].value = value
+```
+
+値が `null`（追加の途中で、まだ書かれていない）なら、代わりに `Placeholder(index)` を置きます。追加した側は後でこの印を見つけ、自分の値で埋めます。最後に、凍結フラグを外した状態を新しい配列に設定します。
 
 例: 容量 4（mask 3）で head=2、tail=6 のとき、位置 2,3,4,5 は旧配列の 2,3,0,1 番目にあります。新しい配列（容量 8、mask 7）では 2,3,4,5 番目に入るので、環状の折り返しが解消されます。
 
@@ -93,8 +142,8 @@ tags: [並行処理, ロック不要, データ構造, メモリ管理]
 
 - **凍結してからコピーする**: コピー中に中身が変わると、正しくコピーできません。先にフラグを立てて誰も変更できないようにしてから、ゆっくりコピーします。凍結された配列は「読み取り専用」なので、複数のスレッドが同時にコピーしても同じ結果になります。
 - **位置を変えずにコピーする**: head と tail の値（マスクする前の通し番号）はそのまま使い、新しい配列ではマスクだけを変えます。だから `_state` の head/tail をそのまま引き継げます。
-- **Placeholder に本当の位置を持たせる**: 環状配列は何周もするので、同じ場所に別の周回の印が残っているかもしれません。印に通し番号を持たせておけば、「自分が置いてもらった印か」を確かめられます（262 行目のコメント）。
-- **作るのは誰でもよい、採用は 1 つ**: 誰が作ってもよく、CAS で 1 つに決まる。待ち合わせをしないので、どのスレッドも止まりません。
+- **Placeholder に本当の位置を持たせる**: 環状配列は何周もするので、同じ場所に別の周回の印が残っているかもしれません。印に通し番号（マスクしない位置）を持たせておけば、「自分が置いてもらった印か」を確かめられます。
+- **作るのは誰でもよく、採用は 1 つ**: 誰が作ってもよく、CAS で 1 つに決まる。待ち合わせをしないので、どのスレッドも止まりません。
 
 ## まとめ
 
