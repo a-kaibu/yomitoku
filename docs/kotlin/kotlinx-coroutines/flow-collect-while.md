@@ -12,6 +12,7 @@ lines: [122, 140]
 function: "Flow.collectWhile"
 difficulty: 3
 tags: [非同期, エラー処理, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,32 @@ tags: [非同期, エラー処理, 標準ライブラリ]
 
 ## コード
 
-```kotlin:line-numbers=122
+
+::: code-group
+
+```kotlin:line-numbers=122 [日本語訳]
+// 途中で打ち切る演算子の共通部品（呼び出せないのでインライン展開される）
+internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: suspend (value: T) -> Boolean) {
+    val collector = object : FlowCollector<T> {
+        override suspend fun emit(value: T) {
+            // 注意: まず predicate を調べてから投げます。predicate の中で中断（emit など）すると、
+            // 結果のコードが末尾で中断できず、状態機械になってしまいます。
+            if (!predicate(value)) {
+                throw AbortFlowException(this)
+            }
+        }
+    }
+    try {
+        collect(collector)
+    } catch (e: AbortFlowException) {
+        e.checkOwnership(collector)
+        // AbortFlowException が投げられる前に、タスクがキャンセルされていたかもしれません。
+        coroutineContext.ensureActive()
+    }
+}
+```
+
+```kotlin:line-numbers=122 [原文]
 // Internal building block for non-tailcalling flow-truncating operators
 internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: suspend (value: T) -> Boolean) {
     val collector = object : FlowCollector<T> {
@@ -45,6 +71,8 @@ internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: susp
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **Flow と `collect`**: Flow は値を順番に流すもので、`collect(collector)` を呼ぶと、流れてきた値ごとに `collector.emit(値)` が呼ばれます。`FlowCollector` は `emit` を 1 つだけ持つインターフェースです。
@@ -56,12 +84,30 @@ internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: susp
 
 ## 何をしているか
 
-### 1. 条件を見て、だめなら例外を投げる collector を作る（124〜132 行目）
+### 1. 条件を見て、だめなら例外を投げる collector を作る
+
+```kotlin:line-numbers=124
+    val collector = object : FlowCollector<T> {
+        override suspend fun emit(value: T) {
+```
+
+```kotlin:line-numbers=128
+            if (!predicate(value)) {
+                throw AbortFlowException(this)
+            }
+```
 
 値が来るたびに `predicate(value)` を呼び、`false` なら `AbortFlowException(this)` を投げます。
 `this` はこの無名オブジェクト自身です。**collector そのものを「持ち主の印」にしている** ので、別途目印を作る必要がありません。
 
-### 2. 収集して、打ち切りを受け止める（133〜136 行目）
+### 2. 収集して、打ち切りを受け止める
+
+```kotlin:line-numbers=133
+    try {
+        collect(collector)
+    } catch (e: AbortFlowException) {
+        e.checkOwnership(collector)
+```
 
 `collect(collector)` で上流から値を受け取り続けます。例外が飛んできたら `checkOwnership(collector)` で自分の collector が投げたものかを確認し、違えば投げ直します。
 
@@ -71,7 +117,12 @@ internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: susp
 - `2` → 同上
 - `5` → 条件 `false`、例外を投げて終了（`3` は作られもしない）
 
-### 3. キャンセルされていないか最後に確認（137〜138 行目）
+### 3. キャンセルされていないか最後に確認
+
+```kotlin:line-numbers=137
+        // The task might have been cancelled before AbortFlowException was thrown.
+        coroutineContext.ensureActive()
+```
 
 打ち切り例外を受け止めたあと、`ensureActive()` を呼んでいます。
 コメントにある通り、**打ち切りの直前にコルーチン自体がキャンセルされていた** 可能性があるからです。その場合に何事もなかったように正常終了すると、キャンセルが握りつぶされてしまいます。最後に確認することで、キャンセルは確実に上へ伝わります。
@@ -81,7 +132,7 @@ internal suspend inline fun <T> Flow<T>.collectWhile(crossinline predicate: susp
 - **collector 自身を目印にする**: `take` は `Any()` を別に作っていましたが、ここでは無名オブジェクトの `this` がすでに一意なので、それを流用しています。余計なオブジェクトが 1 つ減ります。
 - **`inline` + `crossinline` でラムダのコストを消す**: `predicate` は呼び出し元に埋め込まれるので、`takeWhile` などを使っても関数オブジェクトの呼び出しが増えません。
 - **例外とキャンセルの「すり抜け」を防ぐ**: 例外を制御に使うと、本物のエラーやキャンセルと混ざる危険があります。持ち主チェックと `ensureActive()` の二段構えで、**自分の打ち切りだけを正常終了にする** ことを保証しています。
-- **コメントで設計の限界も書いてある**: 126〜127 行目には「条件を先に判定してから投げる形なので、`predicate` が中断すると状態機械ができる」と書かれています。だからこそ、速さが要る `take` は別実装にしてあるのです（同じファイルの 54〜57 行目）。
+- **コメントで設計の限界も書いてある**: 注意コメントには「条件を先に判定してから投げる形なので、`predicate` が中断すると状態機械ができる」と書かれています。だからこそ、速さが要る `take` は別実装にしてあるのです。
 
 ## まとめ
 

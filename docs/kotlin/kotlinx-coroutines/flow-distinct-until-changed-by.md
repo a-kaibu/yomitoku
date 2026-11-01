@@ -12,6 +12,7 @@ lines: [53, 77]
 function: "Flow.distinctUntilChangedBy"
 difficulty: 2
 tags: [非同期, イディオム, 最適化, 標準ライブラリ]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,38 @@ tags: [非同期, イディオム, 最適化, 標準ライブラリ]
 
 ## コード
 
-```kotlin:line-numbers=53
+
+::: code-group
+
+```kotlin:line-numbers=53 [日本語訳]
+private fun <T> Flow<T>.distinctUntilChangedBy(
+    keySelector: (T) -> Any?,
+    areEquivalent: (old: Any?, new: Any?) -> Boolean
+): Flow<T> = when {
+    this is DistinctFlowImpl<*> && this.keySelector === keySelector && this.areEquivalent === areEquivalent -> this // 同じ設定なら、そのまま返す
+    else -> DistinctFlowImpl(this, keySelector, areEquivalent)
+}
+
+private class DistinctFlowImpl<T>(
+    private val upstream: Flow<T>,
+    @JvmField val keySelector: (T) -> Any?,
+    @JvmField val areEquivalent: (old: Any?, new: Any?) -> Boolean
+): Flow<T> {
+    override suspend fun collect(collector: FlowCollector<T>) {
+        var previousKey: Any? = NULL
+        upstream.collect { value ->
+            val key = keySelector(value)
+            @Suppress("UNCHECKED_CAST")
+            if (previousKey === NULL || !areEquivalent(previousKey, key)) {
+                previousKey = key
+                collector.emit(value)
+            }
+        }
+    }
+}
+```
+
+```kotlin:line-numbers=53 [原文]
 private fun <T> Flow<T>.distinctUntilChangedBy(
     keySelector: (T) -> Any?,
     areEquivalent: (old: Any?, new: Any?) -> Boolean
@@ -51,6 +83,8 @@ private class DistinctFlowImpl<T>(
 }
 ```
 
+:::
+
 `NULL` は同じライブラリの `NullSurrogate.kt` で定義されている、内部用の特別なオブジェクトです（`Symbol("NULL")`）。
 
 ## 前提知識
@@ -65,18 +99,45 @@ private class DistinctFlowImpl<T>(
 
 ## 何をしているか
 
-### 1. 同じ操作の重ねがけを見抜く（56〜59 行目）
+### 1. 同じ操作の重ねがけを見抜く
+
+```kotlin:line-numbers=56
+): Flow<T> = when {
+    this is DistinctFlowImpl<*> && this.keySelector === keySelector && this.areEquivalent === areEquivalent -> this // same
+    else -> DistinctFlowImpl(this, keySelector, areEquivalent)
+```
 
 `flow.distinctUntilChanged().distinctUntilChanged()` と 2 回書いても、2 回目は何も取り除けません。
-57 行目は、元の Flow がすでに `DistinctFlowImpl` で、**キー関数も比較関数もまったく同じオブジェクト（`===`）** なら、新しく包まずに `this` をそのまま返します。
-既定の関数は 42〜44 行目で 1 個だけ作られて共有されているので、引数なしの `distinctUntilChanged()` どうしなら必ず一致します。
+この条件は、元の Flow がすでに `DistinctFlowImpl` で、**キー関数も比較関数もまったく同じオブジェクト（`===`）** なら、新しく包まずに `this` をそのまま返します。
+既定の関数は次の定義で 1 個だけ作られて共有されているので、引数なしの `distinctUntilChanged()` どうしなら必ず一致します。
 
-### 2. 直前のキーを番兵で初期化する（67 行目）
+```kotlin:line-numbers=42
+private val defaultKeySelector: (Any?) -> Any? = { it }
+
+private val defaultAreEquivalent: (Any?, Any?) -> Boolean = { old, new -> old == new }
+```
+
+### 2. 直前のキーを番兵で初期化する
+
+```kotlin:line-numbers=67
+        var previousKey: Any? = NULL
+```
 
 `previousKey` の初期値は `null` ではなく `NULL` という特別なオブジェクトです。
 もし `null` で初期化すると、最初の値が本当に `null` だったとき「直前と同じ」と判定されて捨てられてしまいます。
 
-### 3. 1 個ずつキーを比べる（68〜75 行目）
+### 3. 1 個ずつキーを比べる
+
+```kotlin:line-numbers=68
+        upstream.collect { value ->
+            val key = keySelector(value)
+            @Suppress("UNCHECKED_CAST")
+            if (previousKey === NULL || !areEquivalent(previousKey, key)) {
+                previousKey = key
+                collector.emit(value)
+            }
+        }
+```
 
 `1, 1, 2` が来る場合:
 
@@ -90,7 +151,7 @@ private class DistinctFlowImpl<T>(
 
 - **番兵オブジェクトで「値なし」と `null` を区別**: 「まだ値がない」を表すのに `null` や `Boolean` のフラグを使うと、`null` が正当な値になれる型で壊れるか、変数が 1 つ増えます。ライブラリ専用の `NULL` オブジェクトなら、利用者の値と絶対にぶつかりません。
 - **無駄な重ねがけを 1 行で省く**: 同じ設定の `DistinctFlowImpl` を二重に包んでも結果は同じなので、包まずに返します。比較を `===` にしているのは、「同じ関数かどうか」を中身で判断する方法がないからで、既定の関数を共有オブジェクトにしておくことでこの最適化が効くようになっています。
-- **あえて `inline` にしない**: 51 行目のコメントの通り、この関数は非 inline です。`inline` にすると呼び出しごとに専用クラスが作られてアプリが大きくなります。`distinctUntilChanged` と `distinctUntilChangedBy` の両方で **1 つの実装クラスを共有** するための選択です。
+- **あえて `inline` にしない**: 元のファイルには、この関数は非 inline だという説明があります。`inline` にすると呼び出しごとに専用クラスが作られてアプリが大きくなります。`distinctUntilChanged` と `distinctUntilChangedBy` の両方で **1 つの実装クラスを共有** するための選択です。
 
 ## まとめ
 
