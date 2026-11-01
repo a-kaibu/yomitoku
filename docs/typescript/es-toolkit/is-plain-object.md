@@ -11,6 +11,7 @@ file: src/predicate/isPlainObject.ts
 lines: [43, 61]
 function: "isPlainObject"
 difficulty: 3
+format: 2
 tags: [型システム, 防御的プログラミング, リフレクション]
 ---
 
@@ -30,7 +31,31 @@ JavaScript では `typeof` がこれらすべてに `'object'` を返すため�
 
 ## コード
 
-```ts:line-numbers=43
+::: code-group
+
+```ts:line-numbers=43 [日本語訳]
+export function isPlainObject(value: unknown): value is Record<PropertyKey, any> {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const proto = Object.getPrototypeOf(value) as typeof Object.prototype | null;
+
+  const hasObjectPrototype =
+    proto === null ||
+    proto === Object.prototype ||
+    // // node:vm.runInNewContext({}) に対応するために必要
+    Object.getPrototypeOf(proto) === null;
+
+  if (!hasObjectPrototype) {
+    return false;
+  }
+
+  return Object.prototype.toString.call(value) === '[object Object]';
+}
+```
+
+```ts:line-numbers=43 [原文]
 export function isPlainObject(value: unknown): value is Record<PropertyKey, any> {
   if (!value || typeof value !== 'object') {
     return false;
@@ -52,6 +77,8 @@ export function isPlainObject(value: unknown): value is Record<PropertyKey, any>
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **プロトタイプ**: JavaScript のオブジェクトは、自分にないプロパティを探しに行く「親」のオブジェクトを持っています。これをプロトタイプと呼びます。`{}` の親は `Object.prototype`、配列の親は `Array.prototype`、クラス `Foo` のインスタンスの親は `Foo.prototype` です。
@@ -62,22 +89,43 @@ export function isPlainObject(value: unknown): value is Record<PropertyKey, any>
 
 ## 何をしているか
 
-### 1. オブジェクトでなければ false（44〜46 行目）
+### 1. オブジェクトでなければ false
 
+```ts:line-numbers=44
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+```
 `!value` で `null` や `0`、`''` を除外し、`typeof` で数値や文字列、関数を除外します。
 
-### 2. 親を調べる（48〜58 行目）
+### 2. 親を調べる
 
+```ts:line-numbers=48
+  const proto = Object.getPrototypeOf(value) as typeof Object.prototype | null;
+
+  const hasObjectPrototype =
+    proto === null ||
+    proto === Object.prototype ||
+    // Required to support node:vm.runInNewContext({})
+    Object.getPrototypeOf(proto) === null;
+
+  if (!hasObjectPrototype) {
+    return false;
+  }
+```
 次のどれかなら「ただのオブジェクト」の候補です。
 
 - 親がいない（`Object.create(null)`）
 - 親が `Object.prototype`（`{}` で作ったもの）
-- **親の親がいない**（53 行目のコメントにある、別の実行環境で作られたオブジェクト）
+- **親の親がいない**（`node:vm.runInNewContext({})` に対応するためというコメントがある、別の実行環境で作られたオブジェクト）
 
 配列やクラスのインスタンスは親がそれぞれのプロトタイプなので、ここで落ちます。
 
-### 3. 最後に種類を確かめる（60 行目）
+### 3. 最後に種類を確かめる
 
+```ts:line-numbers=60
+  return Object.prototype.toString.call(value) === '[object Object]';
+```
 `toString` の結果が `'[object Object]'` かどうかを見ます。
 
 ## ここがすごい

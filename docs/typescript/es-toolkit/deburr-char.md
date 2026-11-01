@@ -11,6 +11,7 @@ file: src/string/deburr.ts
 lines: [70, 104]
 function: "deburrChar"
 difficulty: 2
+format: 2
 tags: [Unicode, 文字列処理, 最適化]
 ---
 
@@ -22,7 +23,47 @@ tags: [Unicode, 文字列処理, 最適化]
 
 ## コード
 
-```ts:line-numbers=70
+::: code-group
+
+```ts:line-numbers=70 [日本語訳]
+function deburrChar(char: string): string {
+  const code = char.charCodeAt(0);
+
+  if (code < 0x80) {
+    return char;
+  }
+
+  if (isCombiningMark(code)) {
+    return '';
+  }
+
+  const deburred = deburrMap.get(char);
+
+  if (deburred != null) {
+    return deburred;
+  }
+
+  // // 分解してラテン文字の記号になるのは、Latin-1 Supplement、
+  // // Latin Extended-A、Latin Extended-B、Latin Extended Additional のブロックと、ケルビン記号・オングストローム記号だけ。
+  // // ハングルやキリル文字などのそれ以外の文字は、そのまま残す。
+  if (!isLatinLetter(code)) {
+    return char;
+  }
+
+  const decomposed = char.normalize('NFD');
+  let result = '';
+
+  for (let index = 0; index < decomposed.length; index++) {
+    if (!isCombiningMark(decomposed.charCodeAt(index))) {
+      result += deburrMap.get(decomposed[index]) ?? decomposed[index];
+    }
+  }
+
+  return result;
+}
+```
+
+```ts:line-numbers=70 [原文]
 function deburrChar(char: string): string {
   const code = char.charCodeAt(0);
 
@@ -60,6 +101,8 @@ function deburrChar(char: string): string {
 }
 ```
 
+:::
+
 `deburrMap` はファイルの先頭にある対応表で、`ß → ss`、`Æ → Ae`、`ø → o` のように「分解しても記号にならない」特殊な文字の置き換え先を持っています。
 
 ## 前提知識
@@ -72,24 +115,65 @@ function deburrChar(char: string): string {
 
 ## 何をしているか
 
-### 1. ASCII はそのまま（73〜75 行目）
+### 1. ASCII はそのまま
 
+```ts:line-numbers=73
+  if (code < 0x80) {
+    return char;
+  }
+```
 `a` や `1` は変換不要なので、すぐに返します。文章の大半はここで終わります。
 
-### 2. 単独の結合文字は捨てる（77〜79 行目）
+### 2. 単独の結合文字は捨てる
 
+```ts:line-numbers=77
+  if (isCombiningMark(code)) {
+    return '';
+  }
+```
 入力がすでに分解された形なら、記号だけが単独で来ることがあります。
 
-### 3. 特殊な文字は対応表で（81〜85 行目）
+### 3. 特殊な文字は対応表で
 
+```ts:line-numbers=81
+  const deburred = deburrMap.get(char);
+
+  if (deburred != null) {
+    return deburred;
+  }
+```
 `ß` や `ø` は分解しても記号が出てこない「それ自体が別の文字」なので、表で置き換えます。
 
-### 4. ラテン文字以外はそのまま（90〜92 行目）
+### 4. ラテン文字以外はそのまま
 
-ハングルやキリル文字は分解するとまったく別の形になってしまうので、触りません（87〜89 行目のコメント）。
+```ts:line-numbers=90
+  if (!isLatinLetter(code)) {
+    return char;
+  }
+```
+ハングルやキリル文字は分解するとまったく別の形になってしまうので、触りません。
 
-### 5. 分解して記号を捨てる（94〜103 行目）
+```ts:line-numbers=87
+  // Only Latin letters with diacritical marks are decomposed. They live in the Latin-1 Supplement,
+  // Latin Extended-A, Latin Extended-B, and Latin Extended Additional blocks, and the Kelvin and Angstrom signs.
+  // Other letters, such as Hangul syllables or Cyrillic letters, are kept as they are.
+```
 
+
+### 5. 分解して記号を捨てる
+
+```ts:line-numbers=94
+  const decomposed = char.normalize('NFD');
+  let result = '';
+
+  for (let index = 0; index < decomposed.length; index++) {
+    if (!isCombiningMark(decomposed.charCodeAt(index))) {
+      result += deburrMap.get(decomposed[index]) ?? decomposed[index];
+    }
+  }
+
+  return result;
+```
 ```
 'é' → NFD → 'e' + U+0301 → 結合文字を捨てて 'e'
 'Ǻ' → NFD → 'A' + U+030A + U+0301 → 'A'

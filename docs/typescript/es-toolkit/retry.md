@@ -11,6 +11,7 @@ file: src/function/retry.ts
 lines: [117, 160]
 function: "retry"
 difficulty: 2
+format: 2
 tags: [非同期, エラー処理, API設計]
 ---
 
@@ -26,7 +27,56 @@ await retry(() => fetchUser(id), { retries: 3, delay: (n) => 100 * 2 ** n })
 
 ## コード
 
-```ts:line-numbers=117
+::: code-group
+
+```ts:line-numbers=117 [日本語訳]
+export async function retry<T>(func: () => Promise<T>, _options?: number | RetryOptions): Promise<T> {
+  let delay: number | ((attempts: number, error: unknown) => number);
+  let retries: number;
+  let signal: AbortSignal | undefined;
+  let shouldRetry: (error: unknown, attempt: number) => boolean;
+
+  if (typeof _options === 'number') {
+    delay = DEFAULT_DELAY;
+    retries = _options;
+    signal = undefined;
+    shouldRetry = DEFAULT_SHOULD_RETRY;
+  } else {
+    delay = _options?.delay ?? DEFAULT_DELAY;
+    retries = _options?.retries ?? DEFAULT_RETRIES;
+    signal = _options?.signal;
+    shouldRetry = _options?.shouldRetry ?? DEFAULT_SHOULD_RETRY;
+  }
+
+  let error;
+
+  for (let attempts = 0; attempts <= retries; attempts++) {
+    if (signal?.aborted) {
+      throw error ?? new Error(`The retry operation was aborted due to an abort signal.`);
+    }
+
+    try {
+      return await func();
+    } catch (err) {
+      error = err;
+
+      // // 与えられた shouldRetry 関数に基づき、再試行するかを判定する
+      if (!shouldRetry(err, attempts)) {
+        throw err;
+      }
+
+      if (attempts < retries) {
+        const currentDelay = typeof delay === 'function' ? delay(attempts, error) : delay;
+        await delayToolkit(currentDelay);
+      }
+    }
+  }
+
+  throw error;
+}
+```
+
+```ts:line-numbers=117 [原文]
 export async function retry<T>(func: () => Promise<T>, _options?: number | RetryOptions): Promise<T> {
   let delay: number | ((attempts: number, error: unknown) => number);
   let retries: number;
@@ -73,6 +123,8 @@ export async function retry<T>(func: () => Promise<T>, _options?: number | Retry
 }
 ```
 
+:::
+
 `delayToolkit` は同じライブラリの `delay` 関数を別名で読み込んだもので、指定したミリ秒だけ待つ Promise を返します。
 
 ## 前提知識
@@ -86,26 +138,96 @@ export async function retry<T>(func: () => Promise<T>, _options?: number | Retry
 
 ## 何をしているか
 
-### 1. 引数の形を揃える（123〜133 行目）
+### 1. 引数の形を揃える
 
+```ts:line-numbers=123
+  if (typeof _options === 'number') {
+    delay = DEFAULT_DELAY;
+    retries = _options;
+    signal = undefined;
+    shouldRetry = DEFAULT_SHOULD_RETRY;
+  } else {
+    delay = _options?.delay ?? DEFAULT_DELAY;
+    retries = _options?.retries ?? DEFAULT_RETRIES;
+    signal = _options?.signal;
+    shouldRetry = _options?.shouldRetry ?? DEFAULT_SHOULD_RETRY;
+  }
+```
 第 2 引数が数値ならそれを回数とし、ほかは既定値にします。オブジェクトなら各項目を取り出し、なければ既定値（待ち時間 0、回数無限、常に再試行）にします。以降のコードは、どちらの呼び方だったかを気にしなくて済みます。
 
-### 2. ループで試す（137〜157 行目）
+### 2. ループで試す
 
+```ts:line-numbers=137
+  for (let attempts = 0; attempts <= retries; attempts++) {
+    if (signal?.aborted) {
+      throw error ?? new Error(`The retry operation was aborted due to an abort signal.`);
+    }
+
+    try {
+      return await func();
+    } catch (err) {
+      error = err;
+
+      // Determine if we should retry based on the provided shouldRetry function
+      if (!shouldRetry(err, attempts)) {
+        throw err;
+      }
+
+      if (attempts < retries) {
+        const currentDelay = typeof delay === 'function' ? delay(attempts, error) : delay;
+        await delayToolkit(currentDelay);
+      }
+    }
+  }
+```
 `attempts` は 0 から始まるので、ループは最大 `retries + 1` 回、つまり「最初の 1 回 + 再試行 `retries` 回」です。
 
-- 中断の合図が来ていたら、それまでの最後のエラー（なければ中断のエラー）を投げます（138〜140 行目）。
-- `await func()` が成功したら、その値を返して終わりです（143 行目）。
-- 失敗したらエラーを覚え（145 行目）、`shouldRetry` が「やり直さない」と言えば即座に投げます（148〜150 行目）。
-- まだ回数が残っていれば待ってから次へ（152〜155 行目）。待ち時間は、関数なら回数とエラーから計算します。
+- 中断の合図が来ていたら、それまでの最後のエラー（なければ中断のエラー）を投げます。
 
-### 3. 全部失敗したら最後のエラーを投げる（159 行目）
+```ts:line-numbers=138
+    if (signal?.aborted) {
+      throw error ?? new Error(`The retry operation was aborted due to an abort signal.`);
+    }
+```
 
+- `await func()` が成功したら、その値を返して終わりです。
+
+```ts:line-numbers=143
+      return await func();
+```
+
+- 失敗したらエラーを覚え、`shouldRetry` が「やり直さない」と言えば即座に投げます。
+
+```ts:line-numbers=145
+      error = err;
+```
+
+```ts:line-numbers=148
+      if (!shouldRetry(err, attempts)) {
+        throw err;
+      }
+```
+
+- まだ回数が残っていれば待ってから次へ。待ち時間は、関数なら回数とエラーから計算します。
+
+```ts:line-numbers=152
+      if (attempts < retries) {
+        const currentDelay = typeof delay === 'function' ? delay(attempts, error) : delay;
+        await delayToolkit(currentDelay);
+      }
+```
+
+
+### 3. 全部失敗したら最後のエラーを投げる
+
+```ts:line-numbers=159
+  throw error;
+```
 ## ここがすごい
 
 - **呼び方を最初に正規化する**: 数値かオブジェクトかの分岐を冒頭にまとめ、本体のループは 1 種類だけにしています。オプションが増えても本体は読みやすいままです。
 - **待ち時間を関数にできる**: 回数に応じて待ち時間を倍々に増やす「指数バックオフ」や、エラーの種類で待ち方を変えることが、使う側の 1 行で書けます。
-- **最後の 1 回のあとは待たない**: 152 行目の `attempts < retries` のおかげで、もう再試行しないのに無駄に待つことがありません。
+- **最後の 1 回のあとは待たない**: `if (attempts < retries)` の条件のおかげで、もう再試行しないのに無駄に待つことがありません。
 - **元のエラーを投げ直す**: 最終的に投げるのは、ライブラリが作った「失敗しました」ではなく、`func` が実際に投げたエラーです。呼び出し元は本当の原因（HTTP のステータスなど）をそのまま調べられます。
 - **やり直しても無駄なエラーを見分けられる**: `shouldRetry` で「404 はやり直しても無駄なので即終了」のような判断ができます。
 

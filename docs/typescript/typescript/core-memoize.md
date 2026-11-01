@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [1891, 1900]
 function: "memoize"
 difficulty: 2
+format: 2
 tags: [キャッシュ, クロージャ, メモリ管理]
 ---
 
@@ -44,18 +45,39 @@ export function memoize<T>(callback: () => T): () => T {
 ## 前提知識
 
 - **クロージャ**: 関数の中で作った関数は、外側の変数（ここでは `value` と、引数の `callback`）を覚えていて、あとから読み書きできます。
-- **引数への再代入**: JavaScript では、関数の引数もふつうの変数として書き換えられます。1896 行目では引数 `callback` を書き換えています。
+- **引数への再代入**: JavaScript では、関数の引数もふつうの変数として書き換えられます。`callback = undefined!;` では引数 `callback` を書き換えています。
 - **`undefined!`**: 末尾の `!` は「`null` や `undefined` ではない」と TypeScript に伝える記号です。`callback` の型は関数なので本来 `undefined` は入れられませんが、`!` で型チェックを通しています。
 - **真偽値としての関数**: `if (callback)` は、`callback` が関数なら真、`undefined` なら偽になります。
 
 ## 何をしているか
 
+### 処理の流れ
+
+
 返される関数が呼ばれるたびに、次のことをします。
 
-1. `callback` がまだあれば（1894 行目）、実行して結果を `value` に入れ（1895 行目）、`callback` を `undefined` にします（1896 行目）。
-2. `value` を返します（1898 行目）。
+1. `callback` がまだあれば、実行して結果を `value` に入れ、`callback` を `undefined` にします。
 
-2 回目に呼ばれたときは `callback` が `undefined` なので、1895 行目は実行されません。
+```ts:line-numbers=1894
+        if (callback) {
+```
+
+```ts:line-numbers=1895
+            value = callback();
+```
+
+```ts:line-numbers=1896
+            callback = undefined!;
+```
+
+2. `value` を返します。
+
+```ts:line-numbers=1898
+        return value;
+```
+
+
+2 回目に呼ばれたときは `callback` が `undefined` なので、`value = callback();` は実行されません。
 
 ## ここがすごい
 

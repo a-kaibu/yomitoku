@@ -11,6 +11,7 @@ file: src/array/sampleSize.ts
 lines: [21, 42]
 function: "sampleSize"
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 乱数, データ構造]
 ---
 
@@ -59,19 +60,56 @@ export function sampleSize<T>(array: readonly T[], size: number): T[] {
 
 ## 何をしているか
 
-### 1. 範囲を確認する（22〜24 行目）
+### 1. 範囲を確認する
 
+```ts:line-numbers=22
+  if (size > array.length) {
+    throw new Error('Size must be less than or equal to the length of array.');
+  }
+```
 配列の長さより多くは選べないので、`size` が大きすぎたらエラーにします。
 
-### 2. 選ぶ範囲を 1 つずつ広げながら選ぶ（29〜39 行目）
+### 2. 選ぶ範囲を 1 つずつ広げながら選ぶ
 
+```ts:line-numbers=29
+  for (let step = array.length - size, resultIndex = 0; step < array.length; step++, resultIndex++) {
+    let index = randomInt(0, step + 1);
+
+    if (selected.has(index)) {
+      index = step;
+    }
+
+    selected.add(index);
+
+    result[resultIndex] = array[index];
+  }
+```
 `step` は `array.length - size` から始まり、`array.length - 1` まで増えていきます。つまりループはちょうど `size` 回です。
 
 各回でやることは次のとおりです。
 
-1. `0` 以上 `step` 以下の位置 `index` をランダムに選ぶ（30 行目）。
-2. その位置がすでに選ばれていたら、**代わりに `step` そのものを選ぶ**（32〜34 行目）。
-3. 選んだ位置を `selected` に記録し、要素を結果に入れる（36〜38 行目）。
+1. `0` 以上 `step` 以下の位置 `index` をランダムに選ぶ。
+
+```ts:line-numbers=30
+    let index = randomInt(0, step + 1);
+```
+
+2. その位置がすでに選ばれていたら、**代わりに `step` そのものを選ぶ**。
+
+```ts:line-numbers=32
+    if (selected.has(index)) {
+      index = step;
+    }
+```
+
+3. 選んだ位置を `selected` に記録し、要素を結果に入れる。
+
+```ts:line-numbers=36
+    selected.add(index);
+
+    result[resultIndex] = array[index];
+```
+
 
 長さ 5 の配列から 3 個選ぶ例で追います（位置は 0〜4）。
 

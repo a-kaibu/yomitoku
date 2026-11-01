@@ -11,6 +11,7 @@ file: src/util/invariant.ts
 lines: [65, 75]
 function: "invariant"
 difficulty: 2
+format: 2
 tags: [型システム, エラー処理, 防御的プログラミング]
 ---
 
@@ -54,12 +55,24 @@ export function invariant(condition: unknown, message: string | Error): asserts 
 
 ## 何をしているか
 
-### 1. 条件が真なら何もしない（66〜68 行目）
+### 1. 条件が真なら何もしない
 
+```ts:line-numbers=66
+  if (condition) {
+    return;
+  }
+```
 ほとんどの場合はここで終わります。
 
-### 2. 偽なら投げる（70〜74 行目）
+### 2. 偽なら投げる
 
+```ts:line-numbers=70
+  if (typeof message === 'string') {
+    throw new Error(message);
+  }
+
+  throw message;
+```
 `message` が文字列なら、それを使って `Error` を作って投げます。エラーオブジェクトが渡されていれば、それをそのまま投げます。独自のエラークラス（`new NotFoundError(…)` など）を使いたい場合に対応しています。
 
 ## ここがすごい

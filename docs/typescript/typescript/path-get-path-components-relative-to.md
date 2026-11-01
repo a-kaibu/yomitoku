@@ -11,6 +11,7 @@ file: src/compiler/path.ts
 lines: [1010, 1032]
 function: "getPathComponentsRelativeTo"
 difficulty: 2
+format: 2
 tags: [ファイル, アルゴリズム, 文字列処理]
 ---
 
@@ -64,18 +65,48 @@ function getPathComponentsRelativeTo(from: string, to: string, stringEqualityCom
 
 ## 何をしているか
 
-### 1. 両方を正規化して部品に分ける（1011〜1012 行目）
+### 1. 両方を正規化して部品に分ける
 
-### 2. 先頭から一致する部品を数える（1015〜1020 行目）
+```ts:line-numbers=1011
+    const fromComponents = reducePathComponents(getPathComponents(from));
+    const toComponents = reducePathComponents(getPathComponents(to));
+```
+### 2. 先頭から一致する部品を数える
 
-0 番目（ルート）だけは、大文字・小文字を区別せずに比べます（1018 行目）。Windows の `C:/` と `c:/` は同じだからです。それ以外は、渡された比較関数を使います。
+```ts:line-numbers=1015
+    for (start = 0; start < fromComponents.length && start < toComponents.length; start++) {
+        const fromComponent = getCanonicalFileName(fromComponents[start]);
+        const toComponent = getCanonicalFileName(toComponents[start]);
+        const comparer = start === 0 ? equateStringsCaseInsensitive : stringEqualityComparer;
+        if (!comparer(fromComponent, toComponent)) break;
+    }
+```
+0 番目（ルート）だけは、大文字・小文字を区別せずに比べます。Windows の `C:/` と `c:/` は同じだからです。それ以外は、渡された比較関数を使います。
 
-### 3. ルートから違えば、相対パスにできない（1022〜1024 行目）
+```ts:line-numbers=1018
+        const comparer = start === 0 ? equateStringsCaseInsensitive : stringEqualityComparer;
+```
 
+
+### 3. ルートから違えば、相対パスにできない
+
+```ts:line-numbers=1022
+    if (start === 0) {
+        return toComponents;
+    }
+```
 `C:/a` と `D:/b` のように別のドライブなら、`to` の絶対パスをそのまま返します。
 
-### 4. `..` を並べて、残りをつなぐ（1026〜1031 行目）
+### 4. `..` を並べて、残りをつなぐ
 
+```ts:line-numbers=1026
+    const components = toComponents.slice(start);
+    const relative: string[] = [];
+    for (; start < fromComponents.length; start++) {
+        relative.push("..");
+    }
+    return ["", ...relative, ...components];
+```
 `from` の一致しなかった部品の数だけ `..` を並べ、そのあとに `to` の一致しなかった部品を続けます。
 
 ```

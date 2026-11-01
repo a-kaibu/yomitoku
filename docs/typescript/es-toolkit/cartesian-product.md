@@ -11,6 +11,7 @@ file: src/array/cartesianProduct.ts
 lines: [83, 113]
 function: "cartesianProduct"
 difficulty: 2
+format: 2
 tags: [アルゴリズム, 数値計算, 最適化]
 ---
 
@@ -70,13 +71,61 @@ export function cartesianProduct<T>(...arrs: Array<readonly T[]>): T[][] {
 
 ## 何をしているか
 
-### 1. 特別な場合を先に片付ける（84〜95 行目）
+### 1. 特別な場合を先に片付ける
 
-配列が 1 つもなければ「何も選ばない組み合わせ」が 1 通りあるとして `[[]]` を返します（84〜86 行目）。
-次に全組み合わせの数 `total` を、各配列の長さの掛け算で求めます（88〜91 行目）。どれか 1 つでも空の配列があれば、掛け算の結果は 0 になり、空の配列を返します（93〜95 行目）。
+```ts:line-numbers=84
+  if (arrs.length === 0) {
+    return [[]];
+  }
 
-### 2. 通し番号を分解して組み合わせを作る（100〜110 行目）
+  let total = 1;
+  for (let i = 0; i < arrs.length; i++) {
+    total *= arrs[i].length;
+  }
 
+  if (total === 0) {
+    return [];
+  }
+```
+配列が 1 つもなければ「何も選ばない組み合わせ」が 1 通りあるとして `[[]]` を返します。
+
+```ts:line-numbers=84
+  if (arrs.length === 0) {
+    return [[]];
+  }
+```
+
+次に全組み合わせの数 `total` を、各配列の長さの掛け算で求めます。どれか 1 つでも空の配列があれば、掛け算の結果は 0 になり、空の配列を返します。
+
+```ts:line-numbers=88
+  let total = 1;
+  for (let i = 0; i < arrs.length; i++) {
+    total *= arrs[i].length;
+  }
+```
+
+```ts:line-numbers=93
+  if (total === 0) {
+    return [];
+  }
+```
+
+
+### 2. 通し番号を分解して組み合わせを作る
+
+```ts:line-numbers=100
+  for (let i = 0; i < total; i++) {
+    const tuple: T[] = Array(n);
+    let idx = i;
+    for (let j = n - 1; j >= 0; j--) {
+      const arr = arrs[j];
+      const len = arr.length;
+      tuple[j] = arr[idx % len];
+      idx = Math.floor(idx / len);
+    }
+    result[i] = tuple;
+  }
+```
 ここが核心です。通し番号 `i` を、**後ろの配列から順に** その配列の長さで割っていきます。
 
 上の例（長さ 2 と 3）で `i = 4` のときを追います。

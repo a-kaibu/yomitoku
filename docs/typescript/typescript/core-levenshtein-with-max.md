@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [2196, 2242]
 function: "levenshteinWithMax"
 difficulty: 3
+format: 2
 tags: [アルゴリズム, 文字列処理, 最適化]
 ---
 
@@ -26,7 +27,59 @@ TypeScript の「もしかして○○ですか？」という提案のために
 
 ## コード
 
-```ts:line-numbers=2196
+::: code-group
+
+```ts:line-numbers=2196 [日本語訳]
+function levenshteinWithMax(s1: string, s2: string, max: number): number | undefined {
+    let previous = new Array(s2.length + 1);
+    let current = new Array(s2.length + 1);
+    /** /** max より大きい値を表す。具体的な値は問題にしない。 */
+    const big = max + 0.01;
+
+    for (let i = 0; i <= s2.length; i++) {
+        previous[i] = i;
+    }
+
+    for (let i = 1; i <= s1.length; i++) {
+        const c1 = s1.charCodeAt(i - 1);
+        const minJ = Math.ceil(i > max ? i - max : 1);
+        const maxJ = Math.floor(s2.length > max + i ? max + i : s2.length);
+        current[0] = i;
+        /** /** 今の列における行列の最小値。 */
+        let colMin = i;
+        for (let j = 1; j < minJ; j++) {
+            current[j] = big;
+        }
+        for (let j = minJ; j <= maxJ; j++) {
+            // // 大文字・小文字の違いは、ほかの違いよりずっと安いコストにする
+            const substitutionDistance = s1[i - 1].toLowerCase() === s2[j - 1].toLowerCase()
+                ? (previous[j - 1] + 0.1)
+                : (previous[j - 1] + 2);
+            const dist = c1 === s2.charCodeAt(j - 1)
+                ? previous[j - 1]
+                : Math.min(/*delete*/ previous[j] + 1, /*insert*/ current[j - 1] + 1, /*substitute*/ substitutionDistance);
+            current[j] = dist;
+            colMin = Math.min(colMin, dist);
+        }
+        for (let j = maxJ + 1; j <= s2.length; j++) {
+            current[j] = big;
+        }
+        if (colMin > max) {
+            // // 全部の列が max を超えており、後の列でも良くならないのであきらめる。
+            return undefined;
+        }
+
+        const temp = previous;
+        previous = current;
+        current = temp;
+    }
+
+    const res = previous[s2.length];
+    return res > max ? undefined : res;
+}
+```
+
+```ts:line-numbers=2196 [原文]
 function levenshteinWithMax(s1: string, s2: string, max: number): number | undefined {
     let previous = new Array(s2.length + 1);
     let current = new Array(s2.length + 1);
@@ -76,6 +129,8 @@ function levenshteinWithMax(s1: string, s2: string, max: number): number | undef
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **編集距離**: 文字列 A を B に変えるのに必要な、1 文字の挿入・削除・置換の最小回数です。
@@ -86,20 +141,116 @@ function levenshteinWithMax(s1: string, s2: string, max: number): number | undef
 
 ## 何をしているか
 
-### 1. 表の 1 行目（2197〜2204 行目）
+### 1. 表の最初の行
 
+```ts:line-numbers=2197
+    let previous = new Array(s2.length + 1);
+    let current = new Array(s2.length + 1);
+    /** Represents any value > max. We don't care about the particular value. */
+    const big = max + 0.01;
+
+    for (let i = 0; i <= s2.length; i++) {
+        previous[i] = i;
+    }
+```
 `previous` は表の 1 つ前の行、`current` は今の行です。最初の行は「空の文字列から B の先頭 j 文字を作る距離」なので `j` です。
 
-### 2. 1 行ずつ埋める（2206〜2238 行目）
+### 2. 1 行ずつ埋める
 
-- **計算する範囲を絞る**（2208〜2209 行目）。位置 `i` と `j` の差が `max` を超えるマスは、少なくともその差だけの挿入か削除が必要なので、必ず `max` を超えます。その範囲は計算せず、「大きい値」の `big` を入れておきます（2213〜2215 行目、2227〜2229 行目）。
-- **置換のコスト**（2218〜2220 行目）。大文字・小文字だけの違いなら `0.1`、それ以外は `2` です。
-- **1 マスの値**（2221〜2223 行目）。同じ文字なら左上の値、違えば削除・挿入・置換の最小値です。
-- **行の最小値が上限を超えたらあきらめる**（2230〜2233 行目）。距離は行が進むほど小さくなることはないので、この行で全部 `max` を超えていたら、もう望みはありません。
-- **2 つの配列を入れ替える**（2235〜2237 行目）。今の行が次の「前の行」になります。
+```ts:line-numbers=2206
+    for (let i = 1; i <= s1.length; i++) {
+        const c1 = s1.charCodeAt(i - 1);
+        const minJ = Math.ceil(i > max ? i - max : 1);
+        const maxJ = Math.floor(s2.length > max + i ? max + i : s2.length);
+        current[0] = i;
+        /** Smallest value of the matrix in the ith column. */
+        let colMin = i;
+        for (let j = 1; j < minJ; j++) {
+            current[j] = big;
+        }
+        for (let j = minJ; j <= maxJ; j++) {
+            // case difference should be significantly cheaper than other differences
+            const substitutionDistance = s1[i - 1].toLowerCase() === s2[j - 1].toLowerCase()
+                ? (previous[j - 1] + 0.1)
+                : (previous[j - 1] + 2);
+            const dist = c1 === s2.charCodeAt(j - 1)
+                ? previous[j - 1]
+                : Math.min(/*delete*/ previous[j] + 1, /*insert*/ current[j - 1] + 1, /*substitute*/ substitutionDistance);
+            current[j] = dist;
+            colMin = Math.min(colMin, dist);
+        }
+        for (let j = maxJ + 1; j <= s2.length; j++) {
+            current[j] = big;
+        }
+        if (colMin > max) {
+            // Give up -- everything in this column is > max and it can't get better in future columns.
+            return undefined;
+        }
 
-### 3. 結果（2240〜2241 行目）
+        const temp = previous;
+        previous = current;
+        current = temp;
+    }
+```
+- **計算する範囲を絞る**。位置 `i` と `j` の差が `max` を超えるマスは、少なくともその差だけの挿入か削除が必要なので、必ず `max` を超えます。その範囲は計算せず、「大きい値」の `big` を入れておきます。
 
+```ts:line-numbers=2208
+        const minJ = Math.ceil(i > max ? i - max : 1);
+        const maxJ = Math.floor(s2.length > max + i ? max + i : s2.length);
+```
+
+```ts:line-numbers=2213
+        for (let j = 1; j < minJ; j++) {
+            current[j] = big;
+        }
+```
+
+```ts:line-numbers=2227
+        for (let j = maxJ + 1; j <= s2.length; j++) {
+            current[j] = big;
+        }
+```
+
+- **置換のコスト**。大文字・小文字だけの違いなら `0.1`、それ以外は `2` です。
+
+```ts:line-numbers=2218
+            const substitutionDistance = s1[i - 1].toLowerCase() === s2[j - 1].toLowerCase()
+                ? (previous[j - 1] + 0.1)
+                : (previous[j - 1] + 2);
+```
+
+- **1 マスの値**。同じ文字なら左上の値、違えば削除・挿入・置換の最小値です。
+
+```ts:line-numbers=2221
+            const dist = c1 === s2.charCodeAt(j - 1)
+                ? previous[j - 1]
+                : Math.min(/*delete*/ previous[j] + 1, /*insert*/ current[j - 1] + 1, /*substitute*/ substitutionDistance);
+```
+
+- **行の最小値が上限を超えたらあきらめる**。距離は行が進むほど小さくなることはないので、この行で全部 `max` を超えていたら、もう望みはありません。
+
+```ts:line-numbers=2230
+        if (colMin > max) {
+            // Give up -- everything in this column is > max and it can't get better in future columns.
+            return undefined;
+        }
+```
+
+- **2 つの配列を入れ替える**。今の行が次の「前の行」になります。
+
+```ts:line-numbers=2235
+        const temp = previous;
+        previous = current;
+        current = temp;
+```
+
+
+### 3. 結果
+
+```ts:line-numbers=2240
+    const res = previous[s2.length];
+    return res > max ? undefined : res;
+```
 最後のマスが答えです。上限を超えていれば `undefined` です。
 
 ## ここがすごい

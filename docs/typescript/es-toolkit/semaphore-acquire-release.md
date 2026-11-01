@@ -11,6 +11,7 @@ file: src/promise/semaphore.ts
 lines: [72, 109]
 function: "Semaphore#acquire / Semaphore#release"
 difficulty: 3
+format: 2
 tags: [非同期, 並行処理, データ構造]
 ---
 
@@ -23,7 +24,50 @@ JavaScript には「スレッドを止めて待つ」命令がありません。
 
 ## コード
 
-```ts:line-numbers=72
+::: code-group
+
+```ts:line-numbers=72 [日本語訳]
+  async acquire(): Promise<void> {
+    if (this.available > 0) {
+      this.available--;
+      return;
+    }
+
+    return new Promise<void>(resolve => {
+      this.deferredTasks.enqueue(resolve);
+    });
+  }
+
+  /**
+   * * セマフォを解放し、待機中の処理を 1 つ進められるようにする。
+   *
+   * @example
+   * const sema = new Semaphore(1);
+   *
+   * async function task() {
+   *   await sema.acquire();
+   *   try {
+   * *     // このコードは同時に 2 つのタスクからしか実行されない
+   *   } finally {
+   * *     sema.release(); // 待機中のタスクを 1 つ先に進める
+   *   }
+   * }
+   */
+  release(): void {
+    const deferredTask = this.deferredTasks.dequeue();
+
+    if (deferredTask != null) {
+      deferredTask();
+      return;
+    }
+
+    if (this.available < this.capacity) {
+      this.available++;
+    }
+  }
+```
+
+```ts:line-numbers=72 [原文]
   async acquire(): Promise<void> {
     if (this.available > 0) {
       this.available--;
@@ -64,6 +108,8 @@ JavaScript には「スレッドを止めて待つ」命令がありません。
   }
 ```
 
+:::
+
 `this.available` は残りの空き枠の数、`this.capacity` は最大数、`this.deferredTasks` は待っている人の行列（先に入れたものから取り出すキュー）です。
 
 ## 前提知識
@@ -76,15 +122,70 @@ JavaScript には「スレッドを止めて待つ」命令がありません。
 
 ## 何をしているか
 
-### acquire: 枠を取る（72〜81 行目）
+### acquire: 枠を取る
 
-- 空きがあれば（73 行目）、空きを 1 つ減らしてすぐ終わります。`async` 関数なので、すぐ完了する Promise が返ります。
-- 空きがなければ、新しい Promise を作り、その `resolve` を行列に並べて返します（78〜80 行目）。誰かが `resolve` を呼ぶまで、`await sema.acquire()` した側はずっと待つことになります。
+```ts:line-numbers=72
+  async acquire(): Promise<void> {
+    if (this.available > 0) {
+      this.available--;
+      return;
+    }
 
-### release: 枠を返す（98〜109 行目）
+    return new Promise<void>(resolve => {
+      this.deferredTasks.enqueue(resolve);
+    });
+  }
+```
+- 空きがあれば、空きを 1 つ減らしてすぐ終わります。`async` 関数なので、すぐ完了する Promise が返ります。
 
-- 行列に待っている人がいれば、先頭の `resolve` を呼んで **枠をその人に直接手渡し** します（99〜104 行目）。このとき `available` は増やしません。
-- 誰も待っていなければ、空き枠を 1 つ増やします（106〜108 行目）。最大値を超えないようにも確認しています。
+```ts:line-numbers=73
+    if (this.available > 0) {
+```
+
+- 空きがなければ、新しい Promise を作り、その `resolve` を行列に並べて返します。誰かが `resolve` を呼ぶまで、`await sema.acquire()` した側はずっと待つことになります。
+
+```ts:line-numbers=78
+    return new Promise<void>(resolve => {
+      this.deferredTasks.enqueue(resolve);
+    });
+```
+
+
+### release: 枠を返す
+
+```ts:line-numbers=98
+  release(): void {
+    const deferredTask = this.deferredTasks.dequeue();
+
+    if (deferredTask != null) {
+      deferredTask();
+      return;
+    }
+
+    if (this.available < this.capacity) {
+      this.available++;
+    }
+  }
+```
+- 行列に待っている人がいれば、先頭の `resolve` を呼んで **枠をその人に直接手渡し** します。このとき `available` は増やしません。
+
+```ts:line-numbers=99
+    const deferredTask = this.deferredTasks.dequeue();
+
+    if (deferredTask != null) {
+      deferredTask();
+      return;
+    }
+```
+
+- 誰も待っていなければ、空き枠を 1 つ増やします。最大値を超えないようにも確認しています。
+
+```ts:line-numbers=106
+    if (this.available < this.capacity) {
+      this.available++;
+    }
+```
+
 
 容量 1 で A、B が順に `acquire` した場合はこう動きます。
 
@@ -99,7 +200,7 @@ B.release → 行列は空 → 空き 0 → 1
 
 - **「待つ」を Promise だけで表現**: ロックの待機を、OS の機能も特別なライブラリも使わず、`resolve` を保存して後で呼ぶだけで実現しています。JavaScript の非同期の仕組みをよく理解したうえでの書き方です。
 - **枠を直接手渡しする**: `release` で `available` を増やしてから待ち人に取らせる方式だと、その間に新しく来た人に枠を横取りされる可能性があります。手渡し方式なら、先に待っていた人が必ず先に進めます（公平）。
-- **行列の実装まで気を配る**: 41 行目のコメントにあるとおり、配列の `shift`（先頭の削除）は要素が多いと遅く、長い行列を処理すると全体が 2 乗のオーダーで遅くなることがありました。専用の `Queue` を使うことで、取り出しを一定時間にしています。
+- **行列の実装まで気を配る**: `deferredTasks` の宣言に付いたコメントにあるとおり、配列の `shift`（先頭の削除）は要素が多いと遅く、長い行列を処理すると全体が 2 乗のオーダーで遅くなることがありました。専用の `Queue` を使うことで、取り出しを一定時間にしています。
 - **`Mutex` はこれの容量 1 版**: 同じライブラリの `Mutex` は `new Semaphore(1)` を包むだけで作られています。
 
 ## まとめ

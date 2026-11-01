@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [1202, 1225]
 function: "binarySearchKey"
 difficulty: 2
+format: 2
 tags: [探索, アルゴリズム, ビット演算]
 ---
 
@@ -66,20 +67,51 @@ export function binarySearchKey<T, U>(array: readonly T[], key: U, keySelector: 
 
 ## 何をしているか
 
-### 1. 空の配列なら -1（1203〜1205 行目）
+### 1. 空の配列なら -1
 
+```ts:line-numbers=1203
+    if (!some(array)) {
+        return -1;
+    }
+```
 `-1` は `~0` なので、「位置 0 に入るはず」という意味にもなっています。
 
-### 2. 範囲を絞り込む（1207〜1222 行目）
+### 2. 範囲を絞り込む
 
-`low` から `high` が探す範囲です。真ん中の位置を計算し（1210 行目）、そのキーと比べます。
+```ts:line-numbers=1207
+    let low = offset ?? 0;
+    let high = array.length - 1;
+    while (low <= high) {
+        const middle = low + ((high - low) >> 1);
+        const midKey = keySelector(array[middle], middle);
+        switch (keyComparer(midKey, key)) {
+            case Comparison.LessThan:
+                low = middle + 1;
+                break;
+            case Comparison.EqualTo:
+                return middle;
+            case Comparison.GreaterThan:
+                high = middle - 1;
+                break;
+        }
+    }
+```
+`low` から `high` が探す範囲です。真ん中の位置を計算し、そのキーと比べます。
+
+```ts:line-numbers=1210
+        const middle = low + ((high - low) >> 1);
+```
+
 
 - 真ん中のほうが小さい → 右半分を探す（`low = middle + 1`）
 - 等しい → 見つかった
 - 真ん中のほうが大きい → 左半分を探す（`high = middle - 1`）
 
-### 3. 見つからなかったら `~low`（1224 行目）
+### 3. 見つからなかったら `~low`
 
+```ts:line-numbers=1224
+    return ~low;
+```
 ループを抜けたとき、`low` は「探しているキーより大きい最初の位置」を指しています。これがまさに挿入すべき位置です。
 
 `[10, 20, 30]` で 25 を探す例です。

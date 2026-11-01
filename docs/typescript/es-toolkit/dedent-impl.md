@@ -11,6 +11,7 @@ file: src/string/dedent.ts
 lines: [125, 169]
 function: "dedentImpl"
 difficulty: 1
+format: 2
 tags: [文字列処理, アルゴリズム, イディオム]
 ---
 
@@ -92,13 +93,59 @@ function dedentImpl(text: string): string {
 
 ## 何をしているか
 
-### 1. 改行をそろえ、前後の空行を落とす（126〜135 行目）
+### 1. 改行をそろえ、前後の空行を落とす
 
+```ts:line-numbers=126
+  text = text.replace(/\r\n/g, '\n');
+  const lines = text.split('\n');
+
+  if (lines.length > 0 && lines[0].trim() === '') {
+    lines.shift();
+  }
+
+  if (lines.length > 0 && lines[lines.length - 1].trim() === '') {
+    lines.pop();
+  }
+```
 テンプレート文字列は `` dedent` `` の直後と閉じの直前に改行が入るのが普通なので、最初と最後の空行を 1 つずつ取り除きます。
 
-### 2. いちばん浅い字下げを探す（137〜154 行目）
+### 2. いちばん浅い字下げを探す
 
-空白だけの行は飛ばし（142〜144 行目）、各行の先頭のスペースとタブを数えます（146〜149 行目）。その最小値を `commonIndent` に記録します。
+```ts:line-numbers=137
+  let commonIndent = Infinity;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (line.trim() === '') {
+      continue;
+    }
+
+    let indent = 0;
+    while (indent < line.length && (line[indent] === ' ' || line[indent] === '\t')) {
+      indent++;
+    }
+
+    if (indent < commonIndent) {
+      commonIndent = indent;
+    }
+  }
+```
+空白だけの行は飛ばし、各行の先頭のスペースとタブを数えます。その最小値を `commonIndent` に記録します。
+
+```ts:line-numbers=142
+    if (line.trim() === '') {
+      continue;
+    }
+```
+
+```ts:line-numbers=146
+    let indent = 0;
+    while (indent < line.length && (line[indent] === ' ' || line[indent] === '\t')) {
+      indent++;
+    }
+```
+
 
 ```
 '    if (x) {'  → 4
@@ -107,12 +154,28 @@ function dedentImpl(text: string): string {
 → commonIndent = 4
 ```
 
-### 3. 中身のある行がなければ空文字（156〜158 行目）
+### 3. 中身のある行がなければ空文字
 
+```ts:line-numbers=156
+  if (commonIndent === Infinity) {
+    return '';
+  }
+```
 すべてが空行だと `commonIndent` は `Infinity` のままなので、それを目印に空文字を返します。
 
-### 4. 削ってつなぐ（160〜168 行目）
+### 4. 削ってつなぐ
 
+```ts:line-numbers=160
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '') {
+      lines[i] = '';
+    } else {
+      lines[i] = lines[i].slice(commonIndent);
+    }
+  }
+
+  return lines.join('\n');
+```
 空白だけの行は空にし、それ以外は先頭から `commonIndent` 文字を削ります。
 
 ## ここがすごい

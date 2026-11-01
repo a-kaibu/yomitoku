@@ -11,6 +11,7 @@ file: src/util/queue.ts
 lines: [61, 101]
 function: "Queue#enqueue / Queue#dequeue"
 difficulty: 2
+format: 2
 tags: [データ構造, 最適化, アルゴリズム]
 ---
 
@@ -22,7 +23,53 @@ JavaScript の配列でも `push` と `shift` で同じことができますが�
 
 ## コード
 
-```ts:line-numbers=61
+::: code-group
+
+```ts:line-numbers=61 [日本語訳]
+  enqueue(value: T): void {
+    const node: QueueNode<T> = { v: value, n: null };
+
+    if (this.#tail === null) {
+      this.#head = node;
+    } else {
+      this.#tail.n = node;
+    }
+
+    this.#tail = node;
+    this.#size++;
+  }
+
+  /**
+   * * キューの先頭の要素を取り除いて返す。
+   *
+   * * @returns 取り除いた要素。キューが空なら `undefined`。
+   *
+   * @example
+   * const queue = new Queue<number>();
+   * queue.enqueue(1);
+   * console.log(queue.dequeue()); // 1
+   * console.log(queue.dequeue()); // undefined
+   */
+  dequeue(): T | undefined {
+    const node = this.#head;
+
+    if (node === null) {
+      return undefined;
+    }
+
+    this.#head = node.n;
+
+    if (this.#head === null) {
+      this.#tail = null;
+    }
+
+    this.#size--;
+
+    return node.v;
+  }
+```
+
+```ts:line-numbers=61 [原文]
   enqueue(value: T): void {
     const node: QueueNode<T> = { v: value, n: null };
 
@@ -66,6 +113,8 @@ JavaScript の配列でも `push` と `shift` で同じことができますが�
   }
 ```
 
+:::
+
 ノードは `{ v: 値, n: 次のノード }` という小さなオブジェクトで、ファイルの先頭で定義されています。
 
 ## 前提知識
@@ -78,13 +127,74 @@ JavaScript の配列でも `push` と `shift` で同じことができますが�
 
 ## 何をしているか
 
-### enqueue: 末尾に追加（61〜72 行目）
+### enqueue: 末尾に追加
 
-新しいノードを作り、キューが空なら先頭にします（64〜65 行目）。そうでなければ、今の末尾のノードの「次」を新しいノードにします（66〜67 行目）。最後に、末尾を新しいノードに更新します。
+```ts:line-numbers=61
+  enqueue(value: T): void {
+    const node: QueueNode<T> = { v: value, n: null };
 
-### dequeue: 先頭から取り出す（85〜101 行目）
+    if (this.#tail === null) {
+      this.#head = node;
+    } else {
+      this.#tail.n = node;
+    }
 
-先頭がなければ `undefined` を返します（88〜90 行目）。あれば、先頭を「次のノード」に進め（92 行目）、その結果キューが空になったら末尾も `null` にします（94〜96 行目）。
+    this.#tail = node;
+    this.#size++;
+  }
+```
+新しいノードを作り、キューが空なら先頭にします。そうでなければ、今の末尾のノードの「次」を新しいノードにします。最後に、末尾を新しいノードに更新します。
+
+```ts:line-numbers=64
+    if (this.#tail === null) {
+      this.#head = node;
+```
+
+```ts:line-numbers=66
+    } else {
+      this.#tail.n = node;
+```
+
+
+### dequeue: 先頭から取り出す
+
+```ts:line-numbers=85
+  dequeue(): T | undefined {
+    const node = this.#head;
+
+    if (node === null) {
+      return undefined;
+    }
+
+    this.#head = node.n;
+
+    if (this.#head === null) {
+      this.#tail = null;
+    }
+
+    this.#size--;
+
+    return node.v;
+  }
+```
+先頭がなければ `undefined` を返します。あれば、先頭を「次のノード」に進め、その結果キューが空になったら末尾も `null` にします。
+
+```ts:line-numbers=88
+    if (node === null) {
+      return undefined;
+    }
+```
+
+```ts:line-numbers=92
+    this.#head = node.n;
+```
+
+```ts:line-numbers=94
+    if (this.#head === null) {
+      this.#tail = null;
+    }
+```
+
 
 ```
 enqueue(1), enqueue(2):  head → [1] → [2] ← tail
@@ -95,8 +205,8 @@ dequeue() → 2:           head = tail = null
 ## ここがすごい
 
 - **配列の `shift` の遅さを避ける**: 配列の `shift` は、先頭を取り除いたあと残りの要素を 1 つずつ前にずらすため、要素数に比例した時間がかかることがあります。セマフォの待ち行列のように大量の要素を順番に取り出すと、全体の時間が要素数の 2 乗で増えてしまいます。連結リストなら、先頭の参照を 1 つ進めるだけです。
-- **末尾も覚えておく**: 先頭だけでは、末尾に追加するために毎回最後までたどる必要があります。`#tail` を持つことで、追加も一定時間になります。そのぶん、空になったときに `#tail` も忘れずに `null` に戻しています（94〜96 行目）。
-- **フィールド名を 1 文字に**: 1 行目のコメントにあるとおり、コードを小さくするツール（ミニファイア）は変数名は短くしてくれますが、オブジェクトのプロパティ名は変えてくれません。`value` や `next` ではなく `v` と `n` にすることで、配布されるコードを小さくしています。
+- **末尾も覚えておく**: 先頭だけでは、末尾に追加するために毎回最後までたどる必要があります。`#tail` を持つことで、追加も一定時間になります。そのぶん、空になったときに `#tail` も忘れずに `null` に戻しています。
+- **フィールド名を 1 文字に**: ファイル先頭のコメントにあるとおり、コードを小さくするツール（ミニファイア）は変数名は短くしてくれますが、オブジェクトのプロパティ名は変えてくれません。`value` や `next` ではなく `v` と `n` にすることで、配布されるコードを小さくしています。
 
 ## まとめ
 

@@ -11,6 +11,7 @@ file: src/function/once.ts
 lines: [34, 46]
 function: "once"
 difficulty: 1
+format: 2
 tags: [クロージャ, 関数型, イディオム]
 ---
 
@@ -49,14 +50,41 @@ export function once<F extends (() => any) | ((...args: any[]) => void)>(func: F
 
 ## 何をしているか
 
-### 1. 状態を 2 つ用意する（35〜36 行目）
+### 1. 状態を 2 つ用意する
 
+```ts:line-numbers=35
+  let called = false;
+  let cache: ReturnType<F>;
+```
 `called` は「もう呼んだか」の旗、`cache` は 1 回目の結果の保存場所です。この 2 つは `once` を呼ぶたびに新しく作られ、返す関数だけが触れます。
 
-### 2. 返す関数（38〜45 行目）
+### 2. 返す関数
 
-- 旗が立っていなければ、**先に旗を立ててから** `func` を実行し、結果を保存します（39〜42 行目）。
-- 旗の状態に関係なく、保存した結果を返します（44 行目）。
+```ts:line-numbers=38
+  return function (this: unknown, ...args: Parameters<F>): ReturnType<F> {
+    if (!called) {
+      called = true;
+      cache = func.apply(this, args);
+    }
+
+    return cache;
+  } as F;
+```
+- 旗が立っていなければ、**先に旗を立ててから** `func` を実行し、結果を保存します。
+
+```ts:line-numbers=39
+    if (!called) {
+      called = true;
+      cache = func.apply(this, args);
+    }
+```
+
+- 旗の状態に関係なく、保存した結果を返します。
+
+```ts:line-numbers=44
+    return cache;
+```
+
 
 ```ts
 const init = once(() => { console.log('初期化'); return 42 })
@@ -66,7 +94,7 @@ init() // 何も表示せず 42
 
 ## ここがすごい
 
-- **旗を「先に」立てる**: 40 行目で `called = true` を `func` の実行より前に書いています。もし `func` の中から同じ関数がもう一度呼ばれても（再帰的な呼び出し）、二重に実行されることがありません。また `func` がエラーを投げた場合でも、2 回目は実行されなくなります。
+- **旗を「先に」立てる**: `called = true` を `func` の実行より前に書いています。もし `func` の中から同じ関数がもう一度呼ばれても（再帰的な呼び出し）、二重に実行されることがありません。また `func` がエラーを投げた場合でも、2 回目は実行されなくなります。
 - **結果がなくても判定できる**: 「`cache` が空なら未実行」と判定する書き方もありえますが、`func` が `undefined` を返す関数だと区別できません。旗を別に持つことで、どんな戻り値でも正しく判定できます。
 - **状態が外から見えない**: `called` と `cache` はクロージャの中にしかないので、外のコードがうっかり書き換えることはできません。クラスを使わずに「隠れた状態」を持つ、関数型らしいテクニックです。
 - **型を崩さない**: 戻り値を `as F` で元の関数と同じ型にしているので、使う側は引数や戻り値の型チェックをそのまま受けられます。

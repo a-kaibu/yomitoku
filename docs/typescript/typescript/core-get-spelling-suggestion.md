@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [2167, 2194]
 function: "getSpellingSuggestion"
 difficulty: 2
+format: 2
 tags: [文字列処理, アルゴリズム, 最適化]
 ---
 
@@ -22,7 +23,40 @@ TypeScript でうっかり `consle.log()` と書くと、「`consle` は見つ�
 
 ## コード
 
-```ts:line-numbers=2167
+::: code-group
+
+```ts:line-numbers=2167 [日本語訳]
+export function getSpellingSuggestion<T>(name: string, candidates: Iterable<T>, getName: (candidate: T) => string | undefined): T | undefined {
+    const maximumLengthDifference = Math.max(2, Math.floor(name.length * 0.34));
+    let bestDistance = Math.floor(name.length * 0.4) + 1; // let bestDistance = Math.floor(name.length * 0.4) + 1; // 最良の結果がこれより悪ければ計算しない。
+    let bestCandidate: T | undefined;
+    for (const candidate of candidates) {
+        const candidateName = getName(candidate);
+        if (candidateName !== undefined && Math.abs(candidateName.length - name.length) <= maximumLengthDifference) {
+            if (candidateName === name) {
+                continue;
+            }
+            // // 3 文字未満の候補は、大文字・小文字の違いだけのときに考える。
+            // // それ以外は無視する。2 文字の名前では 1 文字違いでも人がすぐ気づくため。
+            if (candidateName.length < 3 && candidateName.toLowerCase() !== name.toLowerCase()) {
+                continue;
+            }
+
+            const distance = levenshteinWithMax(name, candidateName, bestDistance - 0.1);
+            if (distance === undefined) {
+                continue;
+            }
+
+            Debug.assert(distance < bestDistance); // Debug.assert(distance < bestDistance); // そうでなければ levenshteinWithMax は undefined を返すはず
+            bestDistance = distance;
+            bestCandidate = candidate;
+        }
+    }
+    return bestCandidate;
+}
+```
+
+```ts:line-numbers=2167 [原文]
 export function getSpellingSuggestion<T>(name: string, candidates: Iterable<T>, getName: (candidate: T) => string | undefined): T | undefined {
     const maximumLengthDifference = Math.max(2, Math.floor(name.length * 0.34));
     let bestDistance = Math.floor(name.length * 0.4) + 1; // If the best result is worse than this, don't bother.
@@ -53,6 +87,8 @@ export function getSpellingSuggestion<T>(name: string, candidates: Iterable<T>, 
 }
 ```
 
+:::
+
 `levenshteinWithMax` は同じファイルにある、上限付きで編集距離を計算する関数です。距離が上限を超えると分かった時点で `undefined` を返します。
 
 ## 前提知識
@@ -65,26 +101,72 @@ export function getSpellingSuggestion<T>(name: string, candidates: Iterable<T>, 
 
 ## 何をしているか
 
-### 1. しきい値を決める（2168〜2169 行目）
+### 1. しきい値を決める
 
+```ts:line-numbers=2168
+    const maximumLengthDifference = Math.max(2, Math.floor(name.length * 0.34));
+    let bestDistance = Math.floor(name.length * 0.4) + 1; // If the best result is worse than this, don't bother.
+```
 - 長さの差の上限: 名前の長さの 34 %（最低 2）。
 - 距離の上限: 名前の長さの 40 % + 1。これより似ていなければ提案しません。
 
-### 2. 候補をふるい落とす（2171〜2181 行目）
+### 2. 候補をふるい落とす
 
-- 長さが違いすぎる候補は、計算せずに飛ばします（2173 行目）。
-- 完全に同じ名前は飛ばします（2174〜2176 行目）。
-- 3 文字未満の候補は、**大文字・小文字の違いだけ** のときしか考えません（2179〜2181 行目）。
+```ts:line-numbers=2171
+    for (const candidate of candidates) {
+        const candidateName = getName(candidate);
+        if (candidateName !== undefined && Math.abs(candidateName.length - name.length) <= maximumLengthDifference) {
+            if (candidateName === name) {
+                continue;
+            }
+            // Only consider candidates less than 3 characters long when they differ by case.
+            // Otherwise, don't bother, since a user would usually notice differences of a 2-character name.
+            if (candidateName.length < 3 && candidateName.toLowerCase() !== name.toLowerCase()) {
+                continue;
+            }
+```
+- 長さが違いすぎる候補は、計算せずに飛ばします。
 
-### 3. 距離を計算して最良を更新（2183〜2190 行目）
+```ts:line-numbers=2173
+        if (candidateName !== undefined && Math.abs(candidateName.length - name.length) <= maximumLengthDifference) {
+```
 
+- 完全に同じ名前は飛ばします。
+
+```ts:line-numbers=2174
+            if (candidateName === name) {
+                continue;
+            }
+```
+
+- 3 文字未満の候補は、**大文字・小文字の違いだけ** のときしか考えません。
+
+```ts:line-numbers=2179
+            if (candidateName.length < 3 && candidateName.toLowerCase() !== name.toLowerCase()) {
+                continue;
+            }
+```
+
+
+### 3. 距離を計算して最良を更新
+
+```ts:line-numbers=2183
+            const distance = levenshteinWithMax(name, candidateName, bestDistance - 0.1);
+            if (distance === undefined) {
+                continue;
+            }
+
+            Debug.assert(distance < bestDistance); // Else `levenshteinWithMax` should return undefined
+            bestDistance = distance;
+            bestCandidate = candidate;
+```
 上限を「今までの最良の距離 - 0.1」にして計算します。つまり **今の最良より良くなる見込みがない候補は途中で打ち切られます**。打ち切られなかったら、それが新しい最良です。
 
 ## ここがすごい
 
 - **安い判定から順に**: 編集距離の計算は、文字数の掛け算に比例する重い処理です。長さの差を見る、同じ名前を除く、といった一瞬で済む判定を先に行い、重い計算をする候補を減らしています。
 - **最良の距離を上限にする**: 候補を処理するたびに上限が厳しくなるので、後のほうの候補ほど早く打ち切られます。「最良の解を見つけたら、それより悪いものは最後まで調べない」という、探索問題でよく使われる考え方（枝刈り）です。
-- **人間の感覚に合わせた調整**: 2 文字の名前は、1 文字違うだけで全く別の名前になります（`id` と `if` など）。2177〜2178 行目のコメントのとおり、短い名前の違いには人は自分で気づくので、大文字・小文字の違いだけを提案しています。数字のしきい値も含めて、使い勝手を考えた調整です。
+- **人間の感覚に合わせた調整**: 2 文字の名前は、1 文字違うだけで全く別の名前になります（`id` と `if` など）。ループの中のコメントのとおり、短い名前の違いには人は自分で気づくので、大文字・小文字の違いだけを提案しています。数字のしきい値も含めて、使い勝手を考えた調整です。
 
 ## まとめ
 

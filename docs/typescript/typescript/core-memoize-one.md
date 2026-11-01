@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [1907, 1918]
 function: "memoizeOne"
 difficulty: 2
+format: 2
 tags: [キャッシュ, ハッシュ, 防御的プログラミング]
 ---
 
@@ -47,9 +48,30 @@ export function memoizeOne<A extends string | number | boolean | undefined, T>(c
 
 ## 何をしているか
 
-1. 引数から、`型名:値` の形のキーを作ります（1910 行目）。
-2. `Map` からそのキーの値を取り出します（1911 行目）。
-3. 値が `undefined` で、**しかもキー自体が登録されていない** ときだけ、`callback` を実行して保存します（1912〜1915 行目）。
+### 処理の流れ
+
+
+1. 引数から、`型名:値` の形のキーを作ります。
+
+```ts:line-numbers=1910
+        const key = `${typeof arg}:${arg}`;
+```
+
+2. `Map` からそのキーの値を取り出します。
+
+```ts:line-numbers=1911
+        let value = map.get(key);
+```
+
+3. 値が `undefined` で、**しかもキー自体が登録されていない** ときだけ、`callback` を実行して保存します。
+
+```ts:line-numbers=1912
+        if (value === undefined && !map.has(key)) {
+            value = callback(arg);
+            map.set(key, value);
+        }
+```
+
 4. 値を返します。
 
 キーの例です。
@@ -65,7 +87,7 @@ arg = undefined → 'undefined:undefined'
 ## ここがすごい
 
 - **型が違えば別のキー**: `Map` のキーに引数をそのまま使えば区別はできますが、この関数はキーを文字列にそろえています。そのとき単に `String(arg)` にすると、`1` と `'1'`、`true` と `'true'` が同じキーになってしまいます。先頭に型名を付けるだけで、この衝突が起きなくなります。
-- **「結果が `undefined`」も正しくキャッシュ**: 1912 行目の `value === undefined && !map.has(key)` がよくできています。`get` だけを見ると、「まだ計算していない」と「計算した結果が `undefined` だった」の区別がつきません。そこで、`get` が `undefined` を返したときだけ `has` で確かめています。値があるときは `get` 1 回で済み、`has` を呼ばないので、よくある場合の速さも保っています。
+- **「結果が `undefined`」も正しくキャッシュ**: `value === undefined && !map.has(key)` という条件がよくできています。`get` だけを見ると、「まだ計算していない」と「計算した結果が `undefined` だった」の区別がつきません。そこで、`get` が `undefined` を返したときだけ `has` で確かめています。値があるときは `get` 1 回で済み、`has` を呼ばないので、よくある場合の速さも保っています。
 - **用途を絞って単純に**: 引数をプリミティブ（基本的な値）の 1 つだけに限っているので、キーの作り方を 1 行で書けます。
 
 ## まとめ

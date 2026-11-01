@@ -11,6 +11,7 @@ file: src/string/words.ts
 lines: [18, 40]
 function: "words"
 difficulty: 2
+format: 2
 tags: [正規表現, Unicode, 文字列処理]
 ---
 
@@ -25,11 +26,39 @@ words('hello_world 123')   // ['hello', 'world', '123']
 words('café🎉')            // ['café', '🎉']
 ```
 
-処理は `str.match` 1 回だけ。仕事のほとんどを、18〜19 行目の **1 本の正規表現** がしています。
+処理は `str.match` 1 回だけ。仕事のほとんどを、`CASE_SPLIT_PATTERN` という **1 本の正規表現** がしています。
 
 ## コード
 
-```ts:line-numbers=18
+::: code-group
+
+```ts:line-numbers=18 [日本語訳]
+export const CASE_SPLIT_PATTERN =
+  /\p{Lu}?\p{Ll}+|[0-9]+|\p{Lu}+(?!\p{Ll})|\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{L}+/gu;
+
+/**
+ * * 文字列 `string` を単語の配列に分割する。空白と句読点を区切りとみなす。
+ *
+ * * @param str 調べる文字列。
+ * * @param [pattern] 単語を一致させるパターン。
+ * * @returns `string` の単語の配列を返す。
+ *
+ * @example
+ * words('fred, barney, & pebbles');
+ * // => ['fred', 'barney', 'pebbles']
+ *
+ * words('camelCaseHTTPRequest🚀');
+ * // => ['camel', 'Case', 'HTTP', 'Request', '🚀']
+ *
+ * words('Lunedì 18 Set')
+ * // => ['Lunedì', '18', 'Set']
+ */
+export function words(str: string): string[] {
+  return Array.from(str.match(CASE_SPLIT_PATTERN) ?? []);
+}
+```
+
+```ts:line-numbers=18 [原文]
 export const CASE_SPLIT_PATTERN =
   /\p{Lu}?\p{Ll}+|[0-9]+|\p{Lu}+(?!\p{Ll})|\p{Emoji_Presentation}|\p{Extended_Pictographic}|\p{L}+/gu;
 
@@ -55,6 +84,8 @@ export function words(str: string): string[] {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **正規表現**: 文字列のパターンを表す小さな言語です。`/…/gu` の `g` は「すべての一致を探す」、`u` は「Unicode モード」です。
@@ -65,6 +96,15 @@ export function words(str: string): string[] {
 - **`str.match(re)`**: `g` 付きなら一致した文字列の配列、一致がなければ `null` を返します。`?? []` で `null` のときは空配列にしています。
 
 ## 何をしているか
+
+### 処理の流れ
+
+```ts:line-numbers=38
+export function words(str: string): string[] {
+  return Array.from(str.match(CASE_SPLIT_PATTERN) ?? []);
+}
+```
+
 
 正規表現は 6 つの候補を `|` でつないだものです。上から順に試されます。
 

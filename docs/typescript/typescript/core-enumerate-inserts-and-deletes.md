@@ -11,6 +11,7 @@ file: src/compiler/core.ts
 lines: [2490, 2526]
 function: "enumerateInsertsAndDeletes"
 difficulty: 2
+format: 2
 tags: [アルゴリズム, 探索, 設計パターン]
 ---
 
@@ -77,20 +78,55 @@ export function enumerateInsertsAndDeletes<T, U>(newItems: readonly T[], oldItem
 
 ## 何をしているか
 
-### 1. 両方に要素が残っている間（2497〜2516 行目）
+### 1. 両方に要素が残っている間
 
+```ts:line-numbers=2497
+    while (newIndex < newLen && oldIndex < oldLen) {
+        const newItem = newItems[newIndex];
+        const oldItem = oldItems[oldIndex];
+        const compareResult = comparer(newItem, oldItem);
+        if (compareResult === Comparison.LessThan) {
+            inserted(newItem);
+            newIndex++;
+            hasChanges = true;
+        }
+        else if (compareResult === Comparison.GreaterThan) {
+            deleted(oldItem);
+            oldIndex++;
+            hasChanges = true;
+        }
+        else {
+            unchanged(oldItem, newItem);
+            newIndex++;
+            oldIndex++;
+        }
+    }
+```
 新旧それぞれの「今の位置」の要素を比べます。
 
 - 新 < 旧: 新しい要素は古いリストにないので **追加**。新側だけ進める。
 - 新 > 旧: 古い要素は新しいリストにないので **削除**。旧側だけ進める。
 - 等しい: **変化なし**。両方進める。
 
-### 2. 残りを片付ける（2517〜2524 行目）
+### 2. 残りを片付ける
 
+```ts:line-numbers=2517
+    while (newIndex < newLen) {
+        inserted(newItems[newIndex++]);
+        hasChanges = true;
+    }
+    while (oldIndex < oldLen) {
+        deleted(oldItems[oldIndex++]);
+        hasChanges = true;
+    }
+```
 新側に残りがあれば全部追加、旧側に残りがあれば全部削除です。
 
-### 3. 変化があったかを返す（2525 行目）
+### 3. 変化があったかを返す
 
+```ts:line-numbers=2525
+    return hasChanges;
+```
 上の例を追ってみます。
 
 ```

@@ -11,6 +11,7 @@ file: src/util/attempt.ts
 lines: [40, 46]
 function: "attempt"
 difficulty: 1
+format: 2
 tags: [エラー処理, 型システム, 関数型]
 ---
 
@@ -52,12 +53,20 @@ export function attempt<T, E = unknown>(func: () => T): [null, T] | [E, null] {
 
 ## 何をしているか
 
-### 成功したら `[null, 結果]`（41〜42 行目）
+### 成功したら `[null, 結果]`
 
+```ts:line-numbers=41
+  try {
+    return [null, func()];
+```
 `func()` を実行して、問題なければ 1 つ目を `null`、2 つ目を結果にした組を返します。
 
-### 失敗したら `[エラー, null]`（43〜44 行目）
+### 失敗したら `[エラー, null]`
 
+```ts:line-numbers=43
+  } catch (error) {
+    return [error as E, null];
+```
 エラーが投げられたら、1 つ目をエラー、2 つ目を `null` にした組を返します。
 
 ## ここがすごい
