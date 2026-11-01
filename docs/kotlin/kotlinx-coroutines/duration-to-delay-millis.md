@@ -12,6 +12,7 @@ lines: [149, 158]
 function: "Duration.toDelayMillis"
 difficulty: 1
 tags: [数値計算, 日時, イディオム]
+format: 2
 ---
 
 ## ひとことで
@@ -19,11 +20,27 @@ tags: [数値計算, 日時, イディオム]
 `toDelayMillis()` は、Kotlin の `Duration`（時間の長さ）を、`delay` に渡すための **ミリ秒の整数** に変換する内部関数です。
 ポイントは **切り上げ** をしていることで、`1.5` ミリ秒なら `2` ミリ秒、`1` ナノ秒でも `1` ミリ秒になります。「999,999 ナノ秒を足してから切り捨てる」という古典的な切り上げの技が使われています。
 
-ついでに、すぐ上の 149 行目にある「コンテキストから時間待ち担当を取り出す」拡張プロパティも一緒に読みます。
+ついでに、すぐ上にある「コンテキストから時間待ち担当を取り出す」拡張プロパティも一緒に読みます。
 
 ## コード
 
-```kotlin:line-numbers=149
+
+::: code-group
+
+```kotlin:line-numbers=149 [日本語訳]
+internal val CoroutineContext.delay: Delay get() = get(ContinuationInterceptor) as? Delay ?: DefaultDelay
+
+/**
+ * このDuration をミリ秒に変換します。1 ミリ秒未満のナノ秒成分を持つ値は、
+ * 次に大きいミリ秒へ切り上げられます。
+ */
+internal fun Duration.toDelayMillis(): Long = when (isPositive()) {
+    true -> plus(999_999L.nanoseconds).inWholeMilliseconds
+    false -> 0L
+}
+```
+
+```kotlin:line-numbers=149 [原文]
 internal val CoroutineContext.delay: Delay get() = get(ContinuationInterceptor) as? Delay ?: DefaultDelay
 
 /**
@@ -36,6 +53,8 @@ internal fun Duration.toDelayMillis(): Long = when (isPositive()) {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Duration`**: Kotlin 標準ライブラリの「時間の長さ」を表す型です。`1500.microseconds` や `2.seconds` のように作れます。内部ではナノ秒単位の精度を持っています。
@@ -46,11 +65,20 @@ internal fun Duration.toDelayMillis(): Long = when (isPositive()) {
 
 ## 何をしているか
 
-### 1. 時間待ち担当を選ぶ（149 行目）
+### 1. 時間待ち担当を選ぶ
+
+```kotlin:line-numbers=149
+internal val CoroutineContext.delay: Delay get() = get(ContinuationInterceptor) as? Delay ?: DefaultDelay
+```
 
 ディスパッチャ自身が時間待ちを実装していればそれを使い、なければ既定のものを使います。`as? Delay ?: DefaultDelay` は「`Delay` にキャストできなければ既定値」という定番の書き方です。
 
-### 2. 正なら切り上げてミリ秒に（155〜156 行目）
+### 2. 正なら切り上げてミリ秒にする
+
+```kotlin:line-numbers=155
+internal fun Duration.toDelayMillis(): Long = when (isPositive()) {
+    true -> plus(999_999L.nanoseconds).inWholeMilliseconds
+```
 
 | 入力 | 999,999 ns を足す | 切り捨て | 結果 |
 | --- | --- | --- | --- |
@@ -61,7 +89,11 @@ internal fun Duration.toDelayMillis(): Long = when (isPositive()) {
 
 ちょうどのミリ秒はそのまま、端数が少しでもあれば 1 繰り上がります。
 
-### 3. 0 以下なら 0（157 行目）
+### 3. 0 以下なら 0
+
+```kotlin:line-numbers=157
+    false -> 0L
+```
 
 負の時間や 0 は「待たない」なので 0 にします。
 

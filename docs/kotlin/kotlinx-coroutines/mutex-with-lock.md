@@ -12,6 +12,7 @@ lines: [116, 127]
 function: "Mutex.withLock"
 difficulty: 2
 tags: [並行処理, 非同期, 型システム, イディオム]
+format: 2
 ---
 
 ## ひとことで
@@ -43,18 +44,36 @@ public suspend inline fun <T> Mutex.withLock(owner: Any? = null, action: () -> T
 - **`Mutex`**: 同時に 1 つのコルーチンしか入れない区間を作るためのロックです。`lock()` は取れるまで **中断して待ち**（スレッドを止めない）、`unlock()` で解放します。
 - **`owner`**: 誰がロックを持っているかを示す任意のオブジェクトです。デバッグや二重ロックの検出に使えます。省略すると `null` です。
 - **`suspend inline fun`**: 一時停止でき、しかも呼び出し元に展開される関数です。`action` は普通のラムダ（`suspend` ではない）ですが、`inline` なので中で `suspend` 関数を呼べます。
-- **`try { } finally { }`**: 途中で例外が起きても `finally` を必ず実行します。`try` は式なので、`return try { action() } ...` で `action()` の結果を返せます。
+- **`try { } finally { }`**: 途中で例外が起きても `finally` を必ず実行する構文です。`try` は式なので、`return try { action() } ...` で `action()` の結果を返せます。
 - **`contract { callsInPlace(action, InvocationKind.EXACTLY_ONCE) }`**: Kotlin の契約機能です。「`action` はこの関数の中で、ちょうど 1 回呼ばれる」とコンパイラに宣言します。実行時には何もしません。`@OptIn(ExperimentalContracts::class)` は実験的機能を使う宣言です。
 
 ## 何をしているか
 
-### 1. 契約を宣言（118〜120 行目）
+### 1. 契約を宣言する
 
-### 2. ロックを取る（121 行目）
+```kotlin:line-numbers=118
+    contract {
+        callsInPlace(action, InvocationKind.EXACTLY_ONCE)
+    }
+```
+
+### 2. ロックを取る
+
+```kotlin:line-numbers=121
+    lock(owner)
+```
 
 他のコルーチンが持っていれば、解放されるまで中断して待ちます。
 
-### 3. ブロックを実行して、必ず解放（122〜126 行目）
+### 3. ブロックを実行して、必ず解放する
+
+```kotlin:line-numbers=122
+    return try {
+        action()
+    } finally {
+        unlock(owner)
+    }
+```
 
 ```kotlin
 val mutex = Mutex()
@@ -66,7 +85,7 @@ repeat(1000) {
 
 1000 個のコルーチンが同時に `counter++` しても、ロックのおかげで 1 つずつ実行され、最後は必ず 1000 になります。
 
-### contract があると何がうれしいか
+### 契約があると何がうれしいか
 
 ```kotlin
 val result: Int
