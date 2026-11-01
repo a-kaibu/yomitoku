@@ -11,8 +11,10 @@ file: Lib/functools.py
 lines: [504, 535]
 function: _make_key
 difficulty: 2
+format: 2
 tags: [キャッシュ, 最適化, ハッシュ, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `_make_key` は、`@lru_cache`（関数の結果を覚えておくデコレータ）が「この引数での呼び出しは前にもあったか？」を調べるための **辞書のキー** を作る関数です。
@@ -20,7 +22,44 @@ tags: [キャッシュ, 最適化, ハッシュ, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=504
+::: code-group
+
+```python:line-numbers=504 [日本語訳]
+def _make_key(args, kwds, typed,
+             kwd_mark = (object(),),
+             fasttypes = {int, str},
+             tuple=tuple, type=type, len=len):
+    """Make a cache key from optionally typed positional and keyword arguments
+
+    The key is constructed in a way that is flat as possible rather than
+    as a nested structure that would take more memory.
+
+    If there is only a single argument and its data type is known to cache
+    its hash value, then that argument is returned without a wrapper.  This
+    saves space and improves lookup speed.
+
+    """
+    # 以下のコードは、kwds がユーザーの渡した順序を保つことに依存している。
+    # 以前は、ループの前に kwds を sorted() していた。新しい方法は*ずっと*
+    # 速い。その代わり、f(x=1, y=2) と f(y=2, x=1) は別の呼び出しとして
+    # 別々にキャッシュされる。
+    key = args
+    if kwds:
+        key = list(key)
+        key += kwd_mark
+        for item in kwds.items():
+            key += item
+        key = tuple(key)
+    if typed:
+        key += tuple([type(v) for v in args])
+        if kwds:
+            key += tuple([type(v) for v in kwds.values()])
+    elif len(key) == 1 and type(key[0]) in fasttypes:
+        return key[0]
+    return key
+```
+
+```python:line-numbers=504 [原文]
 def _make_key(args, kwds, typed,
              kwd_mark = (object(),),
              fasttypes = {int, str},
@@ -55,6 +94,8 @@ def _make_key(args, kwds, typed,
     return key
 ```
 
+:::
+
 ## 前提知識
 
 - **`*args` と `**kwargs`**: Python の関数は、位置引数をタプル（`args`）、キーワード引数を辞書（`kwds`）としてまとめて受け取れます。この関数はそれらをそのまま受け取っています。
@@ -66,11 +107,24 @@ def _make_key(args, kwds, typed,
 
 ## 何をしているか
 
-### 1. 位置引数をそのままキーにする（522 行目）
+### 1. 位置引数をそのままキーにする
+
+```python:line-numbers=522
+    key = args
+```
 
 `key = args` です。`f(1, 2)` なら `key` は `(1, 2)` です。
 
-### 2. キーワード引数があれば平らに追加する（523〜528 行目）
+### 2. キーワード引数があれば平らに追加する
+
+```python:line-numbers=523
+    if kwds:
+        key = list(key)
+        key += kwd_mark
+        for item in kwds.items():
+            key += item
+        key = tuple(key)
+```
 
 `f(1, 2, mode="fast")` の場合、
 
@@ -81,11 +135,24 @@ def _make_key(args, kwds, typed,
 
 目印があるので、`f(1, 2, "mode", "fast")`（全部位置引数）とは別のキーになります。
 
-### 3. typed=True なら型も入れる（529〜532 行目）
+### 3. typed=True なら型も入れる
+
+```python:line-numbers=529
+    if typed:
+        key += tuple([type(v) for v in args])
+        if kwds:
+            key += tuple([type(v) for v in kwds.values()])
+```
 
 `@lru_cache(typed=True)` のときは、`f(3)` と `f(3.0)` を区別したいので、引数の型をキーの後ろに足します。
 
-### 4. 引数 1 個で int か str ならそのまま返す（533〜534 行目）
+### 4. 引数 1 個で int か str ならそのまま返す
+
+```python:line-numbers=533
+    elif len(key) == 1 and type(key[0]) in fasttypes:
+        return key[0]
+    return key
+```
 
 `f(42)` のときは、タプル `(42,)` を作らずに `42` そのものをキーにします。
 
@@ -98,7 +165,7 @@ def _make_key(args, kwds, typed,
 
 ### 「ソートしない」という決断
 
-518〜521 行目のコメントにある通り、以前はキーワード引数をソートしてから並べていました。今は辞書が挿入順を保つので、そのまま並べています。その代わり `f(x=1, y=2)` と `f(y=2, x=1)` は別々にキャッシュされますが、**毎回のソートを省けるほうが得** という判断です。
+コメントにあるとおり、以前はキーワード引数をソートしてから並べていました。今は辞書が挿入順を保つので、そのまま並べています。その代わり `f(x=1, y=2)` と `f(y=2, x=1)` は別々にキャッシュされますが、**毎回のソートを省けるほうが得** という判断です。
 
 ### よく使う型は包まない
 

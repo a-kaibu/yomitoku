@@ -11,8 +11,10 @@ file: Lib/posixpath.py
 lines: [345, 371]
 function: normpath
 difficulty: 2
+format: 2
 tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `normpath` は、`a//b/./c/../d` のようなごちゃごちゃしたパスを、`a/b/d` のように **整った形に直す** 関数です。
@@ -21,7 +23,39 @@ tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=345
+::: code-group
+
+```python:line-numbers=345 [日本語訳]
+    def normpath(path):
+        """パスを正規化する（重ねたスラッシュなどを取り除く）。"""
+        path = os.fspath(path)
+        if isinstance(path, bytes):
+            sep = b'/'
+            dot = b'.'
+            dotdot = b'..'
+        else:
+            sep = '/'
+            dot = '.'
+            dotdot = '..'
+        if not path:
+            return dot
+        _, initial_slashes, path = splitroot(path)
+        comps = path.split(sep)
+        new_comps = []
+        for comp in comps:
+            if not comp or comp == dot:
+                continue
+            if (comp != dotdot or (not initial_slashes and not new_comps) or
+                 (new_comps and new_comps[-1] == dotdot)):
+                new_comps.append(comp)
+            elif new_comps:
+                new_comps.pop()
+        comps = new_comps
+        path = initial_slashes + sep.join(comps)
+        return path or dot
+```
+
+```python:line-numbers=345 [原文]
     def normpath(path):
         """Normalize path, eliminating double slashes, etc."""
         path = os.fspath(path)
@@ -51,7 +85,9 @@ tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
         return path or dot
 ```
 
-この関数は、C 言語で書かれた高速版が使えないときのための Python 版です（すぐ上の `from posix import _path_normpath as normpath` が `ImportError` で失敗したときだけ定義されます）。
+:::
+
+この関数は、C 言語で書かれた高速版（`posix._path_normpath`）が使えないときのための Python 版です。
 
 ## 前提知識
 
@@ -66,16 +102,47 @@ tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
 
 `'/usr//local/./lib/../bin'` で追います。
 
-### 1. 区切り文字を型に合わせる（347〜355 行目）
+### 1. 区切り文字を型に合わせる
+
+```python:line-numbers=347
+        path = os.fspath(path)
+        if isinstance(path, bytes):
+            sep = b'/'
+            dot = b'.'
+            dotdot = b'..'
+        else:
+            sep = '/'
+            dot = '.'
+            dotdot = '..'
+```
 
 文字列なら `'/'`, `'.'`, `'..'`、バイト列なら `b'/'` などを使います。
 
-### 2. 先頭のスラッシュを分けて、残りを区切る（356〜359 行目）
+### 2. 先頭のスラッシュを分けて、残りを区切る
+
+```python:line-numbers=356
+        if not path:
+            return dot
+        _, initial_slashes, path = splitroot(path)
+        comps = path.split(sep)
+```
 
 空のパスなら `'.'` を返します。`splitroot` で先頭の `'/'` と残りに分け、残りを `/` で区切ると
 `['usr', '', 'local', '.', 'lib', '..', 'bin']` になります。
 
-### 3. 1 つずつ積んだり戻したりする（360〜368 行目）
+### 3. 1 つずつ積んだり戻したりする
+
+```python:line-numbers=360
+        new_comps = []
+        for comp in comps:
+            if not comp or comp == dot:
+                continue
+            if (comp != dotdot or (not initial_slashes and not new_comps) or
+                 (new_comps and new_comps[-1] == dotdot)):
+                new_comps.append(comp)
+            elif new_comps:
+                new_comps.pop()
+```
 
 | comp | 処理 | new_comps |
 | --- | --- | --- |
@@ -87,7 +154,13 @@ tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
 | `..` | 1 つ戻す（pop） | `[usr, local]` |
 | `bin` | 積む | `[usr, local, bin]` |
 
-### 4. 組み立て直す（369〜371 行目）
+### 4. 組み立て直す
+
+```python:line-numbers=369
+        comps = new_comps
+        path = initial_slashes + sep.join(comps)
+        return path or dot
+```
 
 先頭のスラッシュと `/` でつないで `'/usr/local/bin'` を返します。結果が空なら `'.'` にします。
 
@@ -95,7 +168,14 @@ tags: [文字列処理, ファイル, データ構造, 標準ライブラリ]
 
 ### `..` を積むべき場合を 1 つの条件にまとめた
 
-364〜365 行目の条件は、「`..` 以外」か、次のどちらかなら **積む** という意味です。
+この条件は、次のとおりです。
+
+```python:line-numbers=364
+            if (comp != dotdot or (not initial_slashes and not new_comps) or
+                 (new_comps and new_comps[-1] == dotdot)):
+```
+
+「`..` 以外」か、次のどちらかなら **積む** という意味です。
 
 - `not initial_slashes and not new_comps`: 相対パスで、まだ何も積んでいない（`../a` の `..` は消せない）
 - `new_comps[-1] == dotdot`: 直前も `..`（`../../a` の 2 つ目も消せない）

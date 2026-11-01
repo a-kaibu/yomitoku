@@ -11,8 +11,10 @@ file: Lib/heapq.py
 lines: [164, 169]
 function: heappushpop
 difficulty: 1
+format: 2
 tags: [データ構造, 最適化, 標準ライブラリ]
 ---
+
 ## ひとことで
 
 `heappushpop(heap, item)` は、**ヒープに `item` を追加して、そのあと最小値を取り出す** という 2 つの操作を、まとめて効率よく行う関数です。
@@ -21,7 +23,18 @@ tags: [データ構造, 最適化, 標準ライブラリ]
 
 ## コード
 
-```python:line-numbers=164
+::: code-group
+
+```python:line-numbers=164 [日本語訳]
+def heappushpop(heap, item):
+    """heappush と heappop を続けて行う操作の高速版。"""
+    if heap and heap[0] < item:
+        item, heap[0] = heap[0], item
+        _siftup(heap, 0)
+    return item
+```
+
+```python:line-numbers=164 [原文]
 def heappushpop(heap, item):
     """Fast version of a heappush followed by a heappop."""
     if heap and heap[0] < item:
@@ -30,7 +43,9 @@ def heappushpop(heap, item):
     return item
 ```
 
-`_siftup` は同じファイルの 274 行目にある関数で、ヒープのある位置に置いた値を正しい位置まで沈め直します。
+:::
+
+`_siftup` は同じファイルにある関数で、ヒープのある位置に置いた値を正しい位置まで沈め直します。
 
 ## 前提知識
 
@@ -42,19 +57,32 @@ def heappushpop(heap, item):
 
 ## 何をしているか
 
-### 1. 新しい値がヒープの最小値より大きいか調べる（166 行目）
+### 1. 新しい値がヒープの最小値より大きいか調べる
+
+```python:line-numbers=166
+    if heap and heap[0] < item:
+```
 
 `heap = [2, 5, 3]`（最小値は 2）とします。
 
 - `item = 1` の場合: `2 < 1` は偽なので、何もせず `1` をそのまま返します。ヒープは変わりません。
 - `item = 4` の場合: `2 < 4` は真なので、次に進みます。
 
-### 2. 先頭と入れ替えて沈める（167〜168 行目）
+### 2. 先頭と入れ替えて沈める
+
+```python:line-numbers=167
+        item, heap[0] = heap[0], item
+        _siftup(heap, 0)
+```
 
 `item, heap[0] = heap[0], item` で、`item` は `2`（取り出す最小値）に、`heap[0]` は `4` になります。ヒープは `[4, 5, 3]` で、先頭だけがルール違反です。
 `_siftup(heap, 0)` で `4` を正しい位置へ沈めると、`[3, 5, 4]` になります。
 
-### 3. 取り出した値を返す（169 行目）
+### 3. 取り出した値を返す
+
+```python:line-numbers=169
+    return item
+```
 
 `2` を返します。
 
@@ -73,7 +101,7 @@ return heappop(heap)   # 末尾の値を先頭に移して、下へ沈める
 
 ### 「入れた値がいちばん小さければ、入れる意味がない」
 
-`item` がヒープの最小値以下なら、追加しても次の取り出しで `item` 自身が出てくるだけです。つまり **ヒープに触れずに `item` を返せば同じ結果** になります。166 行目の条件 1 つで、この場合の処理を丸ごと省いています。
+`item` がヒープの最小値以下なら、追加しても次の取り出しで `item` 自身が出てくるだけです。つまり **ヒープに触れずに `item` を返せば同じ結果** になります。条件 1 つで、この場合の処理を丸ごと省いています。
 
 ### 入れ替えなら沈める処理は 1 回だけ
 
