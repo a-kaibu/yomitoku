@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [216, 239]
 function: all_equal
 difficulty: 2
+format: 2
 tags: [イテレータ, イディオム, 関数型]
 ---
+
 ## ひとことで
 
 `all_equal(iterable)` は、**すべての要素が互いに等しいか** を調べる関数です。
@@ -21,7 +23,36 @@ tags: [イテレータ, イディオム, 関数型]
 
 ## コード
 
-```python:line-numbers=216
+::: code-group
+
+```python:line-numbers=216 [日本語訳]
+def all_equal(iterable, key=None):
+    """
+    全要素が互いに等しければ ``True`` を返す。
+
+        >>> all_equal('aaaa')
+        True
+        >>> all_equal('aaab')
+        False
+
+    1 引数を受け取り、変換した値を返す関数を
+    of each input item can be specified with *key*:
+
+        >>> all_equal('AaaA', key=str.casefold)
+        True
+        >>> all_equal([1, 2, 3], key=lambda x: x < 10)
+        True
+
+    """
+    iterator = groupby(iterable, key)
+    for first in iterator:
+        for second in iterator:
+            return False
+        return True
+    return True
+```
+
+```python:line-numbers=216 [原文]
 def all_equal(iterable, key=None):
     """
     Returns ``True`` if all the elements are equal to each other.
@@ -48,6 +79,8 @@ def all_equal(iterable, key=None):
     return True
 ```
 
+:::
+
 `groupby` は `itertools.groupby` です。
 
 ## 前提知識
@@ -59,22 +92,40 @@ def all_equal(iterable, key=None):
 
 ## 何をしているか
 
-### 1. グループに分けるイテレータを作る（234 行目）
+### 1. グループに分けるイテレータを作る
+
+```python:line-numbers=234
+    iterator = groupby(iterable, key)
+```
 
 `'aaab'` なら、グループは `a` と `b` の 2 つです。
 
-### 2. 1 つ目のグループを取り出す（235 行目）
+### 2. 1 つ目のグループを取り出す
+
+```python:line-numbers=235
+    for first in iterator:
+```
 
 外側の `for` で 1 つ目のグループ（`a`）を取り出します。
 
-### 3. 2 つ目のグループがあるか（236〜238 行目）
+### 3. 2 つ目のグループがあるか
+
+```python:line-numbers=236
+        for second in iterator:
+            return False
+        return True
+```
 
 内側の `for` は同じイテレータの **続き** を取り出そうとします。
 
 - `'aaab'`: 2 つ目のグループ `b` が出てくるので、`return False`。
 - `'aaaa'`: グループは 1 つだけなので、内側の `for` は 1 回も回らずに終わり、`return True`。
 
-### 4. 空の場合（239 行目）
+### 4. 空の場合
+
+```python:line-numbers=239
+    return True
+```
 
 要素がなければ外側の `for` も回らず、`True` を返します（「全部等しくない要素」が 1 つもないので、真とみなします）。
 

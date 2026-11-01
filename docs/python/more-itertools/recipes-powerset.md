@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [451, 469]
 function: powerset
 difficulty: 1
+format: 2
 tags: [イテレータ, アルゴリズム, 関数型]
 ---
+
 ## ひとことで
 
 `powerset(iterable)` は、要素のあらゆる選び方（**部分集合**）を順番に出す関数です。
@@ -21,7 +23,31 @@ tags: [イテレータ, アルゴリズム, 関数型]
 
 ## コード
 
-```python:line-numbers=451
+::: code-group
+
+```python:line-numbers=451 [日本語訳]
+def powerset(iterable):
+    """イテラブルのとりうるすべての部分集合を出す。
+
+        >>> list(powerset([1, 2, 3]))
+        [(), (1,), (2,), (3,), (1, 2), (1, 3), (2, 3), (1, 2, 3)]
+
+    :func:`powerset` will operate on iterables that aren't :class:`set`
+    instances, so repeated elements in the input will produce repeated elements
+    in the output.
+
+        >>> seq = [1, 1, 0]
+        >>> list(powerset(seq))
+        [(), (1,), (1,), (0,), (1, 1), (1, 0), (1, 0), (1, 1, 0)]
+
+    For a variant that efficiently yields actual :class:`set` instances, see
+    :func:`powerset_of_sets`.
+    """
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
+```
+
+```python:line-numbers=451 [原文]
 def powerset(iterable):
     """Yields all possible subsets of the iterable.
 
@@ -43,6 +69,8 @@ def powerset(iterable):
     return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
 ```
 
+:::
+
 `chain` と `combinations` は `itertools` の関数です。
 
 ## 前提知識
@@ -54,11 +82,19 @@ def powerset(iterable):
 
 ## 何をしているか
 
-### 1. いったんリストにする（468 行目）
+### 1. いったんリストにする
+
+```python:line-numbers=468
+    s = list(iterable)
+```
 
 `combinations` は同じデータを何度も使う（r ごとに最初から選び直す）ので、1 回しか読めないジェネレータが渡されても大丈夫なように、先にリストにしておきます。
 
-### 2. 選ぶ個数ごとに組み合わせを作って、つなげる（469 行目）
+### 2. 選ぶ個数ごとに組み合わせを作って、つなげる
+
+```python:line-numbers=469
+    return chain.from_iterable(combinations(s, r) for r in range(len(s) + 1))
+```
 
 `s = [1, 2, 3]` なら、`r` は 0, 1, 2, 3 です。
 
@@ -90,7 +126,7 @@ for mask in range(2 ** len(s)):
 
 ### 重複した要素もそのまま扱う
 
-457〜463 行目の説明の通り、入力に同じ値が複数あっても、位置が違えば別のものとして扱います。集合として重複を取り除くかどうかは、使う側が決められます。
+docstring にあるとおり、入力に同じ値が複数あっても、位置が違えば別のものとして扱います。集合として重複を取り除くかどうかは、使う側が決められます。
 
 ## まとめ
 
