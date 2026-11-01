@@ -10,10 +10,11 @@ permissions:
   pages: write
   id-token: write
 
-# push が続いたときは最新のものだけビルド・デプロイする
+# 実行中のデプロイは止めず、待機中のものは最新の 1 つだけ残す
+# （12 スレッドが頻繁に push するので、cancel-in-progress だといつまでも完了しない）
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
