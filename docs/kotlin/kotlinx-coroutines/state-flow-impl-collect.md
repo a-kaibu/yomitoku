@@ -1,6 +1,6 @@
 ---
-title: "終わらない collect と「最新の値だけ届ける」購読ループ"
-description: "StateFlow を購読するループ。戻り値の型 Nothing で終わらないことを示し、起きるたびに最新の値を読み、前回と同じなら流さないことで古い値を間引く。"
+title: "途中の値を飛ばして最新の値だけを届ける StateFlow.collect"
+description: "StateFlow を購読するときの本体。待たずに今の値を送り、以後は新しい値が来たときだけ起きる。ディスパッチを待つ間に古くなった値は、最新の値に置き換えて届ける。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -11,17 +11,52 @@ file: kotlinx-coroutines-core/common/src/flow/StateFlow.kt
 lines: [386, 412]
 function: "StateFlowImpl.collect"
 difficulty: 3
-tags: [非同期, 並行処理, 型システム]
+tags: [非同期, 並行処理, 状態機械]
+format: 2
 ---
 
 ## ひとことで
 
-`StateFlowImpl.collect` は、StateFlow（現在の値を 1 つ持つ Flow）を購読する側のループです。
-購読を始めるとまず今の値を流し、その後は **値が変わるたびに最新の値を流し続けます**。StateFlow の購読は終わることがないので、戻り値の型が `Nothing`（決して戻らない）になっているのも特徴です。
+`stateFlow.collect { ... }` は、StateFlow の **今の値と、その後の新しい値** を、購読者に順番に届ける関数です。値が古くなっていても、それを全部届ける必要はなく、**いつも最新の値に追いつく** ように作られています。
+
+購読者は、新しい値が来るまで眠り、来たら起きて最新の値を流します。値が同じなら、流さずに飛ばします。
 
 ## コード
 
-```kotlin:line-numbers=386
+
+::: code-group
+
+```kotlin:line-numbers=386 [日本語訳]
+    override suspend fun collect(collector: FlowCollector<T>): Nothing {
+        val slot = allocateSlot()
+        try {
+            if (collector is SubscribedFlowCollector) collector.onSubscription()
+            val collectorJob = currentCoroutineContext()[Job]
+            var oldState: Any? = null // 前に流した T!! か NULL（null は、まだ何も流していない）
+            // ループは、待たずに今の値を配り始めるように組まれている
+            while (true) {
+                // ここでコルーチンは、ディスパッチされるまでしばらく待っていたかもしれない。
+                // そのため最新の状態を使い、古い値をできるだけ 1 つにまとめる（conflation）
+                val newState = _state.value
+                // 必ずキャンセルを確かめる
+                collectorJob?.ensureActive()
+                // 等価性を使って、値の発行をまとめる（conflate）
+                if (oldState == null || oldState != newState) {
+                    collector.emit(NULL.unbox(newState))
+                    oldState = newState
+                }
+                // 注意: awaitPending がキャンセルされると、このループを抜けて freeSlot を呼ぶ
+                if (!slot.takePending()) { // 中断せず、まずは速い道を試す
+                    slot.awaitPending() // 新しい値が必要なときだけ中断する
+                }
+            }
+        } finally {
+            freeSlot(slot)
+        }
+    }
+```
+
+```kotlin:line-numbers=386 [原文]
     override suspend fun collect(collector: FlowCollector<T>): Nothing {
         val slot = allocateSlot()
         try {
@@ -51,50 +86,57 @@ tags: [非同期, 並行処理, 型システム]
     }
 ```
 
+:::
+
 ## 前提知識
 
-- **`Nothing` 型**: 「この関数は正常には戻ってこない」ことを表す特別な型です。無限ループか例外でしか抜けません。コンパイラはこれを知っているので、`collect` のあとに書いたコードは「到達しない」と警告できます。
-- **スロット（`slot`）**: 購読者ごとに割り当てられる小さなオブジェクトで、「新しい値が来た」という印を受け取ります。`allocateSlot()` で借り、`freeSlot(slot)` で返します。
-- **`takePending()` / `awaitPending()`**: スロットの関数です。前者は眠らずに「印が来ていたか」を確かめ、後者は印が来るまで眠ります。
-- **`currentCoroutineContext()[Job]`**: 今のコルーチンの `Job`（取り消しなどを管理するもの）を取り出します。`ensureActive()` は、取り消されていたら例外を投げます。
-- **`NULL.unbox(x)`**: 値としての `null` は内部では番兵 `NULL` で保存されているので、流す前に `null` に戻します。
-- **`try { } finally { }`**: 例外（取り消しを含む）で抜けても、`finally` を必ず実行します。
+- **`StateFlow`**: 今の値を 1 つ持ち、値が変わるたびに購読者へ知らせる Flow です。
+- **スロット（slot）**: 購読者 1 人ぶんの連絡用の区画です。`allocateSlot()` で確保し、`freeSlot(slot)` で返します。
+- **`takePending()` / `awaitPending()`**: スロットに「新しい値がある」という印があるかを調べ、なければ印が付くまで中断して待つ関数です。
+- **`SubscribedFlowCollector`**: 購読が始まったことを知らせるための収集者の型です。
+- **`currentCoroutineContext()[Job]`**: 今のコルーチンの Job を取り出します。キャンセルを確かめるために使います。
+- **`NULL.unbox(...)`**: 番兵 `NULL` を、本当の `null` に戻す関数です。
 
 ## 何をしているか
 
-### 1. スロットを借りる（387〜389 行目）
+### 1. 今の最新値を読み、同じでなければ流す
 
-購読開始時のコールバック（`onSubscription`）があれば呼びます。
+`_state.value` で最新の値を読みます。前に流した値（`oldState`）と同じなら、飛ばします。違えば、下流へ `emit` します。
 
-### 2. ループ: 最新を読む → 必要なら流す → 待つ（393〜408 行目）
+```kotlin:line-numbers=400
+                if (oldState == null || oldState != newState) {
+                    collector.emit(NULL.unbox(newState))
+```
 
-`oldState` は前回流した値です。最初は `null`（まだ何も流していない）です。
+### 2. 新しい値が来るまで眠る
 
-1. `_state.value` で **その時点の最新値** を読む（396 行目）
-2. 取り消されていないか確認する（398 行目）
-3. 前回と違えば流す。`oldState == null` なら初回なので必ず流す（400〜403 行目）
-4. 印が来ていなければ眠る（405〜407 行目）
+流し終わったら、新しい値の印（pending）を探します。見つからなければ `awaitPending()` で中断し、印が付くまで眠ります。
 
-値が `1 → 2 → 3` と素早く変わり、購読者の処理が遅い場合:
+```kotlin:line-numbers=405
+                if (!slot.takePending()) {
+                    slot.awaitPending()
+                }
+```
 
-- 購読者は `1` を流す。処理している間に値は `2`、`3` と変わる
-- 次のループで最新の `3` を読んで流す。`2` は飛ばされる
+先に `takePending()` で速い道を試すのは、印がすでにあれば、中断せずに済むからです。
 
-値が `1 → 1` と同じ値で更新されたら、400 行目の比較で流しません。
+### 3. 購読を抜けるとき、スロットを返す
 
-### 3. 必ずスロットを返す（409〜411 行目）
+キャンセルや例外で抜けるときは、`finally` で必ず `freeSlot` を呼び、スロットを次の購読者に渡せるようにします。
 
-取り消しで抜けても、スロットは返却されます。
+```kotlin:line-numbers=410
+            freeSlot(slot)
+```
 
 ## ここがすごい
 
-- **「起こされた理由」ではなく「今の値」を見る**: 通知には値を載せず、起きてから最新値を読みに行きます。だから途中の古い値は自然に間引かれ（conflation）、遅い購読者に古い値が溜まりません。394〜395 行目のコメントが、ディスパッチを待つ間に値が変わる可能性まで考えていることを示しています。
-- **最初に待たない**: 392 行目のコメントの通り、ループは「流してから待つ」順になっているので、購読直後に今の値がすぐ届きます。
-- **`Nothing` で約束を型にする**: StateFlow は完了しない Flow です。戻り値を `Nothing` にすることで、「`collect` の後ろに処理を書いても実行されない」ことを利用者に型で伝えています。
-- **`==` による重複排除**: StateFlow は「値が等しければ通知しない」性質を持っています。購読側でも比較しているので、同じ値が二重に流れることはありません。
+- **途中の値を飛ばす（conflation）**: 購読者が遅くても、古い値を全部届けません。起きたときの最新の値だけを流すので、遅い購読者が溜まってしまうことがありません。
+- **同じ値は流さない**: 値が変わらなければ `oldState` と比べて飛ばします。StateFlow は「値の変化」を届けるものなので、同じ値を何度も流さないのが正しい振る舞いです。
+- **まず速い道、必要なときだけ中断**: 印がすでにあるなら中断せずに進みます。中断は、本当に新しい値がないときだけ行うので、無駄な切り替えを避けられます。
+- **キャンセルはすぐ確かめる**: 毎回の処理の前に `ensureActive()` で取り消しを確かめるので、長く流しても、取り消しに素早く反応します。
 
 ## まとめ
 
-- 状態の購読は「通知で起きて、最新の値を読みに行く」形にすると、古い値を自然に飛ばせる。
-- 終わらない関数は戻り値の型を `Nothing` にすると、その性質を型で伝えられる。
-- 借りた資源（スロット）は `finally` で必ず返す。
+- 購読者には、途中の値を飛ばして、いつも最新の値を届ける。
+- 同じ値は流さず、変化したときだけ流す。
+- 新しい値がなければ眠り、印が付いたら起きる。スロットは必ず返す。

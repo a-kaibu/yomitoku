@@ -1,6 +1,6 @@
 ---
-title: "別のコルーチンからの emit を見抜く Flow の検査"
-description: "flow ビルダーの中で、collect と違うコルーチンやコンテキストから emit していないかを調べる関数。コンテキストの要素を fold で数え、Job だけは親をたどって比べる。"
+title: "emit が別のコルーチンから呼ばれていないかを確かめる checkContext"
+description: "Flow の emit が正しいコルーチンから呼ばれているかを確かめる関数。各コンテキスト要素を収集時と比べ、Job の親子をさかのぼって、別のコルーチンからの emit を見つけて例外にする。"
 language: kotlin
 project: "kotlinx.coroutines"
 repo: https://github.com/Kotlin/kotlinx.coroutines
@@ -11,18 +11,94 @@ file: kotlinx-coroutines-core/common/src/flow/internal/SafeCollector.common.kt
 lines: [22, 90]
 function: "SafeCollector.checkContext"
 difficulty: 3
-tags: [非同期, 防御的プログラミング, エラー処理]
+tags: [並行処理, エラー処理, 防御的プログラミング]
+format: 2
 ---
 
 ## ひとことで
 
-`flow { ... }` で作った Flow には、**「`emit` は、`collect` を呼んだのと同じコルーチン・同じコンテキストで行うこと」** という決まりがあります。これを破ると、下流の処理が予期しないスレッドで動いたり、同時に呼ばれて壊れたりします。
+Flow の `emit` は、**値を流すコルーチンを 1 つに決めておく** という約束があります。`coroutineScope { launch { emit(1) }; launch { emit(2) } }` のように、子のコルーチンから同時に `emit` すると、約束が破られます。
 
-`checkContext` は、その決まりが守られているかを `emit` のたびに確かめる関数です。破られていれば、どう直せばよいかまで書いたエラーメッセージを出します。
+`checkContext` は、`emit` のたびに「今のコンテキストが、`collect` したときのものと同じ流れか」を確かめる関数です。違っていれば、わかりやすいエラーを投げます。
 
 ## コード
 
-```kotlin:line-numbers=22
+
+::: code-group
+
+```kotlin:line-numbers=22 [日本語訳]
+@JvmName("checkContext") // スタックトレースを見やすくするため
+internal fun SafeCollector<*>.checkContext(currentContext: CoroutineContext) {
+    val result = currentContext.fold(0) fold@{ count, element ->
+        val key = element.key
+        val collectElement = collectContext[key]
+        if (key !== Job) {
+            return@fold if (element !== collectElement) Int.MIN_VALUE
+            else count + 1
+        }
+
+        val collectJob = collectElement as Job?
+        val emissionParentJob = (element as Job).transitiveCoroutineParent(collectJob)
+        /*
+         * 次のようなコードは禁止されている。'emit' はデフォルトではスレッドセーフではないため。
+         * ```
+         * coroutineScope {
+         *     launch {
+         *         emit(1)
+         *     }
+         *
+         *     launch {
+         *         emit(2)
+         *     }
+         * }
+         * ```
+         * 並行して emit する必要があるなら 'channelFlow' を使う。
+         * （または、`withContext` などでコンテキストを動的に切り替えたい場合）
+         *
+         * 別のコルーチンから収集することは許される。たとえば:
+         * ```
+         * coroutineScope {
+         *     val channel = produce {
+         *         collect { value ->
+         *             send(value)
+         *         }
+         *     }
+         *     channel.consumeEach { value ->
+         *         emit(value)
+         *     }
+         * }
+         * ```
+         * は、まったく正しい書き方である。
+         */
+        if (emissionParentJob !== collectJob) {
+            error(
+                "Flow invariant is violated:\n" +
+                        "\t\tEmission from another coroutine is detected.\n" +
+                        "\t\tChild of $emissionParentJob, expected child of $collectJob.\n" +
+                        "\t\tFlowCollector is not thread-safe and concurrent emissions are prohibited.\n" +
+                        "\t\tTo mitigate this restriction please use 'channelFlow' builder instead of 'flow'"
+            )
+        }
+
+        /*
+         * collectJob が null（EmptyCoroutineContext、たとえば `suspend fun main` から実行された場合）なら、不変条件は保たれる
+         * （共通の親は「null」になる）。しかし、個数の確認が失敗するので、
+         * EmptyCoroutineContext から収集された Flow では Job の要素を数えないようにする
+         */
+        if (collectJob == null) count else count + 1
+    }
+    if (result != collectContextSize) {
+        error(
+            "Flow invariant is violated:\n" +
+                    "\t\tFlow was collected in $collectContext,\n" +
+                    "\t\tbut emission happened in $currentContext.\n" +
+                    "\t\tPlease refer to 'flow' documentation or use 'flowOn' instead"
+        )
+    }
+}
+```
+
+```kotlin:line-numbers=22 [原文]
 @JvmName("checkContext") // For prettier stack traces
 internal fun SafeCollector<*>.checkContext(currentContext: CoroutineContext) {
     val result = currentContext.fold(0) fold@{ count, element ->
@@ -94,49 +170,57 @@ internal fun SafeCollector<*>.checkContext(currentContext: CoroutineContext) {
 }
 ```
 
+:::
+
 ## 前提知識
 
-- **コルーチンのコンテキスト（`CoroutineContext`）**: コルーチンの設定の集まりです。ディスパッチャ（どのスレッドで動くか）、`Job`（取り消しや親子関係）、名前などの「要素」が、キーごとに 1 つずつ入っています。`context[key]` で取り出せます。
-- **`fold(初期値) { 累積値, 要素 -> ... }`**: コンテキストの要素を 1 つずつ見て、値を累積していく関数です。
-- **`fold@` と `return@fold`**: ラムダにラベルを付け、そのラムダの 1 回分だけを抜けて値を返す書き方です。
-- **`Int.MIN_VALUE`**: `Int` の最小値です。ここでは「一致しない要素があった」という印として使い、以降の数え上げでも元に戻らない大きな負の値にしています。
-- **`ScopeCoroutine`**: `coroutineScope { }` などが内部で作るコルーチンです。新しい親子関係を作るのではなく、「同じコルーチンの中の範囲」とみなせます。
-- **`tailrec`**: 末尾で自分を呼ぶ再帰をループに変換する指定です。
-- **`error(メッセージ)`**: `IllegalStateException` を投げます。
+- **`CoroutineContext`**: コルーチンの設定の集まりです。Job（取り消しの管理）、ディスパッチャ（どのスレッドで動かすか）などの要素を持ちます。`fold` で全要素を順に畳み込めます。
+- **`Job` の親子関係**: `launch` や `coroutineScope` で作られたコルーチンは、親の Job を持ちます。`transitiveCoroutineParent` は、「殻」（`coroutineScope` などが作る範囲）を飛ばして、本当の持ち主をたどります。
+- **`collectContext`**: 収集を始めたときのコンテキストです。`emit` のときのコンテキストと比べます。
+- **`fold(0) { count, element -> ... }`**: 初期値 0 から、各要素を順に畳み込む関数です。`return@fold` で、その要素の処理だけを抜けます。
+- **`SafeCollector`**: `emit` が約束を守っているかを検査する収集者です。
 
 ## 何をしているか
 
-### 1. 要素ごとに比べて数える（24〜81 行目）
+### 1. 要素ごとに、収集時と同じかを確かめる
 
-`emit` したときのコンテキスト（`currentContext`）の要素を 1 つずつ、`collect` したときのコンテキスト（`collectContext`）の同じキーの要素と比べます。
+`Job` 以外の要素は、収集時のものと同じオブジェクトかを比べます。違えば `Int.MIN_VALUE` を返し、最後の比較で失敗します。
 
-- Job 以外の要素: 同じオブジェクトなら数を 1 増やし、違えば `Int.MIN_VALUE` にします（27〜30 行目）。
-- Job: そのまま比べると、`emit` の中で `coroutineScope { }` を使っただけでも違う Job になってしまいます。そこで `transitiveCoroutineParent` で、`ScopeCoroutine` をさかのぼって本当の親を探し、それが `collect` 側の Job と同じかを確かめます（32〜73 行目）。違えば「別のコルーチンから emit している」というエラーです。
+```kotlin:line-numbers=26
+        val collectElement = collectContext[key]
+```
 
-### 2. 数が一致するか確かめる（82〜89 行目）
+### 2. Job は親子関係をさかのぼって確かめる
 
-数え上げた結果が、`collect` 側のコンテキストの要素数と一致しなければ、「コンテキストが違う」というエラーです。メッセージで `flowOn` を使うよう案内します。
+`Job` の要素は、`transitiveCoroutineParent` で「殻」を飛ばした持ち主を求めます。その持ち主が、収集を始めた Job と同じでなければ、ほかのコルーチンからの `emit` です。
 
-### よくある誤りの例
+```kotlin:line-numbers=33
+        val emissionParentJob = (element as Job).transitiveCoroutineParent(collectJob)
+```
 
-```kotlin
-flow {
-    withContext(Dispatchers.IO) { emit(1) }  // ディスパッチャが違う → エラー
-}
-flow {
-    launch { emit(1) }                       // 別コルーチン → エラー
-}
+```kotlin:line-numbers=65
+        if (emissionParentJob !== collectJob) {
+```
+
+ここで例外を投げるので、`launch` の中から `emit` した場合は、すぐに分かります。エラーメッセージは、`channelFlow` を使うよう案内しています。
+
+### 3. 最後に、要素の個数を比べる
+
+すべての要素を数えた結果が、収集時の要素の個数と一致するかを確かめます。違えば、コンテキストが途中で変わっているということなので、`flowOn` の使用を案内します。
+
+```kotlin:line-numbers=82
+    if (result != collectContextSize) {
 ```
 
 ## ここがすごい
 
-- **数え上げで「完全一致」を判定**: 要素が 1 つずつ同じかを調べ、最後に数が合うかを見れば、「余計な要素も足りない要素もない」ことまで確認できます。一致しない要素を `Int.MIN_VALUE` にするのは、その後いくら足しても正しい数に戻らないようにするためです。
-- **Job だけ特別扱い**: `coroutineScope` は同じコルーチンの中の範囲なので、それで Job が変わっても決まりは破られていません。`ScopeCoroutine` だけをさかのぼる `transitiveCoroutineParent` で、正当な使い方を誤ってエラーにしないようにしています。
-- **直し方まで教えるエラー**: メッセージには、何が起きたか（別のコルーチンから emit）だけでなく、どうすればよいか（`channelFlow` を使う、`flowOn` を使う）まで書かれています。
-- **毎回の検査を軽く**: 実際の `emit` では、前回と同じコンテキストなら検査を省く仕組みが JVM 版の `SafeCollector` にあります。この関数は、コンテキストが変わったときだけ呼ばれます。
+- **禁止を実行時に確かめる**: 「並行して `emit` しない」という約束は、型だけでは守れません。実行時に親子関係を確かめることで、違反をすぐ見つけられます。
+- **許される形も正しく区別する**: 別のコルーチンから `collect` して、その値を `emit` する形は正しい書き方です。親の Job が同じなので、検査を通ります。
+- **殻を飛ばして判定する**: `coroutineScope` の中で `emit` するのは正しいので、殻を飛ばしてから比べます。こうしないと、正しい使い方まで誤りになってしまいます。
+- **わかりやすいエラー**: 例外のメッセージに、代わりに使うべき `channelFlow` や `flowOn` を書いています。エラーを見た人が、次に何をすればよいか分かるようになっています。
 
 ## まとめ
 
-- 「同じであること」の確認は、要素ごとの一致を数え、総数が合うかで判定できる。
-- 正当な例外（ここでは `coroutineScope`）を誤ってエラーにしないよう、特別扱いを入れる。
-- エラーメッセージには、原因と直し方の両方を書く。
+- 「値を流すコルーチンは 1 つ」という約束は、実行時に親子関係を確かめて守る。
+- 殻を飛ばして持ち主を比べると、正しい書き方を誤りにしない。
+- エラーには、正しい代わりの方法を書いておくと親切である。
