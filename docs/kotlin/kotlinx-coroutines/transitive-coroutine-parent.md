@@ -12,6 +12,7 @@ lines: [92, 110]
 function: "transitiveCoroutineParent / unsafeFlow"
 difficulty: 2
 tags: [非同期, 再帰, 最適化]
+format: 2
 ---
 
 ## ひとことで
@@ -23,7 +24,32 @@ tags: [非同期, 再帰, 最適化]
 
 ## コード
 
-```kotlin:line-numbers=92
+
+::: code-group
+
+```kotlin:line-numbers=92 [日本語訳]
+internal tailrec fun Job?.transitiveCoroutineParent(collectJob: Job?): Job? {
+    if (this === null) return null
+    if (this === collectJob) return this
+    if (this !is ScopeCoroutine<*>) return this
+    return parent.transitiveCoroutineParent(collectJob)
+}
+
+/**
+ * Flow の結果の実行コンテキストを検査しない、flow ビルダーの類似物。
+ * 呼び出し元のコンテキストを信頼できる、ライブラリ自身の演算子で使う。
+ */
+@PublishedApi
+internal inline fun <T> unsafeFlow(crossinline block: suspend FlowCollector<T>.() -> Unit): Flow<T> {
+    return object : Flow<T> {
+        override suspend fun collect(collector: FlowCollector<T>) {
+            collector.block()
+        }
+    }
+}
+```
+
+```kotlin:line-numbers=92 [原文]
 internal tailrec fun Job?.transitiveCoroutineParent(collectJob: Job?): Job? {
     if (this === null) return null
     if (this === collectJob) return this
@@ -45,6 +71,8 @@ internal inline fun <T> unsafeFlow(crossinline block: suspend FlowCollector<T>.(
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **Job と親子関係**: コルーチンは親子の木構造を作り、`Job` の `parent` で親をたどれます。
@@ -58,25 +86,42 @@ internal inline fun <T> unsafeFlow(crossinline block: suspend FlowCollector<T>.(
 
 ## 何をしているか
 
-### transitiveCoroutineParent（92〜97 行目）
+### transitiveCoroutineParent: 殻を飛ばす
 
-1. `null` なら `null`（93 行目）
-2. 探している Job そのものなら、それを返す（94 行目）
-3. 殻（`ScopeCoroutine`）でなければ、それが本当の持ち主なので返す（95 行目）
-4. 殻なら、その親で同じことを繰り返す（96 行目）
+```kotlin:line-numbers=93
+    if (this === null) return null
+    if (this === collectJob) return this
+    if (this !is ScopeCoroutine<*>) return this
+    return parent.transitiveCoroutineParent(collectJob)
+```
+
+1. `null` なら `null` を返す。
+2. 探している Job そのものなら、それを返す。
+3. 殻（`ScopeCoroutine`）でなければ、それが本当の持ち主なので返す。
+4. 殻なら、その親で同じことを繰り返す。
 
 `collect` を呼んだコルーチンを J とし、`flow { coroutineScope { coroutineScope { emit(1) } } }` と書いた場合、`emit` 時の Job は「殻 → 殻 → J」とつながっています。2 つの殻を飛ばすと J にたどり着くので、正しいと判定されます。`launch { emit(1) }` なら、`launch` が作った Job は殻ではないので、そこで止まり、J とは違うと判定されます。
 
-### unsafeFlow（103〜110 行目）
+### unsafeFlow: 検査なしの Flow
+
+```kotlin:line-numbers=104
+internal inline fun <T> unsafeFlow(crossinline block: suspend FlowCollector<T>.() -> Unit): Flow<T> {
+    return object : Flow<T> {
+        override suspend fun collect(collector: FlowCollector<T>) {
+            collector.block()
+        }
+    }
+}
+```
 
 `collect` が呼ばれたら、渡された collector を `this` にしてブロックを実行するだけの Flow を作ります。公開版の `flow { }` が使う `SafeCollector` の検査がありません。
 
 ## ここがすごい
 
 - **殻だけを飛ばす**: 親を最後までたどるのではなく、`ScopeCoroutine` の間だけさかのぼるので、「同じ流れの中の範囲」と「別のコルーチン」を正確に区別できます。
-- **`tailrec` でスタックを消費しない**: 殻が何重になっていても、ループとして動くので安全です。終了条件を先頭に並べ、最後の行で自分を呼ぶだけ、という末尾再帰の典型的な形です。
+- **`tailrec` でスタックを消費しない**: 殻が何重になっていても、ループとして動くので安全です。終了条件を先に書き、最後の行で自分を呼ぶだけ、という末尾再帰の典型的な形です。
 - **内部用の軽い Flow**: ライブラリ自身が書く演算子は、決まりを守っていることが分かっているので、検査は無駄です。`unsafeFlow` を使うことで、`map` や `filter` などの基本の演算子が軽く動きます。一方、利用者のブロックを実行するときは `SafeCollector` に切り替える、という使い分けがライブラリ全体で行われています。
-- **`inline` でクラスを増やさない工夫…ではない点に注意**: `unsafeFlow` は `inline` ですが、中で `object : Flow<T>` を作っているので、呼び出し箇所ごとに無名クラスが作られます。その代わり、ブロックの呼び出しはクラスの中に直接埋め込まれ、ラムダのオブジェクトを介さずに済みます。
+- **`inline` でもクラスは増える**: `unsafeFlow` は `inline` ですが、中で `object : Flow<T>` を作っているので、呼び出し箇所ごとに無名クラスが作られます。その代わり、ブロックの呼び出しはクラスの中に直接埋め込まれ、ラムダのオブジェクトを介さずに済みます。
 
 ## まとめ
 

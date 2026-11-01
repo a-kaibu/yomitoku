@@ -12,6 +12,7 @@ lines: [151, 168]
 function: "SemaphoreAndMutexImpl.tryAcquire"
 difficulty: 2
 tags: [並行処理, ロック不要, 防御的プログラミング]
+format: 2
 ---
 
 ## ひとことで
@@ -22,7 +23,31 @@ tags: [並行処理, ロック不要, 防御的プログラミング]
 
 ## コード
 
-```kotlin:line-numbers=151
+
+::: code-group
+
+```kotlin:line-numbers=151 [日本語訳]
+    fun tryAcquire(): Boolean {
+        while (true) {
+            // 利用できる許可の数を取得する。
+            val p = _availablePermits.value
+            // 許可の数が最大値より多いか？
+            // acquire() なしの release() 呼び出しで、
+            // 最大値を超えてしまったのかもしれない。
+            // その場合は permits に直して、最初からやり直す。
+            if (p > permits) {
+                coerceAvailablePermitsAtMaximum()
+                continue
+            }
+            // 許可の数が 0 より大きければ、
+            // 1 つ減らしてみる。
+            if (p <= 0) return false
+            if (_availablePermits.compareAndSet(p, p - 1)) return true
+        }
+    }
+```
+
+```kotlin:line-numbers=151 [原文]
     fun tryAcquire(): Boolean {
         while (true) {
             // Get the current number of available permits.
@@ -43,27 +68,48 @@ tags: [並行処理, ロック不要, 防御的プログラミング]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **セマフォの許可**: 最大 `permits` 個の許可があり、入るときに 1 つ取り、出るときに 1 つ返します。許可がなくなったら、次の人は待つことになります。
-- **`_availablePermits`**: 残りの許可の数を持つ原子変数です。このライブラリでは、**負の値は「待っている人の数」** を表します（146 行目のコメント）。たとえば `-2` は「許可 0、待ち 2 人」です。
+- **`_availablePermits`**: 残りの許可の数を持つ原子変数です。このライブラリでは、**負の値は「待っている人の数」** を表します。たとえば `-2` は「許可 0、待ち 2 人」です。
 - **`compareAndSet(p, p - 1)`**: 今の値がまだ `p` のときだけ `p - 1` に書き換える不可分な操作です。他のスレッドが先に変えていたら失敗します。
-- **`coerceAvailablePermitsAtMaximum()`**: 同じクラスの 269〜275 行目にある関数で、許可の数が上限を超えていたら CAS で上限に戻します。
+- **`coerceAvailablePermitsAtMaximum()`**: 許可の数が上限を超えていたら CAS で上限に戻す、同じクラスの内部関数です。
 - **`while (true)` と `continue`**: 無限ループと、ループの先頭に戻る命令です。
 
 ## 何をしているか
 
-### 1. 今の残りを読む（154 行目）
+### 1. 今の残りを読む
 
-### 2. 上限を超えていたら直してやり直す（159〜162 行目）
+```kotlin:line-numbers=154
+            val p = _availablePermits.value
+```
+
+### 2. 上限を超えていたら直してやり直す
+
+```kotlin:line-numbers=159
+            if (p > permits) {
+                coerceAvailablePermitsAtMaximum()
+                continue
+            }
+```
 
 `acquire` していないのに `release` を呼ぶ誤りがあると、一時的に許可の数が上限を超えることがあります。そのときは上限に戻してから、最初からやり直します。
 
-### 3. 残りがなければ失敗（165 行目）
+### 3. 残りがなければ失敗
+
+```kotlin:line-numbers=165
+            if (p <= 0) return false
+```
 
 0 以下（許可なし、または待っている人がいる）なら、待たずに `false` を返します。
 
-### 4. CAS で 1 つ減らす（166 行目）
+### 4. CAS で 1 つ減らす
+
+```kotlin:line-numbers=166
+            if (_availablePermits.compareAndSet(p, p - 1)) return true
+```
 
 許可 3 のセマフォで、2 つのスレッドが同時に `tryAcquire` した場合:
 
@@ -74,8 +120,8 @@ tags: [並行処理, ロック不要, 防御的プログラミング]
 
 ## ここがすごい
 
-- **待ち人数と残り許可を 1 つの数で**: 正なら残りの許可、負なら待っている人数。1 つの原子変数で両方を表すので、`acquire`（数を 1 減らす）と `release`（1 増やす）がそれぞれ 1 回の原子操作で済みます。`tryAcquire` が 0 以下で失敗するのも、この表現なら自然です。
-- **`getAndDecrement` ではなく CAS を使う理由**: 待つつもりのない `tryAcquire` で数を減らしてしまうと、「待ち人」として数えられてしまいます。CAS なら「正のときだけ減らす」が確実にできます。一方、待つつもりの `acquire` は、同じクラスの `decPermits`（229〜240 行目）で `getAndDecrement` を使い、無条件に減らしています。目的に応じた使い分けです。
+- **待ち人数と残り許可を 1 つの数で**: 正なら残りの許可、負なら待ち人数。1 つの原子変数で両方を表すので、`acquire`（数を 1 減らす）と `release`（1 増やす）がそれぞれ 1 回の原子操作で済みます。`tryAcquire` が 0 以下で失敗するのも、この表現なら自然です。
+- **`getAndDecrement` ではなく CAS を使う理由**: 待つつもりのない `tryAcquire` で数を減らしてしまうと、「待ち人」として数えられてしまいます。CAS なら「正のときだけ減らす」が確実にできます。一方、待つつもりの `acquire` は、同じクラスの `decPermits` で `getAndDecrement` を使い、無条件に減らしています。目的に応じた使い分けです。
 - **誤用から自力で回復する**: 上限を超える `release` は本来エラーですが、そのタイミングと競合した `tryAcquire` が誤って許可を余分に取らないよう、ここでも数を直しています。
 - **ロックを使わない**: どの操作も CAS で行うので、スレッドが待たされることはありません。
 
