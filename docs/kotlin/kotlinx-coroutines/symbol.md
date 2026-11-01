@@ -12,6 +12,7 @@ lines: [10, 15]
 function: "Symbol.unbox"
 difficulty: 1
 tags: [イディオム, 設計パターン, 可読性]
+format: 2
 ---
 
 ## ひとことで
@@ -32,12 +33,7 @@ internal class Symbol(@JvmField val symbol: String) {
 }
 ```
 
-使い方の例として、同じライブラリの `NullSurrogate.kt` には次のような定義があります。
-
-```kotlin
-internal val NULL = Symbol("NULL")
-internal val DONE = Symbol("DONE")
-```
+同じライブラリの `NullSurrogate.kt` では、この `Symbol` を使って `NULL` と `DONE` という番兵が作られています。
 
 ## 前提知識
 
@@ -49,11 +45,20 @@ internal val DONE = Symbol("DONE")
 
 ## 何をしているか
 
-### 1. 名前を持つ（10〜11 行目）
+### 1. 名前を持つ
+
+```kotlin:line-numbers=10
+internal class Symbol(@JvmField val symbol: String) {
+    override fun toString(): String = "<$symbol>"
+```
 
 `Symbol("NULL")` のように名前を付けて作り、`toString()` で `<NULL>` と表示します。
 
-### 2. 番兵を null に戻す（14 行目）
+### 2. 番兵を null に戻す
+
+```kotlin:line-numbers=14
+    inline fun <T> unbox(value: Any?): T = if (value === this) null as T else value as T
+```
 
 `unbox(value)` は、`value` が自分自身（番兵）なら `null` を、そうでなければ `value` をそのまま返します。
 

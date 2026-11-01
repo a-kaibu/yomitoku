@@ -12,6 +12,7 @@ lines: [40, 53]
 function: "systemProp (Long)"
 difficulty: 1
 tags: [イディオム, エラー処理, 防御的プログラミング]
+format: 2
 ---
 
 ## ひとことで
@@ -43,7 +44,7 @@ internal fun systemProp(
 ## 前提知識
 
 - **システムプロパティ**: JVM（Java の実行環境）を起動するときに `-Dkotlinx.coroutines.scheduler.max.pool.size=4` のように渡す設定です。プログラムからは名前で文字列として読み出せます。
-- **`systemProp(propertyName): String?`**: 同じファイルの 72 行目で宣言されている関数で、設定があれば文字列、なければ `null` を返します。`expect` は「実装はプラットフォームごとに別に書く」という印です（JVM、JS、ネイティブで別実装）。
+- **`systemProp(propertyName): String?`**: 同じライブラリに、設定があれば文字列、なければ `null` を返す関数があります。`expect` は「実装はプラットフォームごとに別に書く」という印です（JVM、JS、ネイティブで別実装）。
 - **オーバーロード**: 同じ名前で引数の型が違う関数を複数定義できます。このファイルには `Boolean`、`Int`、`Long`、`String` 版の `systemProp` が並んでいます。
 - **`?:`（エルビス演算子）**: `a ?: b` は「`a` が `null` なら `b`」です。右側に `return` や `error(...)` を書くと、「`null` なら抜ける／例外を投げる」になります。
 - **`toLongOrNull()`**: 文字列を `Long` に変換し、数字として読めなければ `null` を返します。
@@ -53,19 +54,38 @@ internal fun systemProp(
 
 ## 何をしているか
 
-### 1. 設定がなければ既定値（46 行目）
+### 1. 設定がなければ既定値
+
+```kotlin:line-numbers=46
+    val value = systemProp(propertyName) ?: return defaultValue
+```
 
 `systemProp(propertyName)` が `null` なら、`return defaultValue` で抜けます。
 
-### 2. 数字に変換、できなければ例外（47〜48 行目）
+### 2. 数字に変換、できなければ例外
+
+```kotlin:line-numbers=47
+    val parsed = value.toLongOrNull()
+        ?: error("System property '$propertyName' has unrecognized value '$value'")
+```
 
 `"abc"` のような値なら、どの設定が何の値でおかしいのかをメッセージに入れて例外を投げます。
 
-### 3. 範囲チェック（49〜51 行目）
+### 3. 範囲チェック
+
+```kotlin:line-numbers=49
+    if (parsed !in minValue..maxValue) {
+        error("System property '$propertyName' should be in range $minValue..$maxValue, but is '$parsed'")
+    }
+```
 
 たとえば `minValue = 1` で `"0"` が設定されていたら、範囲外として例外にします。
 
-### 4. 返す（52 行目）
+### 4. 返す
+
+```kotlin:line-numbers=52
+    return parsed
+```
 
 | 設定値 | 結果 |
 | --- | --- |
@@ -79,7 +99,7 @@ internal fun systemProp(
 - **`?:` で「早めに抜ける」を並べる**: `if (x == null) return ...` を何度も書く代わりに、`?: return` と `?: error(...)` で、異常な場合を行の右端に追い出しています。その結果、行の左側を読むだけで「正常な流れ」が分かります。
 - **`Nothing` 型のおかげで型がきれい**: `error(...)` は決して戻らない `Nothing` 型なので、`value.toLongOrNull() ?: error(...)` の型は `Long`（`null` なし）になります。以降のコードで `null` チェックが要りません。
 - **黙って既定値にしない**: 設定値が数字でないとき、既定値に戻して黙って続けることもできます。しかしそれでは「設定したのに効いていない」ことに気づけません。エラーにして、メッセージに名前と値を入れるのが親切です。
-- **`Int` 版は `Long` 版に任せる**: 31 行目の `Int` 版は、引数を `Long` に変換してこの関数を呼び、結果を `Int` に戻すだけです。チェックのロジックは 1 か所にまとまっています。
+- **`Int` 版は `Long` 版に任せる**: `Int` 版は、引数を `Long` に変換してこの関数を呼び、結果を `Int` に戻すだけです。チェックのロジックは 1 か所にまとまっています。
 
 ## まとめ
 
