@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [1508, 1522]
 function: "nvm_num_version_groups"
 difficulty: 1
+format: 2
 tags: [文字列処理, ハック]
 ---
 ## ひとことで
@@ -21,7 +22,27 @@ tags: [文字列処理, ハック]
 
 ## コード
 
-```sh:line-numbers=1508
+::: code-group
+
+```sh:line-numbers=1508 [日本語訳]
+nvm_num_version_groups() {
+  local VERSION
+  VERSION="${1-}"
+  VERSION="${VERSION#v}"
+  VERSION="${VERSION%.}"
+  if [ -z "${VERSION}" ]; then
+    nvm_echo "0"
+    return
+  fi
+  local NVM_NUM_DOTS
+  NVM_NUM_DOTS=$(nvm_echo "${VERSION}" | command sed -e 's/[^\.]//g')
+  local NVM_NUM_GROUPS
+  NVM_NUM_GROUPS=".${NVM_NUM_DOTS}" # ドットを 1 つ足す。この時点ではドットは (n - 1) 個なので
+  nvm_echo "${#NVM_NUM_GROUPS}"
+}
+```
+
+```sh:line-numbers=1508 [原文]
 nvm_num_version_groups() {
   local VERSION
   VERSION="${1-}"
@@ -39,6 +60,8 @@ nvm_num_version_groups() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`${VERSION#v}`**: 先頭の `v` を取り除きます。
@@ -52,21 +75,21 @@ nvm_num_version_groups() {
 
 `v20.1.3` を例に追います。
 
-### 1. 前後を整える（1510〜1512 行目）
+### 1. 前後を整える
 
 `v` を取って `20.1.3` にします。末尾がドットなら取り除きます。
 
-### 2. 空なら 0（1513〜1516 行目）
+### 2. 空なら 0
 
 何も残らなければ、要素は 0 個です。
 
-### 3. ドットだけを残す（1518 行目）
+### 3. ドットだけを残す
 
 `sed 's/[^\.]//g'` で、数字などドット以外をすべて消します。`20.1.3` → `..` になります。
 
-### 4. ドットを 1 つ足して数える（1520〜1521 行目）
+### 4. ドットを 1 つ足して数える
 
-要素の数は「ドットの数 + 1」です。そこで `.` を 1 つ前に足して `...` とし、`${#NVM_NUM_GROUPS}` で文字数 `3` を得ます。1520 行目のコメント「n - 1 個のドットなので、1 つ足す」はこのことです。
+要素の数は「ドットの数 + 1」です。そこで `.` を 1 つ前に足して `...` とし、`${#NVM_NUM_GROUPS}` で文字数 `3` を得ます。コメント「n - 1 個のドットなので、1 つ足す」はこのことです。
 
 ## ここがすごい
 

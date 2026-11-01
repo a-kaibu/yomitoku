@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [4423, 4469]
 function: "nvm_acquire_install_lock"
 difficulty: 3
+format: 2
 tags: [並行処理, ファイル, 防御的プログラミング]
 ---
 ## ひとことで
@@ -21,7 +22,59 @@ tags: [並行処理, ファイル, 防御的プログラミング]
 
 ## コード
 
-```sh:line-numbers=4423
+::: code-group
+
+```sh:line-numbers=4423 [日本語訳]
+nvm_acquire_install_lock() {
+  local VERSION
+  VERSION="${1-}"
+  if [ -z "${VERSION}" ]; then
+    return 0
+  fi
+
+  local LOCK_ROOT
+  LOCK_ROOT="$(nvm_cache_dir)/locks"
+  # ロック用のディレクトリを作れなくても、それを理由にインストールを止めない。
+  command mkdir -p "${LOCK_ROOT}" 2>/dev/null || return 0
+
+  local LOCK
+  LOCK="${LOCK_ROOT}/$(nvm_install_lock_name "${VERSION}")"
+
+  local TIMEOUT
+  TIMEOUT="${NVM_INSTALL_LOCK_TIMEOUT:-600}"
+  local STALE
+  STALE="${NVM_INSTALL_LOCK_STALE:-0}"
+
+  local WAITED
+  WAITED=0
+  local ANNOUNCED
+  ANNOUNCED=0
+  while ! command mkdir "${LOCK}" 2>/dev/null; do
+    # 異常終了したインストールが残したロックは、十分古くなったら奪う。
+    if [ "${STALE}" != '0' ] && [ -n "$(command find "${LOCK}" -maxdepth 0 -type d -mmin "+${STALE}" 2>/dev/null)" ]; then
+      nvm_err "Removing stale install lock for ${VERSION} (older than ${STALE} minute(s))"
+      command rm -rf "${LOCK}" 2>/dev/null
+      continue
+    fi
+    if [ "${WAITED}" -ge "${TIMEOUT}" ]; then
+      nvm_err "Timed out after ${TIMEOUT}s waiting for another install of ${VERSION} to finish."
+      nvm_err "If no other install is running, remove ${LOCK} and try again."
+      return 1
+    fi
+    if [ "${ANNOUNCED}" -eq 0 ]; then
+      nvm_err "Waiting for another install of ${VERSION} to finish..."
+      ANNOUNCED=1
+    fi
+    command sleep 1
+    WAITED=$((WAITED + 1))
+  done
+
+  NVM_INSTALL_LOCK="${LOCK}"
+  return 0
+}
+```
+
+```sh:line-numbers=4423 [原文]
 nvm_acquire_install_lock() {
   local VERSION
   VERSION="${1-}"
@@ -71,6 +124,8 @@ nvm_acquire_install_lock() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **ロック**: 複数のプログラムが同じものを同時に触らないようにする仕組みです。先にロックを取ったほうだけが作業し、ほかは待ちます。
@@ -83,13 +138,13 @@ nvm_acquire_install_lock() {
 
 ## 何をしているか
 
-### 1. 準備（4425〜4441 行目）
+### 1. 準備
 
-バージョンが空なら何もしません。ロック用のディレクトリ `~/.nvm/.cache/locks` を作ります。作れなければ、ロックのせいでインストールが止まるのは本末転倒なので、ロックなしで進めます（4432 行目）。
+バージョンが空なら何もしません。ロック用のディレクトリ `~/.nvm/.cache/locks` を作ります。作れなければ、ロックのせいでインストールが止まるのは本末転倒なので、ロックなしで進めます。
 
 待つ上限（既定 600 秒）と、古いロックとみなす時間（既定 0 = 無効）を決めます。
 
-### 2. mkdir できるまで待つ（4447〜4465 行目）
+### 2. mkdir できるまで待つ
 
 `mkdir` に成功すればループを抜けます。失敗した（ほかの誰かがロックを持っている）ときは、次のことをします。
 
@@ -98,7 +153,7 @@ nvm_acquire_install_lock() {
 - 最初の 1 回だけ「待っています」と表示します。
 - 1 秒待って、待ち時間を 1 増やします。
 
-### 3. ロックを記録（4467 行目）
+### 3. ロックを記録
 
 取ったロックの場所を `NVM_INSTALL_LOCK` に保存します。インストールが終わると `nvm_release_install_lock` がこのディレクトリを消します。
 

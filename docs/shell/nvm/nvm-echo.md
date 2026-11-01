@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [21, 29]
 function: "nvm_echo"
 difficulty: 1
+format: 2
 tags: [移植性, 入出力, イディオム]
 ---
 ## ひとことで
@@ -21,7 +22,21 @@ tags: [移植性, 入出力, イディオム]
 
 ## コード
 
-```sh:line-numbers=21
+::: code-group
+
+```sh:line-numbers=21 [日本語訳]
+nvm_echo() {
+  # zsh では `command printf` は組み込みを飛ばして `/usr/bin/printf` を実行してしまう
+  if [ -n "${ZSH_VERSION-}" ]; then
+    # shellcheck: SC3044 の警告を無効化
+    builtin printf %s\\n "$*" 2>/dev/null
+  else
+    command printf %s\\n "$*" 2>/dev/null
+  fi
+}
+```
+
+```sh:line-numbers=21 [原文]
 nvm_echo() {
   # in zsh, `command printf` skips the builtin and runs `/usr/bin/printf`
   if [ -n "${ZSH_VERSION-}" ]; then
@@ -32,6 +47,8 @@ nvm_echo() {
   fi
 }
 ```
+
+:::
 
 ## 前提知識
 
@@ -46,15 +63,15 @@ nvm_echo() {
 
 ## 何をしているか
 
-### zsh かどうかで分岐する（23 行目）
+### zsh かどうかで分岐する
 
 まず `ZSH_VERSION` が空でないかを調べ、zsh で動いているかを判定します。
 
-### printf で 1 行出力する（25・27 行目）
+### printf で 1 行出力する
 
 どちらの分岐でもやっていることは同じで、`printf %s\n "$*"` を実行します。たとえば `nvm_echo '-n' 'foo'` と呼ぶと、`"$*"` は `-n foo` という 1 つの文字列になり、`%s` の位置にそのまま入って `-n foo` と表示されます。
 
-違いは `builtin` と `command` の使い分けだけです。22 行目のコメントにあるとおり、zsh では `command printf` と書くと組み込みの printf ではなく `/usr/bin/printf` という外部コマンドが実行されてしまいます。zsh 以外のシェルでは `command printf` で組み込みの printf が選ばれます。どちらのシェルでも「ユーザーが定義したかもしれない `printf` 関数やエイリアスを避けつつ、速い組み込み版を使う」ための分岐です。
+違いは `builtin` と `command` の使い分けだけです。コメントにあるとおり、zsh では `command printf` と書くと組み込みの printf ではなく `/usr/bin/printf` という外部コマンドが実行されてしまいます。zsh 以外のシェルでは `command printf` で組み込みの printf が選ばれます。どちらのシェルでも「ユーザーが定義したかもしれない `printf` 関数やエイリアスを避けつつ、速い組み込み版を使う」ための分岐です。
 
 ## ここがすごい
 

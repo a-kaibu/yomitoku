@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [1524, 1541]
 function: "nvm_strip_path"
 difficulty: 3
+format: 2
 tags: [文字列処理, 移植性, ハック]
 ---
 ## ひとことで
@@ -21,7 +22,30 @@ tags: [文字列処理, 移植性, ハック]
 
 ## コード
 
-```sh:line-numbers=1524
+::: code-group
+
+```sh:line-numbers=1524 [日本語訳]
+nvm_strip_path() {
+  if [ -z "${NVM_DIR-}" ]; then
+    nvm_err '${NVM_DIR} not set!'
+    return 1
+  fi
+  local RESULT
+  RESULT="$(command printf %s "${1-}" | command awk -v NVM_DIR="${NVM_DIR}" -v RS=: '
+  index($0, NVM_DIR) == 1 {
+    path = substr($0, length(NVM_DIR) + 1)
+    if (path ~ "^(/versions/[^/]*)?/[^/]*'"${2-}"'.*$") { next }
+  }
+  { printf "%s%s", sep, $0; sep=RS }')"
+  # mawk は RT をサポートしないので、末尾のコロンは手作業で残す
+  case "${1-}" in
+    *:) command printf '%s:' "${RESULT}" ;;
+    *) command printf '%s' "${RESULT}" ;;
+  esac
+}
+```
+
+```sh:line-numbers=1524 [原文]
 nvm_strip_path() {
   if [ -z "${NVM_DIR-}" ]; then
     nvm_err '${NVM_DIR} not set!'
@@ -42,6 +66,8 @@ nvm_strip_path() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`PATH`**: コマンドを探すディレクトリを `:` 区切りで並べた環境変数です。
@@ -54,11 +80,11 @@ nvm_strip_path() {
 
 ## 何をしているか
 
-### 1. `NVM_DIR` を確認（1525〜1528 行目）
+### 1. `NVM_DIR` を確認
 
 基準になる `NVM_DIR` が無ければエラーにします。
 
-### 2. PATH を要素ごとに処理（1530〜1535 行目）
+### 2. PATH を要素ごとに処理
 
 `printf %s` で PATH を（改行を付けずに）出力し、`RS=:` の awk に渡します。awk は要素を 1 つずつ受け取ります。
 
@@ -68,9 +94,9 @@ nvm_strip_path() {
 
 `printf "%s%s", sep, $0; sep=RS` という書き方で、最初の要素の前にはコロンを付けず、2 つ目以降にだけ付けています。
 
-### 3. 末尾のコロンを守る（1536〜1540 行目）
+### 3. 末尾のコロンを守る
 
-PATH の末尾が `:` で終わっていると、「カレントディレクトリも探す」という意味になります。awk の出力ではこの末尾の空要素が失われるので、元の値が `:` で終わっていたら結果にも `:` を付け直します。1536 行目のコメントにあるとおり、gawk の `RT` という機能を使えば自動で扱えますが、mawk には無いため手作業で補っています。
+PATH の末尾が `:` で終わっていると、「カレントディレクトリも探す」という意味になります。awk の出力ではこの末尾の空要素が失われるので、元の値が `:` で終わっていたら結果にも `:` を付け直します。コメントにあるとおり、gawk の `RT` という機能を使えば自動で扱えますが、mawk には無いため手作業で補っています。
 
 ## ここがすごい
 

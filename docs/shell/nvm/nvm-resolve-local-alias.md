@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [2066, 2090]
 function: "nvm_resolve_local_alias"
 difficulty: 1
+format: 2
 tags: [最適化, エラー処理]
 ---
 ## ひとことで
@@ -21,7 +22,37 @@ tags: [最適化, エラー処理]
 
 ## コード
 
-```sh:line-numbers=2066
+::: code-group
+
+```sh:line-numbers=2066 [日本語訳]
+nvm_resolve_local_alias() {
+  if [ -z "${1-}" ]; then
+    return 1
+  fi
+
+  local VERSION
+  local EXIT_CODE
+  VERSION="$(nvm_resolve_alias "${1-}")"
+  EXIT_CODE=$?
+  if [ -z "${VERSION}" ]; then
+    return $EXIT_CODE
+  fi
+  if [ "_${VERSION}" = '_∞' ]; then
+    nvm_echo "${VERSION}"
+    return
+  fi
+
+  # ファストパス: インストール済みの正確な vX.Y.Z なら、これ以上の解決は要らない。
+  if nvm_is_installed_exact_version "${VERSION}"; then
+    nvm_echo "${VERSION}"
+    return
+  fi
+
+  nvm_version "${VERSION}"
+}
+```
+
+```sh:line-numbers=2066 [原文]
 nvm_resolve_local_alias() {
   if [ -z "${1-}" ]; then
     return 1
@@ -49,6 +80,8 @@ nvm_resolve_local_alias() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **エイリアス（nvm の）**: `nvm alias default 20` のように、バージョンに付けた名前です。`~/.nvm/alias/` の下にファイルとして保存されます。
@@ -60,21 +93,21 @@ nvm_resolve_local_alias() {
 
 ## 何をしているか
 
-### 1. 引数がなければ失敗（2067〜2069 行目）
+### 1. 引数がなければ失敗
 
-### 2. 別名をたどる（2073〜2077 行目）
+### 2. 別名をたどる
 
 `nvm_resolve_alias` で別名をたどり、結果と終了ステータスを両方受け取ります。結果が空なら、その終了ステータスをそのまま返します。どこで失敗したかの情報を失わないためです。
 
-### 3. 循環していたら（2078〜2081 行目）
+### 3. 循環していたら
 
 別名がぐるぐる回っていて `∞` が返ってきたら、それをそのまま返します。
 
-### 4. ファストパス（2083〜2087 行目）
+### 4. ファストパス
 
 結果が `v20.11.0` のような正確なバージョンで、しかもインストール済みなら、それを返して終わります。
 
-### 5. 通常の道（2089 行目）
+### 5. 通常の道
 
 `lts/iron` → `20` のように、まだあいまいな値なら、`nvm_version` でインストール済みの中から探します。
 

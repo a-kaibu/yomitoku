@@ -11,6 +11,7 @@ file: "lib/functions.zsh"
 lines: [255, 285]
 function: "omz_urldecode"
 difficulty: 2
+format: 2
 tags: [文字列処理, Unicode, ハック]
 ---
 ## ひとことで
@@ -26,7 +27,43 @@ omz_urldecode "%E3%81%93%E3%82%93+world"
 
 ## コード
 
-```zsh:line-numbers=255
+::: code-group
+
+```zsh:line-numbers=255 [日本語訳]
+function omz_urldecode {
+  emulate -L zsh
+  local encoded_url=$1
+
+  # URL は UTF-8 のバイト列でエスケープされているので、1 バイトずつ扱う
+  local caller_encoding=$langinfo[CODESET]
+  local LC_ALL=C
+  export LC_ALL
+
+  # `+` を空白に戻す
+  local tmp=${encoded_url:gs/+/ /}
+  # 残っている `\` は printf に解釈されないよう、先に二重にしておく
+  tmp=${tmp:gs/\\/\\\\/}
+  # `%XX` を printf の `\xXX` エスケープに変える
+  tmp=${tmp:gs/%/\\x/}
+  local decoded="$(printf -- "$tmp")"
+
+  # ここで得られるのは UTF-8 のバイト列。呼び出し元のロケールが
+  # UTF-8 でなければ、その文字コードに変換する
+  local -a safe_encodings
+  safe_encodings=(UTF-8 utf8 US-ASCII)
+  if [[ -z ${safe_encodings[(r)$caller_encoding]} ]]; then
+    decoded=$(echo -E "$decoded" | iconv -f UTF-8 -t $caller_encoding)
+    if [[ $? != 0 ]]; then
+      echo "Error converting string from UTF-8 to $caller_encoding" >&2
+      return 1
+    fi
+  fi
+
+  echo -E "$decoded"
+}
+```
+
+```zsh:line-numbers=255 [原文]
 function omz_urldecode {
   emulate -L zsh
   local encoded_url=$1
@@ -60,6 +97,8 @@ function omz_urldecode {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **URL エンコード**: 文字のバイト値を `%XX`（16 進数 2 桁）で表す方法です。空白は `+` で表すことがあります。
@@ -74,25 +113,25 @@ function omz_urldecode {
 
 `a+%E3%81%93\n` を例に追います（最後の `\n` は文字としてのバックスラッシュと n）。
 
-### 1. `+` を空白に（265 行目）
+### 1. `+` を空白に
 
 `a %E3%81%93\n`
 
-### 2. `\` を `\\` に（267 行目）
+### 2. `\` を `\\` に
 
 `a %E3%81%93\\n`
 
 元からあった `\` は、`printf` に `\n`（改行）などと解釈されないよう二重にしておきます。これで `printf` は `\\` を「文字の `\`」として出力します。
 
-### 3. `%` を `\x` に（269 行目）
+### 3. `%` を `\x` に
 
 `a \xE3\x81\x93\\n`
 
-### 4. printf に渡す（270 行目）
+### 4. printf に渡す
 
 `printf` が `\xE3\x81\x93` を 3 バイトに変換し、それが UTF-8 の「こ」になります。結果は `a こ\n` です。
 
-### 5. 必要なら文字コードを変換（274〜282 行目）
+### 5. 必要なら文字コードを変換
 
 呼び出し元のロケールが UTF-8 でなければ、`iconv` で変換します。
 
@@ -102,7 +141,7 @@ function omz_urldecode {
 - **置換の順番が大事**: `\` を二重にする処理を、`%` を `\x` にするより **前に** やっているのがポイントです。逆にすると、自分で作った `\x` まで二重にしてしまいます。こうした「エスケープの順番」はどの言語でもよくある落とし穴です。
 - **バイト単位で扱う**: `LC_ALL=C` にしておくことで、`printf` が作ったバイト列をそのまま変数に入れられます。
 
-コメント（244〜248 行目）にあるとおり、この関数は入力が正しい URL エンコードかどうかは検査しません。人に見せるために読みやすくする、という用途に割り切っています。
+コメントにあるとおり、この関数は入力が正しい URL エンコードかどうかは検査しません。人に見せるために読みやすくする、という用途に割り切っています。
 
 ## まとめ
 

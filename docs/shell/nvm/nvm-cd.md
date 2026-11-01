@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [40, 48]
 function: "nvm_cd"
 difficulty: 1
+format: 2
 tags: [移植性, 防御的プログラミング, イディオム]
 ---
 ## ひとことで
@@ -21,7 +22,21 @@ tags: [移植性, 防御的プログラミング, イディオム]
 
 ## コード
 
-```sh:line-numbers=40
+::: code-group
+
+```sh:line-numbers=40 [日本語訳]
+nvm_cd() {
+  # `\cd` でもユーザー定義の `cd` 関数は実行される。zsh では `command cd` が組み込みではなく `/usr/bin/cd` を実行する
+  if [ -n "${ZSH_VERSION-}" ]; then
+    # shellcheck: SC3044 の警告を無効化
+    builtin cd "$@"
+  else
+    command cd "$@"
+  fi
+}
+```
+
+```sh:line-numbers=40 [原文]
 nvm_cd() {
   # `\cd` still runs a user-defined `cd` function; in zsh, `command cd` runs `/usr/bin/cd` instead of the builtin
   if [ -n "${ZSH_VERSION-}" ]; then
@@ -32,6 +47,8 @@ nvm_cd() {
   fi
 }
 ```
+
+:::
 
 ## 前提知識
 
@@ -45,15 +62,15 @@ nvm_cd() {
 
 ## 何をしているか
 
-### 1. zsh かどうかを調べる（42 行目）
+### 1. zsh かどうかを調べる
 
 `[ -n "${ZSH_VERSION-}" ]` で、今動いているシェルが zsh かどうかを判定します。
 
-### 2. zsh なら builtin cd（44 行目）
+### 2. zsh なら builtin cd
 
-zsh では `builtin cd "$@"` を使います。41 行目のコメントによると、zsh で `command cd` と書くと、組み込みの `cd` ではなく `/usr/bin/cd` という外部コマンドが実行されてしまうことがあります。外部コマンドは別プロセスで動くため、そこで移動しても **呼び出したシェルの場所は変わりません**。これでは意味がないので、zsh では `builtin` を使います。
+zsh では `builtin cd "$@"` を使います。コメントによると、zsh で `command cd` と書くと、組み込みの `cd` ではなく `/usr/bin/cd` という外部コマンドが実行されてしまうことがあります。外部コマンドは別プロセスで動くため、そこで移動しても **呼び出したシェルの場所は変わりません**。これでは意味がないので、zsh では `builtin` を使います。
 
-### 3. それ以外は command cd（46 行目）
+### 3. それ以外は command cd
 
 bash・dash・ksh などでは `command cd "$@"` を使います。`command` は関数とエイリアスを飛ばすので、ユーザーが `cd` を関数で上書きしていても本来の `cd` が実行されます。dash のように `builtin` を持たないシェルもあるため、こちらは POSIX で決められている `command` を使います。
 
@@ -61,7 +78,7 @@ bash・dash・ksh などでは `command cd "$@"` を使います。`command` は
 
 ## ここがすごい
 
-- **よくある「`\cd` で十分」という誤解を正している**: 41 行目のコメントが指摘するように、`\cd` はエイリアスしか避けられません。関数まで避けるには `command` が必要だ、という正確な知識に基づいています。
+- **よくある「`\cd` で十分」という誤解を正している**: コメントが指摘するように、`\cd` はエイリアスしか避けられません。関数まで避けるには `command` が必要だ、という正確な知識に基づいています。
 - **zsh の例外まで考えている**: 「`command` を付ければ安全」という一般論が zsh では成り立たない場面があることを把握し、zsh だけ `builtin` に切り替えています。
 - **POSIX シェルにも配慮**: `builtin` は便利ですが、dash などにはありません。全シェルで `builtin` を使わず、使えるシェル（zsh）でだけ使う形にしたことで、移植性を保っています。
 - **`"$@"` で引数をそのまま渡す**: `cd -` や `cd -P dir` のようなオプション、空白入りのパスも壊さずに渡せます。

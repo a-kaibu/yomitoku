@@ -11,6 +11,7 @@ file: "lib/git.zsh"
 lines: [314, 322]
 function: "git_previous_branch"
 difficulty: 1
+format: 2
 tags: [CLI, イディオム]
 ---
 ## ひとことで
@@ -25,7 +26,21 @@ git merge $(git_previous_branch)
 
 ## コード
 
-```zsh:line-numbers=314
+::: code-group
+
+```zsh:line-numbers=314 [日本語訳]
+function git_previous_branch() {
+  local ref
+  ref=$(__git_prompt_git rev-parse --quiet --symbolic-full-name @{-1} 2> /dev/null)
+  local ret=$?
+  if [[ $ret != 0 ]] || [[ -z $ref ]]; then
+    return  # git リポジトリの外、またはブランチではない直前の場所なら何も返さない
+  fi
+  echo ${ref#refs/heads/}
+}
+```
+
+```zsh:line-numbers=314 [原文]
 function git_previous_branch() {
   local ref
   ref=$(__git_prompt_git rev-parse --quiet --symbolic-full-name @{-1} 2> /dev/null)
@@ -36,6 +51,8 @@ function git_previous_branch() {
   echo ${ref#refs/heads/}
 }
 ```
+
+:::
 
 ## 前提知識
 
@@ -48,20 +65,20 @@ function git_previous_branch() {
 
 ## 何をしているか
 
-### 1. 1 つ前の場所を完全な名前で得る（316〜317 行目）
+### 1. 1 つ前の場所を完全な名前で得る
 
 `git rev-parse --quiet --symbolic-full-name @{-1}` を実行し、結果と終了ステータスを保存します。
 
-### 2. 使えないなら終わる（318〜320 行目）
+### 2. 使えないなら終わる
 
 次のどちらかなら、何も表示せずに終わります。
 
 - コマンドが失敗した（リポジトリの外、まだ一度も移動していない、など）
 - 結果が空（1 つ前がブランチではなかった）
 
-313 行目のコメント「`rev-parse --symbolic-full-name @{-1}` は、それがブランチのときだけ出力する」がこの判定の根拠です。
+コメント「`rev-parse --symbolic-full-name @{-1}` は、それがブランチのときだけ出力する」がこの判定の根拠です。
 
-### 3. ブランチ名だけを表示（321 行目）
+### 3. ブランチ名だけを表示
 
 `refs/heads/main` → `main` にして表示します。
 

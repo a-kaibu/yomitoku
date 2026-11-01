@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [1401, 1437]
 function: "nvm_is_valid_version"
 difficulty: 3
+format: 2
 tags: [パース, 文字列処理, 防御的プログラミング]
 ---
 ## ひとことで
@@ -24,7 +25,49 @@ tags: [パース, 文字列処理, 防御的プログラミング]
 
 ## コード
 
-```sh:line-numbers=1401
+::: code-group
+
+```sh:line-numbers=1401 [日本語訳]
+nvm_is_valid_version() {
+  case "${1-}" in
+    "stable" | "unstable" | "iojs" | "node")
+      return 0
+    ;;
+    *)
+      local VERSION
+      VERSION="${1-}"
+      VERSION="${VERSION#iojs-}"
+      local NVM_VERSION_CORE
+      NVM_VERSION_CORE="${VERSION#v}"
+      case "${NVM_VERSION_CORE}" in
+        *-*)
+          # プレリリース（rc、nightly、v8-canary など）は完全な x.y.z が必要で、ファイルの拡張子のような「ドットの後に数字以外」は決して含まない
+          case "${NVM_VERSION_CORE#*-}" in
+            '' | .* | *. | *..* | *.*[!0-9.]* | *[!0-9A-Za-z.-]*) return 1 ;;
+          esac
+          NVM_VERSION_CORE="${NVM_VERSION_CORE%%-*}"
+          case "${NVM_VERSION_CORE}" in
+            *.*.*) ;;
+            *) return 1 ;;
+          esac
+          # プレリリースの `-` があると、下にあるシェルだけの検査には
+          # たどり着かないので、ここで完全な検査をする。
+          nvm_version_greater_than_or_equal_to "${VERSION}" 0 || return 1
+        ;;
+        *.)
+          NVM_VERSION_CORE="${NVM_VERSION_CORE%.}"
+        ;;
+      esac
+      case "${NVM_VERSION_CORE}" in
+        '' | .* | *. | *..* | *.*.*.* | *[!0-9.]*) return 1 ;;
+      esac
+      # ここまで来たバージョンはすべて数なので `>= 0` が成り立つ
+    ;;
+  esac
+}
+```
+
+```sh:line-numbers=1401 [原文]
 nvm_is_valid_version() {
   case "${1-}" in
     "stable" | "unstable" | "iojs" | "node")
@@ -64,6 +107,8 @@ nvm_is_valid_version() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`case` のパターン**: `*` は任意の文字列、`[!0-9.]` は数字とドット以外の 1 文字、`|` で複数のパターンを並べられます。上から順に照合し、一致した最初の分岐だけを実行します。
@@ -76,27 +121,27 @@ nvm_is_valid_version() {
 
 ## 何をしているか
 
-### 1. 特別な名前は無条件で OK（1403〜1405 行目）
+### 1. 特別な名前は無条件で OK
 
 `stable`、`unstable`、`iojs`、`node` は正しい名前として成功を返します。
 
-### 2. 前置きを取る（1407〜1411 行目）
+### 2. 前置きを取る
 
 `iojs-` と `v` を取り除き、数字の部分 `NVM_VERSION_CORE` を取り出します。`v22.0.0-rc.1` なら `22.0.0-rc.1` です。
 
-### 3. プレリリースの検査（1413〜1426 行目）
+### 3. プレリリースの検査
 
 `-` を含むならプレリリースです。まず `-` より後ろ（`rc.1`）を調べ、空・ドットで始まる/終わる・ドットの連続・「ドットの後に数字以外」（`.tar` のような拡張子）・英数字とドットとハイフン以外の文字、のどれかがあれば弾きます。
 
-次に `-` より前（`22.0.0`）が `x.y.z` の 3 要素あるかを確かめます（1419〜1422 行目）。最後に、`nvm_version_greater_than_or_equal_to` で詳しく検査します。
+次に `-` より前（`22.0.0`）が `x.y.z` の 3 要素あるかを確かめます。最後に、`nvm_version_greater_than_or_equal_to` で詳しく検査します。
 
-### 4. 末尾のドット（1427〜1429 行目）
+### 4. 末尾のドット
 
 `20.` のような末尾のドットは取り除いて許します。
 
-### 5. 本体の検査（1431〜1433 行目）
+### 5. 本体の検査
 
-空・ドットで始まる/終わる・ドットの連続・ドット 3 つ以上・数字とドット以外の文字、のどれかがあれば弾きます。ここを抜けたら、1434 行目のコメントのとおり「数字だけでできた正しい形」なので、成功で終わります。
+空・ドットで始まる/終わる・ドットの連続・ドット 3 つ以上・数字とドット以外の文字、のどれかがあれば弾きます。ここを抜けたら、コメントのとおり「数字だけでできた正しい形」なので、成功で終わります。
 
 ## ここがすごい
 

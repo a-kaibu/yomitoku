@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [3354, 3413]
 function: "nvm_get_arch"
 difficulty: 3
+format: 2
 tags: [移植性, 低レイヤ, ハック]
 ---
 ## ひとことで
@@ -21,7 +22,72 @@ tags: [移植性, 低レイヤ, ハック]
 
 ## コード
 
-```sh:line-numbers=3354
+::: code-group
+
+```sh:line-numbers=3354 [日本語訳]
+nvm_get_arch() {
+  local HOST_ARCH
+  local NVM_OS
+  local EXIT_CODE
+  local LONG_BIT
+
+  NVM_OS="$(nvm_get_os)"
+  # OS が SunOS なら、まず pkgsrc を使って最も適した
+  # アーキテクチャを推測する。使えなければ isainfo で
+  # カーネルがサポートする命令セットを
+  # 調べる。
+  if [ "_${NVM_OS}" = "_sunos" ]; then
+    if HOST_ARCH=$(pkg_info -Q MACHINE_ARCH pkg_install); then
+      HOST_ARCH=$(nvm_echo "${HOST_ARCH}" | command tail -1)
+    else
+      HOST_ARCH=$(isainfo -n)
+    fi
+  elif [ "_${NVM_OS}" = "_aix" ]; then
+    HOST_ARCH=ppc64
+  else
+    HOST_ARCH="$(command uname -m)"
+    LONG_BIT="$(getconf LONG_BIT 2>/dev/null)"
+  fi
+
+  local NVM_ARCH
+  case "${HOST_ARCH}" in
+    x86_64 | amd64) NVM_ARCH="x64" ;;
+    i*86) NVM_ARCH="x86" ;;
+    aarch64 | armv8l) NVM_ARCH="arm64" ;;
+    loongarch64) NVM_ARCH="loong64" ;;
+    *) NVM_ARCH="${HOST_ARCH}" ;;
+  esac
+
+  # 32 ビットの Docker コンテナの中では、カーネルは 64 ビットのままなので
+  # LONG_BIT が 32 なら ARCH を 32 ビットに変える
+  if [ "_${LONG_BIT}" = "_32" ] && [ "${NVM_ARCH}" = "x64" ]; then
+    NVM_ARCH="x86"
+  fi
+
+  # 64 ビットの ARM カーネルの上で 32 ビットの ARM ユーザーランドが動いていて、
+  # /sbin/init が 32 ビットの実行ファイルなら、ARCH を 32 ビット ARM（armv7l）に変える
+  if [ "$(command uname)" = "Linux" ] \
+    && [ "${NVM_ARCH}" = arm64 ] \
+    && [ "$(command od -An -t x1 -j 4 -N 1 "/sbin/init" 2>/dev/null)" = ' 01' ]\
+  ; then
+    NVM_ARCH=armv7l
+    HOST_ARCH=armv7l
+  fi
+
+  if [ -f "/etc/alpine-release" ] && [ "_${NVM_OS}" = "_linux" ]; then
+    # Alpine Linux は musl libc を使う。あれば musl 用の版に対応づける
+    # 参照: https://unofficial-builds.nodejs.org/download/release/
+    case "${NVM_ARCH}" in
+      x64) NVM_ARCH=x64-musl ;;
+      arm64) NVM_ARCH=arm64-musl ;;
+    esac
+  fi
+
+  nvm_echo "${NVM_ARCH}"
+}
+```
+
+```sh:line-numbers=3354 [原文]
 nvm_get_arch() {
   local HOST_ARCH
   local NVM_OS
@@ -84,6 +150,8 @@ nvm_get_arch() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **アーキテクチャ**: CPU の命令の種類です。`x86_64`（64 ビットの Intel/AMD）、`aarch64`（64 ビットの ARM）などがあります。
@@ -96,23 +164,23 @@ nvm_get_arch() {
 
 ## 何をしているか
 
-### 1. 生の名前を得る（3365〜3376 行目）
+### 1. 生の名前を得る
 
 Solaris 系では `pkg_info` か `isainfo`、AIX では固定で `ppc64`、それ以外は `uname -m` を使います。あわせて `getconf LONG_BIT` も調べます。
 
-### 2. Node.js の名前に変換（3379〜3385 行目）
+### 2. Node.js の名前に変換
 
 `x86_64`/`amd64` → `x64`、`i386`〜`i686` → `x86`、`aarch64` → `arm64` のように変換します。`i*86` というパターン 1 つで `i386`、`i486`、`i586`、`i686` をまとめて扱っています。
 
-### 3. 32 ビットのコンテナ（3387〜3391 行目）
+### 3. 32 ビットのコンテナ
 
 64 ビットのホストで 32 ビットの Docker コンテナを動かすと、`uname -m` はホストのカーネルの `x86_64` を返します。そこで `LONG_BIT` が 32 なら `x86` に直します。
 
-### 4. 32 ビット ARM の環境（3393〜3401 行目）
+### 4. 32 ビット ARM の環境
 
 Raspberry Pi などでは、カーネルは 64 ビット ARM でも、OS は 32 ビットのことがあります。ここでは `/sbin/init`（最初に起動するプログラム）の 5 バイト目を読み、`01`（32 ビット）なら `armv7l` にします。`od` の出力は先頭に空白が付くので、比較する値は `' 01'` です。
 
-### 5. Alpine（3403〜3410 行目）
+### 5. Alpine
 
 Alpine Linux なら musl 用のビルドの名前（`x64-musl` など）に変えます。
 

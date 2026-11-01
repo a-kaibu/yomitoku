@@ -11,6 +11,7 @@ file: "lib/functions.zsh"
 lines: [49, 51]
 function: "takedir"
 difficulty: 1
+format: 2
 tags: [CLI, イディオム, ファイル]
 ---
 ## ひとことで
@@ -42,11 +43,19 @@ function mkcd takedir() {
 
 ## 何をしているか
 
-### 1. ディレクトリを作る（50 行目の前半）
+### 1. ディレクトリを作る
+
+```zsh:line-numbers=50
+  mkdir -p $@ && cd ${@:$#}
+```
 
 `mkdir -p $@` で、渡されたディレクトリを全部作ります。`takedir a b c` なら `a`、`b`、`c` の 3 つができます。`mkdir` のオプション（`-m 700` など）を渡すこともできます。
 
-### 2. 最後の引数に移動する（50 行目の後半）
+### 2. 最後の引数に移動する
+
+```zsh:line-numbers=50
+  mkdir -p $@ && cd ${@:$#}
+```
 
 作るのに成功したら、`cd ${@:$#}` で移動します。
 

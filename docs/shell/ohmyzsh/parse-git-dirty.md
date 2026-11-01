@@ -11,6 +11,7 @@ file: "lib/git.zsh"
 lines: [239, 265]
 function: "parse_git_dirty"
 difficulty: 2
+format: 2
 tags: [最適化, 入出力]
 ---
 ## ひとことで
@@ -21,7 +22,39 @@ tags: [最適化, 入出力]
 
 ## コード
 
-```zsh:line-numbers=239
+::: code-group
+
+```zsh:line-numbers=239 [日本語訳]
+function parse_git_dirty() {
+  local STATUS
+  local -a FLAGS
+  FLAGS=('--porcelain')
+  if [[ "$(__git_prompt_git config --get oh-my-zsh.hide-dirty)" != "1" ]]; then
+    if [[ "${DISABLE_UNTRACKED_FILES_DIRTY:-}" == "true" ]]; then
+      FLAGS+='--untracked-files=no'
+    fi
+    case "${GIT_STATUS_IGNORE_SUBMODULES:-}" in
+      git)
+        # git 自身に決めさせる（.gitmodules の設定に従う）
+        ;;
+      *)
+        # 未設定なら、汚れたサブモジュールは無視する
+        # それ以外の値は --ignore-submodules に渡す
+        FLAGS+="--ignore-submodules=${GIT_STATUS_IGNORE_SUBMODULES:-dirty}"
+        ;;
+    esac
+    # 空かどうかだけが大事なので、全体ではなく 1 行だけ保持する
+    __git_prompt_git status ${FLAGS} 2> /dev/null | read -r STATUS
+  fi
+  if [[ -n $STATUS ]]; then
+    echo "$ZSH_THEME_GIT_PROMPT_DIRTY"
+  else
+    echo "$ZSH_THEME_GIT_PROMPT_CLEAN"
+  fi
+}
+```
+
+```zsh:line-numbers=239 [原文]
 function parse_git_dirty() {
   local STATUS
   local -a FLAGS
@@ -51,19 +84,21 @@ function parse_git_dirty() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`git status --porcelain`**: 変更のあるファイルを 1 行に 1 つ、機械が読みやすい形で出力します。変更が無ければ何も出力しません。
 - **`local -a FLAGS`**: 配列のローカル変数を宣言します。
 - **`FLAGS+='...'`**: zsh で配列に要素を追加します。
 - **`${VAR:-既定値}`**: 変数が空なら既定値を使います。
-- **`コマンド | read -r 変数`**: 出力の 1 行目を変数に読み込みます。zsh では、パイプの最後のコマンドが **今のシェルで** 実行されるので、読んだ変数がそのまま使えます（bash では別のプロセスで動くため、この書き方では変数が残りません）。
+- **`コマンド | read -r 変数`**: 出力の最初の行を変数に読み込みます。zsh では、パイプの最後のコマンドが **今のシェルで** 実行されるので、読んだ変数がそのまま使えます（bash では別のプロセスで動くため、この書き方では変数が残りません）。
 - **`[[ -n $STATUS ]]`**: 変数が空でなければ真です。
 - **`__git_prompt_git`**: ユーザーの設定に左右されない形で `git` を実行する Oh My Zsh の関数です。
 
 ## 何をしているか
 
-### 1. オプションを組み立てる（241〜256 行目）
+### 1. オプションを組み立てる
 
 基本は `--porcelain` です。
 
@@ -71,11 +106,11 @@ function parse_git_dirty() {
 - `DISABLE_UNTRACKED_FILES_DIRTY=true` なら、新しく作っただけのファイルは無視します。
 - サブモジュールの変更をどう扱うかを `GIT_STATUS_IGNORE_SUBMODULES` で決めます。指定が無ければ `dirty`（サブモジュールの中の変更は無視）です。
 
-### 2. 1 行だけ読む（258 行目）
+### 2. 1 行だけ読む
 
-`git status ... | read -r STATUS` で、出力の 1 行目だけを `STATUS` に入れます。257 行目のコメント「空でないかどうかだけが大事なので、リスト全体ではなく 1 行だけ持つ」のとおりです。
+`git status ... | read -r STATUS` で、出力の最初の行だけを `STATUS` に入れます。コメント「空でないかどうかだけが大事なので、リスト全体ではなく 1 行だけ持つ」のとおりです。
 
-### 3. 印を出す（260〜264 行目）
+### 3. 印を出す
 
 `STATUS` が空でなければ変更あり、空なら変更なしの印を表示します。
 

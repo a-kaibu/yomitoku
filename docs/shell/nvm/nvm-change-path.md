@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [1543, 1575]
 function: "nvm_change_path"
 difficulty: 3
+format: 2
 tags: [文字列処理, 正規表現, 防御的プログラミング]
 ---
 ## ひとことで
@@ -26,7 +27,45 @@ nvm の古いディレクトリが無ければ、新しいものを先頭に追�
 
 ## コード
 
-```sh:line-numbers=1543
+::: code-group
+
+```sh:line-numbers=1543 [日本語訳]
+nvm_change_path() {
+  # 元の PATH が空なら、追加するパスだけを返す
+  if [ -z "${1-}" ]; then
+    nvm_echo "${3-}${2-}"
+    return
+  fi
+  # `${NVM_DIR}` は文字どおりに一致させるので、正規表現で特別な意味を持つ文字をエスケープする
+  local NVM_DIR_RE
+  NVM_DIR_RE="$(nvm_echo "${NVM_DIR}" | command sed 's/[][\.*^$+?(){}|]/\\&/g')"
+  # 元の PATH に nvm のパスが含まれていなければ、追加するパスを
+  # 先頭に付ける
+  if ! nvm_echo "${1-}" | nvm_grep -Eq "${NVM_DIR_RE}/[^/]*${2-}" \
+    && ! nvm_echo "${1-}" | nvm_grep -Eq "${NVM_DIR_RE}/versions/[^/]*/[^/]*${2-}"; then
+    nvm_echo "${3-}${2-}:${1-}"
+  # 元の PATH に nvm のパスがあり（上で確認済み）、しかも
+  # その nvm のパスより前にシステムのバイナリのパスがあるなら、
+  # 置き換えずに、追加するパスを先頭に付けるだけにする。
+  # 参考: https://github.com/nvm-sh/nvm/issues/1652#issuecomment-342571223
+  elif nvm_echo "${1-}" | nvm_grep -Eq "(^|:)(/usr(/local)?)?${2-}:.*${NVM_DIR_RE}/[^/]*${2-}" \
+    || nvm_echo "${1-}" | nvm_grep -Eq "(^|:)(/usr(/local)?)?${2-}:.*${NVM_DIR_RE}/versions/[^/]*/[^/]*${2-}"; then
+    nvm_echo "${3-}${2-}:${1-}"
+  # sed で既存の nvm のパスを追加するパスに置き換える。こうすると
+  # PATH の順番が保たれる。
+  else
+    local NVM_DIR_SED
+    NVM_DIR_SED="$(nvm_echo "${NVM_DIR_RE}" | command sed 's/#/\\#/g')"
+    local NEW_DIR_SED
+    NEW_DIR_SED="$(nvm_echo "${3-}" | command sed 's/[\&#]/\\&/g')"
+    nvm_echo "${1-}" | command sed -E \
+      -e "s#${NVM_DIR_SED}/[^/]*${2-}[^:]*#${NEW_DIR_SED}${2-}#" \
+      -e "s#${NVM_DIR_SED}/versions/[^/]*/[^/]*${2-}[^:]*#${NEW_DIR_SED}${2-}#"
+  fi
+}
+```
+
+```sh:line-numbers=1543 [原文]
 nvm_change_path() {
   # if there’s no initial path, just return the supplementary path
   if [ -z "${1-}" ]; then
@@ -62,6 +101,8 @@ nvm_change_path() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **引数**: `$1` が元の PATH、`$2` が付け足す部分（`/bin` など）、`$3` が新しいバージョンのディレクトリです。
@@ -73,23 +114,23 @@ nvm_change_path() {
 
 ## 何をしているか
 
-### 1. PATH が空なら足すだけ（1545〜1548 行目）
+### 1. PATH が空なら足すだけ
 
 元の PATH が空なら `$3$2`（新しいディレクトリ + `/bin`）だけを返します。
 
-### 2. NVM_DIR をエスケープ（1551 行目）
+### 2. NVM_DIR をエスケープ
 
 `NVM_DIR` を正規表現の中で使うので、特殊文字の前に `\` を付けます。`/home/me/.nvm` の `.` は「任意の 1 文字」ではなく本物のドットとして扱われます。
 
-### 3. nvm のディレクトリが無ければ先頭へ（1554〜1556 行目）
+### 3. nvm のディレクトリが無ければ先頭へ
 
 PATH に nvm 管理下の `bin` が見つからなければ、新しいものを先頭に付けます。
 
-### 4. システムの bin が先にある場合（1561〜1563 行目）
+### 4. システムの bin が先にある場合
 
-`/usr/bin:...:~/.nvm/.../bin` のように、システムのディレクトリが nvm より前にあると、差し替えても `/usr/bin/node` が優先されてしまいます。この場合は先頭に追加します（1557〜1560 行目のコメントと issue へのリンク）。
+`/usr/bin:...:~/.nvm/.../bin` のように、システムのディレクトリが nvm より前にあると、差し替えても `/usr/bin/node` が優先されてしまいます。この場合は先頭に追加します（コメントと issue へのリンク）。
 
-### 5. それ以外は同じ位置で差し替え（1566〜1573 行目）
+### 5. それ以外は同じ位置で差し替え
 
 `sed` で、nvm の古いディレクトリを新しいものに置き換えます。区切り文字 `#` がパスに含まれても壊れないよう、`NVM_DIR` 側は `#` を、新しいディレクトリ側は `\` `&` `#` をエスケープしています。
 

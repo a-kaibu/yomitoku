@@ -11,6 +11,7 @@ file: "nvm.sh"
 lines: [155, 231]
 function: "nvm_download"
 difficulty: 3
+format: 2
 tags: [移植性, ネットワーク, 設計パターン]
 ---
 ## ひとことで
@@ -25,7 +26,89 @@ curl が入っていればそのまま curl を実行し、wget しかなけれ�
 
 ## コード
 
-```sh:line-numbers=155
+::: code-group
+
+```sh:line-numbers=155 [日本語訳]
+nvm_download() {
+  local sanitized_header
+  sanitized_header=''
+  if [ -n "${NVM_AUTH_HEADER:-}" ]; then
+    local NVM_DOWNLOAD_AUTH
+    NVM_DOWNLOAD_AUTH=''
+    local NVM_DOWNLOAD_ARG
+    for NVM_DOWNLOAD_ARG in "$@"; do
+      case "${NVM_DOWNLOAD_ARG}" in
+        http://* | https://*)
+          if nvm_auth_header_applies_to "${NVM_DOWNLOAD_ARG}"; then
+            NVM_DOWNLOAD_AUTH=1
+          else
+            NVM_DOWNLOAD_AUTH=''
+            break
+          fi
+        ;;
+      esac
+    done
+    if [ -n "${NVM_DOWNLOAD_AUTH}" ]; then
+      sanitized_header="$(nvm_sanitize_auth_header "${NVM_AUTH_HEADER}")"
+    fi
+  fi
+
+  local NVM_DOWNLOADER
+  NVM_DOWNLOADER=''
+  if nvm_has_executable "curl"; then
+    NVM_DOWNLOADER='curl'
+    set -- --fail "$@"
+    if nvm_curl_use_compression; then
+      set -- --compressed "$@"
+    fi
+    # curl が `.curlrc` を読まないのは、`-q` が最初の引数のときだけ
+    set -- -q "$@"
+  elif nvm_has_executable "wget"; then
+    NVM_DOWNLOADER='wget'
+    # wget で curl のふりをする
+    local NVM_DOWNLOAD_WGET_COUNT
+    NVM_DOWNLOAD_WGET_COUNT=$#
+    local NVM_DOWNLOAD_WGET_SKIP
+    NVM_DOWNLOAD_WGET_SKIP=0
+    local NVM_DOWNLOAD_WGET_ARG
+    for NVM_DOWNLOAD_WGET_ARG in "$@"; do
+      if [ "${NVM_DOWNLOAD_WGET_SKIP}" = '1' ]; then
+        NVM_DOWNLOAD_WGET_SKIP=0
+        continue
+      fi
+      case "${NVM_DOWNLOAD_WGET_ARG}" in
+        '--progress-bar') set -- "$@" '--progress=bar' ;;
+        '--compressed') : ;;
+        '--fail') : ;;
+        '-L') : ;;
+        '-I') set -- "$@" '--server-response' ;;
+        '-s') set -- "$@" '-q' ;;
+        '-sS') set -- "$@" '-nv' ;;
+        '-o') set -- "$@" '-O' ;;
+        '-C') NVM_DOWNLOAD_WGET_SKIP=1; set -- "$@" '-c' ;;
+        *) set -- "$@" "${NVM_DOWNLOAD_WGET_ARG}" ;;
+      esac
+    done
+    shift "${NVM_DOWNLOAD_WGET_COUNT}"
+  fi
+
+  if [ -z "${NVM_DOWNLOADER}" ]; then
+    return 0
+  fi
+
+  if [ -n "${sanitized_header}" ]; then
+    if [ "${NVM_DOWNLOADER}" = 'wget' ] && nvm_wget_is_gnu; then
+      nvm_wget_same_origin "${sanitized_header}" "$@"
+      return $?
+    fi
+    set -- "$@" --header "Authorization: ${sanitized_header}"
+  fi
+
+  command "${NVM_DOWNLOADER}" "$@"
+}
+```
+
+```sh:line-numbers=155 [原文]
 nvm_download() {
   local sanitized_header
   sanitized_header=''
@@ -105,6 +188,8 @@ nvm_download() {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`set -- 値 "$@"`**: 引数リストの **先頭に** 値を足します。`set -- "$@" 値` なら末尾に足します。
@@ -117,15 +202,15 @@ nvm_download() {
 
 ## 何をしているか
 
-### 1. 認証ヘッダを付けるか決める（158〜177 行目）
+### 1. 認証ヘッダを付けるか決める
 
 `NVM_AUTH_HEADER` が設定されていても、すぐには使いません。引数の URL がすべて設定したミラーの配下のときだけ付けます。1 つでも外の URL があれば付けません。値は `nvm_sanitize_auth_header` で危険な文字を取り除きます。
 
-### 2. curl の場合（181〜188 行目）
+### 2. curl の場合
 
-`--fail`（HTTP エラーで失敗する）、`--compressed`（使えれば）、`-q` を先頭に足します。187 行目のコメントのとおり、`-q`（`.curlrc` を読まない）は **最初の引数でないと効かない** ので、最後に `set --` で先頭に入れています。
+`--fail`（HTTP エラーで失敗する）、`--compressed`（使えれば）、`-q` を先頭に足します。コメントのとおり、`-q`（`.curlrc` を読まない）は **最初の引数でないと効かない** ので、最後に `set --` で先頭に入れています。
 
-### 3. wget の場合（189〜215 行目）
+### 3. wget の場合
 
 元の引数の数を覚えてから、1 つずつ見て wget 用の引数を **後ろに** 追加していきます。
 
@@ -141,7 +226,7 @@ nvm_download() {
 
 `-C` は「途中から再開」で、curl では `-C -` と値を伴います。wget の `-c` は値を取らないので、次の引数を読み飛ばすフラグを立てています。最後に `shift` で元の引数を捨てれば、翻訳済みの引数だけが残ります。
 
-### 4. 実行（218〜230 行目）
+### 4. 実行
 
 どちらも無ければ何もしません。ヘッダがあり、ダウンローダーが GNU wget なら、リダイレクトを安全にたどる `nvm_wget_same_origin` に任せます。それ以外はヘッダを付けて実行します。
 
