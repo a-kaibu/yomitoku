@@ -1,0 +1,74 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# push が続いたときは最新のものだけビルド・デプロイする
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run validate
+
+  # ハブ + 12 言語を並列にビルド（1 回のビルドで全ページを処理するとメモリが足りないため）
+  build:
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        site: [hub, c, cpp, go, rust, csharp, typescript, swift, kotlin, java, shell, python, ruby]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build:site -- ${{ matrix.site }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.site }}
+          path: docs/.vitepress/dist-${{ matrix.site }}
+          retention-days: 1
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: docs/.vitepress
+      - run: npm run build:merge
+      - run: du -sh docs/.vitepress/dist
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

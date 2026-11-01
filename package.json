@@ -1,0 +1,20 @@
+{
+  "name": "yokuyomu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "node scripts/build.mjs",
+    "build:site": "node scripts/build.mjs --no-merge",
+    "build:merge": "node scripts/build.mjs --merge-only",
+    "preview": "vitepress preview docs",
+    "validate": "node scripts/validate.mjs",
+    "new": "node scripts/new-entry.mjs"
+  },
+  "devDependencies": {
+    "@shikijs/transformers": "^2.5.0",
+    "gray-matter": "^4.0.3",
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.44"
+  }
+}
