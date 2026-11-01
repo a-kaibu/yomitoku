@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [147, 160]
 function: tail
 difficulty: 1
+format: 2
 tags: [イテレータ, データ構造, イディオム]
 ---
+
 ## ひとことで
 
 `tail(n, iterable)` は、データの **最後の n 個** を取り出す関数です。`tail(3, 'ABCDEFG')` は `E, F, G` を返します。
@@ -20,7 +22,26 @@ tags: [イテレータ, データ構造, イディオム]
 
 ## コード
 
-```python:line-numbers=147
+::: code-group
+
+```python:line-numbers=147 [日本語訳]
+def tail(n, iterable):
+    """*iterable* の最後の *n* 個を取り出すイテレータを返す。
+
+    >>> t = tail(3, 'ABCDEFG')
+    >>> list(t)
+    ['E', 'F', 'G']
+
+    """
+    try:
+        size = len(iterable)
+    except TypeError:
+        return iter(deque(iterable, maxlen=n))
+    else:
+        return islice(iterable, max(0, size - n), None)
+```
+
+```python:line-numbers=147 [原文]
 def tail(n, iterable):
     """Return an iterator over the last *n* items of *iterable*.
 
@@ -37,6 +58,8 @@ def tail(n, iterable):
         return islice(iterable, max(0, size - n), None)
 ```
 
+:::
+
 `deque` は `collections.deque`、`islice` は `itertools.islice` です。
 
 ## 前提知識
@@ -49,11 +72,21 @@ def tail(n, iterable):
 
 ## 何をしているか
 
-### 1. 長さを調べてみる（155〜156 行目）
+### 1. 長さを調べてみる
+
+```python:line-numbers=155
+    try:
+        size = len(iterable)
+```
 
 `len(iterable)` を試します。
 
-### 2. 長さがわからない場合（157〜158 行目）
+### 2. 長さがわからない場合
+
+```python:line-numbers=157
+    except TypeError:
+        return iter(deque(iterable, maxlen=n))
+```
 
 `maxlen=3` の deque に全要素を流し込みます。`'ABCDEFG'` を 1 文字ずつ入れると、
 
@@ -63,7 +96,12 @@ def tail(n, iterable):
 
 と、常に最新の 3 個だけが残ります。
 
-### 3. 長さがわかる場合（159〜160 行目）
+### 3. 長さがわかる場合
+
+```python:line-numbers=159
+    else:
+        return islice(iterable, max(0, size - n), None)
+```
 
 長さ 7 から 3 を引いた 4 番目以降を `islice` で取り出します。`max(0, ...)` は、n が長さより大きいときに負の位置にならないようにするためです。
 

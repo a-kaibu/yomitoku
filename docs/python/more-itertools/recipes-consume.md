@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [163, 200]
 function: consume
 difficulty: 2
+format: 2
 tags: [イテレータ, 最適化, ハック]
 ---
+
 ## ひとことで
 
 `consume(iterator, n)` は、イテレータを **n 個ぶん先へ進める**（読み捨てる）関数です。`n` を省略すると最後まで進めます。
@@ -21,7 +23,50 @@ tags: [イテレータ, 最適化, ハック]
 
 ## コード
 
-```python:line-numbers=163
+::: code-group
+
+```python:line-numbers=163 [日本語訳]
+def consume(iterator, n=None):
+    """*iterable* を *n* 歩進める。*n* が ``None`` のときは最後まで消費する。
+    entirely.
+
+    Efficiently exhausts an iterator without returning values. Defaults to
+    consuming the whole iterator, but an optional second argument may be
+    provided to limit consumption.
+
+        >>> i = (x for x in range(10))
+        >>> next(i)
+        0
+        >>> consume(i, 3)
+        >>> next(i)
+        4
+        >>> consume(i)
+        >>> next(i)
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+        StopIteration
+
+    If the iterator has fewer items remaining than the provided limit, the
+    whole iterator will be consumed.
+
+        >>> i = (x for x in range(3))
+        >>> consume(i, 5)
+        >>> next(i)
+        Traceback (most recent call last):
+          File "<stdin>", line 1, in <module>
+        StopIteration
+
+    """
+    # イテレータを消費する関数を、C の速さで使う。
+    if n is None:
+        # イテレータ全体を長さ 0 の deque に流し込む
+        deque(iterator, maxlen=0)
+    else:
+        # 位置 n から始まる空のスライスまで進める
+        next(islice(iterator, n, n), None)
+```
+
+```python:line-numbers=163 [原文]
 def consume(iterator, n=None):
     """Advance *iterable* by *n* steps. If *n* is ``None``, consume it
     entirely.
@@ -62,6 +107,8 @@ def consume(iterator, n=None):
         next(islice(iterator, n, n), None)
 ```
 
+:::
+
 ## 前提知識
 
 - **イテレータ**: 値を 1 つずつ取り出せるもので、一度取り出した値は戻りません。取り出すたびに「現在位置」が進みます。
@@ -73,11 +120,23 @@ def consume(iterator, n=None):
 
 `it = iter(range(10))` で考えます。
 
-### 1. 最後まで進める場合（195〜197 行目）
+### 1. 最後まで進める場合
+
+```python:line-numbers=195
+    if n is None:
+        # イテレータ全体を長さ 0 の deque に流し込む
+        deque(iterator, maxlen=0)
+```
 
 `deque(it, maxlen=0)` で、0 から 9 までがすべて取り出されて捨てられます。
 
-### 2. n 個だけ進める場合（198〜200 行目）
+### 2. n 個だけ進める場合
+
+```python:line-numbers=198
+    else:
+        # 位置 n から始まる空のスライスまで進める
+        next(islice(iterator, n, n), None)
+```
 
 `consume(it, 3)` なら、`islice(it, 3, 3)` を作り、`next()` で 1 つ取り出そうとします。
 `islice` は「3 番目から始める」ために 0, 1, 2 を読み飛ばし、そこで「3 番目まで」という終わりに達するので、何も返さずに終わります。`next(..., None)` なので、エラーにならずに `None` が返ります。
@@ -94,7 +153,7 @@ for _ in range(n):
     next(iterator)
 ```
 
-これでも動きますが、1 回ごとに Python のバイトコードが実行されます。194 行目のコメントにある通り、`deque` と `islice` は **C で実装されている** ので、読み捨ての繰り返しがすべて C の中で行われ、ずっと速くなります。
+これでも動きますが、1 回ごとに Python のバイトコードが実行されます。`deque` と `islice` は **C で実装されている** ので、読み捨ての繰り返しがすべて C の中で行われ、ずっと速くなります。
 
 ### 「保存しない deque」と「空のスライス」という見立て
 
