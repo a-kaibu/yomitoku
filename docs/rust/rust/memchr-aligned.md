@@ -11,6 +11,7 @@ file: library/core/src/slice/memchr.rs
 lines: [52, 109]
 function: memchr_aligned
 difficulty: 3
+format: 2
 tags: [探索, 最適化, 低レイヤ, ビット演算]
 ---
 
@@ -23,7 +24,70 @@ tags: [探索, 最適化, 低レイヤ, ビット演算]
 
 ## コード
 
-```rust:line-numbers=52
+::: code-group
+
+```rust:line-numbers=52 [日本語訳]
+#[rustc_allow_const_fn_unstable(const_eval_select)] // fallback impl has same behavior
+const fn memchr_aligned(x: u8, text: &[u8]) -> Option<usize> {
+    // 実行時版はコンパイル時版と同じ振る舞いをするが、
+    // より最適化されている。
+    const_eval_select!(
+        @capture { x: u8, text: &[u8] } -> Option<usize>:
+        if const {
+            memchr_naive(x, text)
+        } else {
+            // `usize` 2 語ずつ読んで、1 バイトの値を探す。
+            //
+            // `text` を 3 つに分ける
+            // - 最初の、語のアドレスに揃っていない先頭部分
+            // - 本体（2 語ずつ調べる）
+            // - 最後の端数（2 語未満）
+
+            // 揃った境界まで探す
+            let len = text.len();
+            let ptr = text.as_ptr();
+            let mut offset = ptr.align_offset(USIZE_BYTES);
+
+            if offset > 0 {
+                offset = offset.min(len);
+                let slice = &text[..offset];
+                if let Some(index) = memchr_naive(x, slice) {
+                    return Some(index);
+                }
+            }
+
+            // 本体を探す
+            let repeated_x = usize::repeat_u8(x);
+            while offset <= len - 2 * USIZE_BYTES {
+                // SAFETY: while の条件により、2 * usize_bytes 以上の距離がある
+                // （offset とスライスの末尾の間）。
+                unsafe {
+                    let u = *(ptr.add(offset) as *const usize);
+                    let v = *(ptr.add(offset + USIZE_BYTES) as *const usize);
+
+                    // 一致するバイトがあれば抜ける
+                    let zu = contains_zero_byte(u ^ repeated_x);
+                    let zv = contains_zero_byte(v ^ repeated_x);
+                    if zu || zv {
+                        break;
+                    }
+                }
+                offset += USIZE_BYTES * 2;
+            }
+
+            // 本体のループが止まった位置から、その後のバイトを探す。
+            // FIXME(const-hack): 代わりに `?` を使う
+            // FIXME(const-hack, fee1-dead): 範囲のスライス記法を使う
+            let slice =
+            // SAFETY: offset は範囲内
+                unsafe { super::from_raw_parts(text.as_ptr().add(offset), text.len() - offset) };
+            if let Some(i) = memchr_naive(x, slice) { Some(offset + i) } else { None }
+        }
+    )
+}
+```
+
+```rust:line-numbers=52 [原文]
 #[rustc_allow_const_fn_unstable(const_eval_select)] // fallback impl has same behavior
 const fn memchr_aligned(x: u8, text: &[u8]) -> Option<usize> {
     // The runtime version behaves the same as the compiletime version, it's
@@ -84,6 +148,8 @@ const fn memchr_aligned(x: u8, text: &[u8]) -> Option<usize> {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Option<usize>`**: 「値があるかもしれないし、ないかもしれない」を表す型です。`Some(値)` か `None` のどちらかになります。
@@ -94,11 +160,47 @@ const fn memchr_aligned(x: u8, text: &[u8]) -> Option<usize> {
 
 ## 何をしているか
 
-### 1. 位置がそろうまで 1 バイトずつ探す（69〜79 行目）
+### 1. 位置がそろうまで 1 バイトずつ探す
+
+```rust:line-numbers=69
+            let len = text.len();
+            let ptr = text.as_ptr();
+            let mut offset = ptr.align_offset(USIZE_BYTES);
+
+            if offset > 0 {
+                offset = offset.min(len);
+                let slice = &text[..offset];
+                if let Some(index) = memchr_naive(x, slice) {
+                    return Some(index);
+                }
+            }
+```
+
 
 `text` の先頭アドレスが 8 の倍数とは限りません。そこで `align_offset` で「そろうまでのバイト数」を求め、その部分だけ素朴な `memchr_naive` で探します。ここで見つかればすぐに返します。
 
-### 2. 16 バイトずつまとめて判定する（82〜98 行目）
+### 2. 16 バイトずつまとめて判定する
+
+```rust:line-numbers=82
+            let repeated_x = usize::repeat_u8(x);
+            while offset <= len - 2 * USIZE_BYTES {
+                // SAFETY: the while's predicate guarantees a distance of at least 2 * usize_bytes
+                // between the offset and the end of the slice.
+                unsafe {
+                    let u = *(ptr.add(offset) as *const usize);
+                    let v = *(ptr.add(offset + USIZE_BYTES) as *const usize);
+
+                    // break if there is a matching byte
+                    let zu = contains_zero_byte(u ^ repeated_x);
+                    let zv = contains_zero_byte(v ^ repeated_x);
+                    if zu || zv {
+                        break;
+                    }
+                }
+                offset += USIZE_BYTES * 2;
+            }
+```
+
 
 `repeated_x` は `x` を 8 バイト全部に並べた値です（`x = 0x6C` なら `0x6C6C6C6C6C6C6C6C`）。
 `u ^ repeated_x` を計算すると、`x` と同じバイトだけが `0x00` になります。それを `contains_zero_byte`（引き算を使って「0 のバイトがあるか」を一発で判定する関数）に渡します。
@@ -106,7 +208,15 @@ const fn memchr_aligned(x: u8, text: &[u8]) -> Option<usize> {
 1 回のループで `u` と `v` の 2 ワード、16 バイトを調べ、どちらかに候補があれば `break` します。なければ `offset` を 16 進めて続けます。
 ループ条件 `offset <= len - 2 * USIZE_BYTES` により、読み出しが `text` の範囲を超えることはありません。
 
-### 3. 止まった場所から 1 バイトずつ探す（103〜106 行目）
+### 3. 止まった場所から 1 バイトずつ探す
+
+```rust:line-numbers=103
+            let slice =
+            // SAFETY: offset is within bounds
+                unsafe { super::from_raw_parts(text.as_ptr().add(offset), text.len() - offset) };
+            if let Some(i) = memchr_naive(x, slice) { Some(offset + i) } else { None }
+```
+
 
 ループを抜けた位置（候補を含む 16 バイトの先頭、または末尾の端数）から最後まで、`memchr_naive` で正確な位置を探し、`offset` を足して返します。
 

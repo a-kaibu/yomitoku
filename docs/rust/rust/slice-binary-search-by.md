@@ -11,6 +11,7 @@ file: library/core/src/slice/mod.rs
 lines: [2980, 3032]
 function: <[T]>::binary_search_by
 difficulty: 3
+format: 2
 tags: [探索, アルゴリズム, 最適化, 標準ライブラリ]
 ---
 
@@ -24,7 +25,65 @@ tags: [探索, アルゴリズム, 最適化, 標準ライブラリ]
 
 ## コード
 
-```rust:line-numbers=2980
+::: code-group
+
+```rust:line-numbers=2980 [日本語訳]
+    pub const fn binary_search_by<'a, F>(&'a self, mut f: F) -> Result<usize, usize>
+    where
+        F: [const] FnMut(&'a T) -> Ordering + [const] Destruct,
+    {
+        let mut size = self.len();
+        if size == 0 {
+            return Err(0);
+        }
+        let mut base = 0usize;
+
+        // このループは、比較が Equal でも意図的に途中で抜けない。
+        // ループの回数が *入力の長さだけ* に依るようにしたい。
+        // そうすれば CPU がループの回数を確実に予測できる。
+        //
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+
+            // SAFETY: 次の不変条件によって、この呼び出しは安全になる:
+            // - `mid >= 0`: 定義より
+            // - `mid < size`: `mid = size / 2 + size / 4 + size / 8 ...`
+            let cmp = f(unsafe { self.get_unchecked(mid) });
+
+            // 二分探索は分岐予測と相性が悪いので、
+            // 対象のアーキテクチャが対応していれば、
+            // 条件付き移動を使うようコンパイラに強制する。
+            base = hint::select_unpredictable(cmp == Greater, base, mid);
+
+            // `size` が奇数で比較が Greater の場合は、厳密ではない。
+            // mid の要素が、探している値より大きいと分かっていても
+            // `size` の範囲に含まれたままになる。
+            //
+            //
+            // ただし問題ない。ループ回数を一定に保つ（予測できるようにする）ことで、
+            // 要素を 1 つ余分に考慮することによる損失より、得るものが大きい。
+            //
+            size -= half;
+        }
+
+        // SAFETY: base <= mid なので、base は常に [0, size) の中にある。
+        let cmp = f(unsafe { self.get_unchecked(base) });
+        if cmp == Equal {
+            // SAFETY: 上の `get_unchecked` と同じ。
+            unsafe { hint::assert_unchecked(base < self.len()) };
+            Ok(base)
+        } else {
+            let result = base + (cmp == Less) as usize;
+            // SAFETY: 上の `get_unchecked` と同じ。
+            // 注: これは `Ok` の場合の assume と違い `<=` である。
+            unsafe { hint::assert_unchecked(result <= self.len()) };
+            Err(result)
+        }
+    }
+```
+
+```rust:line-numbers=2980 [原文]
     pub const fn binary_search_by<'a, F>(&'a self, mut f: F) -> Result<usize, usize>
     where
         F: [const] FnMut(&'a T) -> Ordering + [const] Destruct,
@@ -80,6 +139,8 @@ tags: [探索, アルゴリズム, 最適化, 標準ライブラリ]
     }
 ```
 
+:::
+
 ## 前提知識
 
 - **スライスとメソッド**: `&'a self` はスライス自身への参照です。`'a` はライフタイム（参照が有効な期間）の名前で、比較関数に渡す要素の参照が同じ期間有効であることを表しています。
@@ -90,7 +151,35 @@ tags: [探索, アルゴリズム, 最適化, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. 範囲を半分ずつ縮める（2994〜3017 行目）
+### 1. 範囲を半分ずつ縮める
+
+```rust:line-numbers=2994
+        while size > 1 {
+            let half = size / 2;
+            let mid = base + half;
+
+            // SAFETY: the call is made safe by the following invariants:
+            // - `mid >= 0`: by definition
+            // - `mid < size`: `mid = size / 2 + size / 4 + size / 8 ...`
+            let cmp = f(unsafe { self.get_unchecked(mid) });
+
+            // Binary search interacts poorly with branch prediction, so force
+            // the compiler to use conditional moves if supported by the target
+            // architecture.
+            base = hint::select_unpredictable(cmp == Greater, base, mid);
+
+            // This is imprecise in the case where `size` is odd and the
+            // comparison returns Greater: the mid element still gets included
+            // by `size` even though it's known to be larger than the element
+            // being searched for.
+            //
+            // This is fine though: we gain more performance by keeping the
+            // loop iteration count invariant (and thus predictable) than we
+            // lose from considering one additional element.
+            size -= half;
+        }
+```
+
 
 `base` は候補範囲の先頭、`size` はその長さです。真ん中 `mid = base + size/2` を比べ、
 
@@ -105,15 +194,31 @@ size=3 base=3 → mid=4 (9: Greater) → base=3, size=2
 size=2 base=3 → mid=4 (9: Greater) → base=3, size=1
 ```
 
-### 2. 最後に 1 回だけ比べる（3020〜3031 行目）
+### 2. 最後に 1 回だけ比べる
+
+```rust:line-numbers=3020
+        let cmp = f(unsafe { self.get_unchecked(base) });
+        if cmp == Equal {
+            // SAFETY: same as the `get_unchecked` above.
+            unsafe { hint::assert_unchecked(base < self.len()) };
+            Ok(base)
+        } else {
+            let result = base + (cmp == Less) as usize;
+            // SAFETY: same as the `get_unchecked` above.
+            // Note that this is `<=`, unlike the assume in the `Ok` path.
+            unsafe { hint::assert_unchecked(result <= self.len()) };
+            Err(result)
+        }
+```
+
 
 残った `base` の要素と比べ、一致なら `Ok(base)`。一致しなければ、要素が目的より小さいときは 1 つ右（`base + 1`）、大きいときは `base` を挿入位置として `Err` で返します。`8` を探すと最後に `7` と比べて `Less` なので `Err(4)` になります。
 
 ## ここがすごい
 
-- **ループ回数が入力の長さだけで決まる**: 2990〜2993 行目のコメントのとおり、一致で途中終了しないので、長さが同じなら毎回同じ回数だけ回ります。CPU はループの終わりを正確に予測できます。一致で早く抜けられる回は意外と少なく、予測が外れるコストのほうが大きいのです。
+- **ループ回数が入力の長さだけで決まる**: コメントのとおり、一致で途中終了しないので、長さが同じなら毎回同じ回数だけ回ります。CPU はループの終わりを正確に予測できます。一致で早く抜けられる回は意外と少なく、予測が外れるコストのほうが大きいのです。
 - **分岐をなくす**: 二分探索の「左か右か」は毎回ランダムに近く、CPU の分岐予測がほぼ当たりません。`hint::select_unpredictable` は「この選択は予測できない」とコンパイラに伝え、`if` の代わりに条件付き移動命令（`cmov` など、分岐せずに値を選ぶ命令）を使わせます。
-- **あえて不正確にする**: 3008〜3015 行目のコメントのとおり、`size` が奇数で `Greater` のとき、本当は除外できる要素が 1 つ範囲に残ります。それでもループ回数を一定に保つほうが得だという判断です。
+- **あえて不正確にする**: コメントのとおり、`size` が奇数で `Greater` のとき、本当は除外できる要素が 1 つ範囲に残ります。それでもループ回数を一定に保つほうが得だという判断です。
 - **境界チェックの省略を安全に**: `mid` が範囲内である理由を `SAFETY` コメントで示し、最後の `assert_unchecked` で戻り値の範囲をコンパイラに教えています。呼び出し側で `slice[i]` としたときの範囲チェックも消しやすくなります。
 
 ## まとめ

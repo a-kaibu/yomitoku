@@ -11,6 +11,7 @@ file: library/core/src/str/count.rs
 lines: [39, 108]
 function: do_count_chars
 difficulty: 3
+format: 2
 tags: [Unicode, 文字列処理, 最適化, ビット演算]
 ---
 
@@ -23,7 +24,82 @@ UTF-8 では 1 文字が 1〜4 バイトになります。ただし 2 バイト�
 
 ## コード
 
-```rust:line-numbers=39
+::: code-group
+
+```rust:line-numbers=39 [日本語訳]
+fn do_count_chars(s: &str) -> usize {
+    // 正しさのために、`CHUNK_SIZE` は次を満たす必要がある:
+    //
+    // - 255 以下。そうでないと `counts` のバイトがあふれる。
+    // - `UNROLL_INNER` の倍数。そうでないと、
+    //   `body.chunks(CHUNK_SIZE)` ループ内の `break` が正しくなくなる。
+    //
+    // 性能のために、`CHUNK_SIZE` は次であるとよい:
+    // - 割り算が安いこと（2 のべき乗の和など単純な形）。
+    // - `sum_bytes_in_usize` のコストを何度も払わないよう、十分大きいこと。
+    //
+    const CHUNK_SIZE: usize = 192;
+
+    // 正しさに必要な `CHUNK_SIZE` と `UNROLL_INNER` の性質を確認する。
+    //
+    const _: () = assert!(CHUNK_SIZE < 256);
+    const _: () = assert!(CHUNK_SIZE.is_multiple_of(UNROLL_INNER));
+
+    // SAFETY: `[u8]` を `[usize]` に読み替えるのは、大きさの違いを除けば安全で、
+    // 大きさの違いは `align_to` が扱う。
+    let (head, body, tail) = unsafe { s.as_bytes().align_to::<usize>() };
+
+    // これはめったに起きず、主に退化したケースを扱うためにある
+    // （`align_to` が失敗する場合や、Miri のシンボリックなアラインメントの場合）。
+    //
+    //
+    // `unlikely` は、LLVM が本体をインライン化しにくくするためのもの。
+    // `char_count_general_case` 関数を cold としてマークしたくないので、これは都合がよい。
+    //
+    if unlikely(body.is_empty() || head.len() > USIZE_SIZE || tail.len() > USIZE_SIZE) {
+        return char_count_general_case(s.as_bytes());
+    }
+
+    let mut total = char_count_general_case(head) + char_count_general_case(tail);
+    // `body` を `CHUNK_SIZE` のかたまりに分け、
+    // `sum_bytes_in_usize` を呼ぶ頻度を減らす。
+    for chunk in body.chunks(CHUNK_SIZE) {
+        // 途中の合計を `counts` に積み上げる。各バイトは
+        // このかたまりの合計の一部を持つ（`[u8; size_of::<usize>()]` のように）。
+        let mut counts = 0;
+
+        let (unrolled_chunks, remainder) = chunk.as_chunks::<UNROLL_INNER>();
+        for unrolled in unrolled_chunks {
+            for &word in unrolled {
+                // `CHUNK_SIZE` は 256 未満なので、この加算で
+                // どのバイトのカウントも次のバイトへあふれることはない。
+                counts += contains_non_continuation_byte(word);
+            }
+        }
+
+        // `counts` の値を合計する（これも概念的には `[u8;
+        // size_of::<usize>()]` である）、結果を `total` に加える。
+        total += sum_bytes_in_usize(counts);
+
+        // `remainder` にデータがあれば処理する。これは
+        // `body.chunks()` の最後のかたまりでだけ起きる（`CHUNK_SIZE` は
+        // `UNROLL_INNER` で割り切れるため）。だから最後に明示的に break する。
+        // （その方が LLVM が最適化しやすいため）。
+        if !remainder.is_empty() {
+            // Accumulate all the data in the remainder.
+            let mut counts = 0;
+            for &word in remainder {
+                counts += contains_non_continuation_byte(word);
+            }
+            total += sum_bytes_in_usize(counts);
+            break;
+        }
+    }
+    total
+}
+```
+
+```rust:line-numbers=39 [原文]
 fn do_count_chars(s: &str) -> usize {
     // For correctness, `CHUNK_SIZE` must be:
     //
@@ -96,6 +172,8 @@ fn do_count_chars(s: &str) -> usize {
 }
 ```
 
+:::
+
 ## 前提知識
 
 - **`&str` と UTF-8**: Rust の文字列 `&str` は、中身が必ず正しい UTF-8 のバイト列です。`as_bytes()` でそのバイト列 `&[u8]` を取り出せます。
@@ -107,27 +185,97 @@ fn do_count_chars(s: &str) -> usize {
 
 ## 何をしているか
 
-### 1. 3 分割する（59〜72 行目）
+### 1. 3 分割する
 
-`align_to` で `head`・`body`・`tail` に分けます。`head` と `tail` は高々数バイトなので、1 バイトずつ数える素朴な関数 `char_count_general_case` に任せます（72 行目）。
-万一 `body` が空だったりしたら、全体を素朴な方法で数えて終わりです（68〜70 行目）。`unlikely` は「ほぼ起きない」とコンパイラに伝える印です。
+```rust:line-numbers=59
+    let (head, body, tail) = unsafe { s.as_bytes().align_to::<usize>() };
 
-### 2. 192 ワードごとに区切る（75 行目）
+    // This should be quite rare, and basically exists to handle the degenerate
+    // cases where align_to fails (as well as miri under symbolic alignment
+    // mode).
+    //
+    // The `unlikely` helps discourage LLVM from inlining the body, which is
+    // nice, as we would rather not mark the `char_count_general_case` function
+    // as cold.
+    if unlikely(body.is_empty() || head.len() > USIZE_SIZE || tail.len() > USIZE_SIZE) {
+        return char_count_general_case(s.as_bytes());
+    }
+
+    let mut total = char_count_general_case(head) + char_count_general_case(tail);
+```
+
+
+`align_to` で `head`・`body`・`tail` に分けます。`head` と `tail` は高々数バイトなので、1 バイトずつ数える素朴な関数 `char_count_general_case` に任せます。
+万一 `body` が空だったりしたら、全体を素朴な方法で数えて終わりです。`unlikely` は「ほぼ起きない」とコンパイラに伝える印です。
+
+```rust:line-numbers=72
+    let mut total = char_count_general_case(head) + char_count_general_case(tail);
+```
+
+
+```rust:line-numbers=68
+    if unlikely(body.is_empty() || head.len() > USIZE_SIZE || tail.len() > USIZE_SIZE) {
+        return char_count_general_case(s.as_bytes());
+    }
+```
+
+
+### 2. 192 ワードごとに区切る
+
+```rust:line-numbers=75
+    for chunk in body.chunks(CHUNK_SIZE) {
+```
+
 
 `body`（`usize` の並び）を 192 個ずつに区切ります。それぞれの区切りで、`counts` という 1 個の `usize` を **8 個の 1 バイトカウンタの集まり** として使います。
 
-### 3. 1 ワードで 8 バイトぶんを判定して足す（80〜87 行目）
+### 3. 1 ワードで 8 バイトぶんを判定して足す
+
+```rust:line-numbers=80
+        let (unrolled_chunks, remainder) = chunk.as_chunks::<UNROLL_INNER>();
+        for unrolled in unrolled_chunks {
+            for &word in unrolled {
+                // Because `CHUNK_SIZE` is < 256, this addition can't cause the
+                // count in any of the bytes to overflow into a subsequent byte.
+                counts += contains_non_continuation_byte(word);
+            }
+        }
+```
+
 
 `contains_non_continuation_byte(word)` は、`word` の各バイトについて「継続バイトでなければ `0x01`、継続バイトなら `0x00`」を並べた値を返します。
 たとえば `"aあ"` の一部で `61 E3 81 82 ...` というバイトなら `01 01 00 00 ...` です。これを `counts` に足すと、8 個のカウンタが同時に 1 ずつ増えます。
 
-各カウンタは 1 回で最大 1 しか増えず、192 回足しても最大 192 です。1 バイト（最大 255）からあふれないので、隣のカウンタに繰り上がりません。これが 42 行目の「255 以下」の理由です。
+各カウンタは 1 回で最大 1 しか増えず、192 回足しても最大 192 です。1 バイト（最大 255）からあふれないので、隣のカウンタに繰り上がりません。これがの「255 以下」の理由です。
 
-### 4. 8 個のカウンタを合計する（91 行目）
+```rust:line-numbers=42
+    // - Less than or equal to 255, otherwise we'll overflow bytes in `counts`.
+```
+
+
+### 4. 8 個のカウンタを合計する
+
+```rust:line-numbers=91
+        total += sum_bytes_in_usize(counts);
+```
+
 
 `sum_bytes_in_usize(counts)` で 8 個のバイトを合計し、`total` に足します。これを 192 ワードに 1 回だけ行うので、合計の手間はほとんどかかりません。
 
-### 5. 端数の処理（97〜105 行目）
+### 5. 端数の処理
+
+```rust:line-numbers=97
+        if !remainder.is_empty() {
+            // Accumulate all the data in the remainder.
+            let mut counts = 0;
+            for &word in remainder {
+                counts += contains_non_continuation_byte(word);
+            }
+            total += sum_bytes_in_usize(counts);
+            break;
+        }
+```
+
 
 `as_chunks::<4>()` は 4 ワードずつの組とその余りに分けます。余りが出るのは最後の区切りだけなので、そこで処理して `break` します。
 
@@ -135,8 +283,8 @@ fn do_count_chars(s: &str) -> usize {
 
 - **「数えるべきもの」を言い換える**: 文字を 1 つずつデコードせず、「継続バイトでないバイトを数える」という単純な問題に置き換えています。
 - **1 つの整数に 8 個のカウンタ**: SWAR（SIMD Within A Register）と呼ばれる技法で、特別な命令なしに 8 バイトを同時に処理します。
-- **あふれる前にまとめる**: カウンタが 255 を超えないように 192 ワードごとに合計をとります。192 は 128 + 64 なので、割り算もシフトと足し算で安く済みます（46〜49 行目のコメント）。
-- **条件をコンパイル時に検査**: 54〜55 行目で、正しさに必要な条件を `const` のアサーションにしています。将来だれかが定数を変えても、壊れればコンパイルが止まります。
+- **あふれる前にまとめる**: カウンタが 255 を超えないように 192 ワードごとに合計をとります。192 は 128 + 64 なので、割り算もシフトと足し算で安く済みます（コメントのコメント）。
+- **条件をコンパイル時に検査**: コメントで、正しさに必要な条件を `const` のアサーションにしています。将来だれかが定数を変えても、壊れればコンパイルが止まります。
 - **4 個ずつのアンロール**: 内側のループを 4 ワード単位にすることで、コンパイラがループの制御を減らし、CPU が並列に計算しやすくなります。
 
 ## まとめ
