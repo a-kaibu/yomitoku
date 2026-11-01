@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Number.Formatting.cs
 lines: [1962, 1975]
 function: "Number.WriteDigits<TChar>"
 difficulty: 2
+format: 2
 tags: [文字列処理, 数値計算, ハック]
 ---
 
@@ -22,7 +23,26 @@ tags: [文字列処理, 数値計算, ハック]
 
 ## コード
 
-```csharp:line-numbers=1962
+::: code-group
+
+```csharp:line-numbers=1962 [日本語訳]
+        /// <summary><c>destination.Length</c> 桁ちょうどの <paramref name="value"/> を <paramref name="destination"/> に書き込む。</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void WriteDigits<TChar>(uint value, Span<TChar> destination) where TChar : unmanaged, IUtfChar<TChar>
+        {
+            int cur = destination.Length - 1;
+            while (cur > 0)
+            {
+                uint temp = '0' + value;
+                value /= 10;
+                destination[cur--] = TChar.CastFrom(temp - value * 10);
+            }
+            Debug.Assert(value < 10);
+            destination[0] = TChar.CastFrom('0' + value);
+        }
+```
+
+```csharp:line-numbers=1962 [原文]
         /// <summary>Writes exactly <c>destination.Length</c> digits for <paramref name="value"/> into <paramref name="destination"/>.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void WriteDigits<TChar>(uint value, Span<TChar> destination) where TChar : unmanaged, IUtfChar<TChar>
@@ -39,6 +59,8 @@ tags: [文字列処理, 数値計算, ハック]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Span<TChar> destination`**: 書き込み先の文字の並びです。`TChar` は `char`（UTF-16）か `byte`（UTF-8）で、ジェネリクスで両方に対応しています。
@@ -49,6 +71,18 @@ tags: [文字列処理, 数値計算, ハック]
 
 ## 何をしているか
 
+### 1. ループで右から 1 桁ずつ書く
+
+```csharp:line-numbers=1966
+            int cur = destination.Length - 1;
+            while (cur > 0)
+            {
+                uint temp = '0' + value;
+                value /= 10;
+                destination[cur--] = TChar.CastFrom(temp - value * 10);
+            }
+```
+
 長さ 4 の `destination` に `value = 42` を書く場合です。
 
 | cur | temp = '0' + value | value /= 10 | 書く文字 = temp − value × 10 |
@@ -57,13 +91,19 @@ tags: [文字列処理, 数値計算, ハック]
 | 2 | 48 + 4 = 52 | 0 | 52 − 0 = 52 = `'4'` |
 | 1 | 48 + 0 = 48 | 0 | 48 = `'0'` |
 
+### 2. 先頭の桁を書く
+
+```csharp:line-numbers=1974
+            destination[0] = TChar.CastFrom('0' + value);
+```
+
 ループを抜けたら、残った `value`（0）を `'0' + 0` として先頭に書きます。結果は `"0042"` です。
 
 ## ここがすごい
 
 - **% を使わない**: ふつうは `'0' + value % 10` と `value / 10` の 2 回、割り算系の演算をします。この関数は `value / 10` の 1 回だけで、余りは「元の値 − 商 × 10」という掛け算と引き算で求めます。定数 10 での割り算は JIT が掛け算に置き換えますが、それでも `/` と `%` を別々に書くより命令が減ります。
 - **'0' を先に足しておく**: `temp = '0' + value` としておけば、`temp − 商 × 10` がそのまま「余りの文字」になります。「余りを求めてから '0' を足す」という足し算を 1 回省けます。小さな工夫ですが、書式化のように何度も呼ばれる場所では効きます。
-- **最後の桁はループの外**: 先頭の桁（`cur == 0`）ではもう割る必要がないので、ループの外で `'0' + value` を書くだけにしています。1973 行目の `Debug.Assert(value < 10)` で、「桁数が足りない値を渡していない」ことを確かめています。
+- **最後の桁はループの外**: 先頭の桁（`cur == 0`）ではもう割る必要がないので、ループの外で `'0' + value` を書くだけにしています。`Debug.Assert(value < 10)` で、「桁数が足りない値を渡していない」ことを確かめています。
 
 ## まとめ
 

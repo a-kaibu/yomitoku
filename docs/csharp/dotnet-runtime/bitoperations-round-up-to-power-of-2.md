@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Numerics/BitOperations.cs
 lines: [95, 117]
 function: "BitOperations.RoundUpToPowerOf2(uint)"
 difficulty: 2
+format: 2
 tags: [ビット演算, 最適化, 標準ライブラリ]
 ---
 
@@ -23,7 +24,35 @@ tags: [ビット演算, 最適化, 標準ライブラリ]
 
 ## コード
 
-```csharp:line-numbers=95
+::: code-group
+
+```csharp:line-numbers=95 [日本語訳]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CLSCompliant(false)]
+        public static uint RoundUpToPowerOf2(uint value)
+        {
+            if (X86Base.IsSupported || ArmBase.IsSupported || WasmBase.IsSupported)
+            {
+#if TARGET_64BIT
+                return (uint)(0x1_0000_0000ul >> LeadingZeroCount(value - 1));
+#else
+                int shift = 32 - LeadingZeroCount(value - 1);
+                return (1u ^ (uint)(shift >> 5)) << shift;
+#endif
+            }
+
+            // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 に基づく
+            --value;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            return value + 1;
+        }
+```
+
+```csharp:line-numbers=95 [原文]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CLSCompliant(false)]
         public static uint RoundUpToPowerOf2(uint value)
@@ -49,6 +78,8 @@ tags: [ビット演算, 最適化, 標準ライブラリ]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`uint`**: C# の「符号なし 32 ビット整数」です。0 から約 42 億までを表せます。`ulong` は 64 ビット版です。
@@ -61,14 +92,26 @@ tags: [ビット演算, 最適化, 標準ライブラリ]
 
 ## 何をしているか
 
-### 1. CPU 命令がある場合（99〜107 行目）
+### 1. CPU 命令がある場合
+
+```csharp:line-numbers=99
+            if (X86Base.IsSupported || ArmBase.IsSupported || WasmBase.IsSupported)
+            {
+#if TARGET_64BIT
+                return (uint)(0x1_0000_0000ul >> LeadingZeroCount(value - 1));
+#else
+                int shift = 32 - LeadingZeroCount(value - 1);
+                return (1u ^ (uint)(shift >> 5)) << shift;
+#endif
+            }
+```
 
 x86・Arm・WebAssembly では、先頭のゼロを数える命令（`LZCNT` など）が使えます。考え方はこうです。
 
 - `value - 1` の先頭ゼロの数を `n` とすると、`value - 1` は 32 − n ビットで書ける数です。
 - すると答えは 2^(32 − n) です。
 
-64 ビット環境では、これを **`2³² >> n`** と 1 回のシフトで計算しています（102 行目）。`value = 5` で追うと:
+64 ビット環境では、これを **`2³² >> n`** と 1 回のシフトで計算しています。`value = 5` で追うと:
 
 ```
 value - 1 = 4 = 000…0100   → 先頭ゼロ n = 29
@@ -77,14 +120,30 @@ value - 1 = 4 = 000…0100   → 先頭ゼロ n = 29
 
 `value = 8` なら `value - 1 = 7`（`0111`）で n = 29、やはり 8 になります。最初に 1 を引いておくことで「すでに 2 のべき乗なら、そのまま返す」がうまく実現できています。
 
-### 2. 32 ビット環境での工夫（104〜105 行目）
+### 2. 32 ビット環境での工夫
+
+```csharp:line-numbers=104
+                int shift = 32 - LeadingZeroCount(value - 1);
+                return (1u ^ (uint)(shift >> 5)) << shift;
+```
 
 32 ビット環境では 64 ビットの `2³²` を気軽に使えないので、`shift = 32 - n` を求めて `1u << shift` を作ります。
 ただし C#（と x86 CPU）のシフトは **シフト量の下位 5 ビットしか見ない** ため、`shift == 32` のとき `1u << 32` は 0 ではなく 1 になってしまいます。
 
 そこで `(1u ^ (uint)(shift >> 5))` という式を使います。`shift` が 32 のときだけ `shift >> 5` が 1 になり、`1 ^ 1 = 0` で結果を 0 にできます。分岐（if）を使わずに、ドキュメントにある「あふれたら 0 を返す」という約束を守っています。
 
-### 3. CPU 命令がない場合（109〜116 行目）
+### 3. CPU 命令がない場合
+
+```csharp:line-numbers=109
+            // https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2 に基づく
+            --value;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            return value + 1;
+```
 
 有名な「Bit Twiddling Hacks」の方法です。`value = 100` で追ってみます。
 

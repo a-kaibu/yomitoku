@@ -11,6 +11,7 @@ file: src/libraries/System.Collections/src/System/Collections/Generic/PriorityQu
 lines: [350, 388]
 function: "PriorityQueue<TElement, TPriority>.EnqueueDequeue"
 difficulty: 2
+format: 2
 tags: [データ構造, アルゴリズム, API設計]
 ---
 
@@ -23,7 +24,51 @@ tags: [データ構造, アルゴリズム, API設計]
 
 ## コード
 
-```csharp:line-numbers=350
+::: code-group
+
+```csharp:line-numbers=350 [日本語訳]
+        ///  指定した要素と優先度を <see cref="PriorityQueue{TElement, TPriority}"/> に追加し、
+        ///  最小の要素をすぐに取り出して返す。
+        /// </summary>
+        /// <param name="element"><see cref="PriorityQueue{TElement, TPriority}"/> に追加する要素。</param>
+        /// <param name="priority">新しい要素に関連付ける優先度。</param>
+        /// <returns>enqueue のあとに取り除かれた最小の要素。</returns>
+        /// <remarks>
+        ///  挿入してから取り出すヒープ操作を実装しており、一般に
+        ///  Enqueue と Dequeue を続けて行うより効率的で、最悪の場合でも
+        ///  shift-down 操作は 1 回で済む。
+        /// </remarks>
+        public TElement EnqueueDequeue(TElement element, TPriority priority)
+        {
+            if (_size != 0)
+            {
+                (TElement Element, TPriority Priority) root = _nodes[0];
+
+                if (_comparer == null)
+                {
+                    if (Comparer<TPriority>.Default.Compare(priority, root.Priority) > 0)
+                    {
+                        MoveDownDefaultComparer((element, priority), 0);
+                        _version++;
+                        return root.Element;
+                    }
+                }
+                else
+                {
+                    if (_comparer.Compare(priority, root.Priority) > 0)
+                    {
+                        MoveDownCustomComparer((element, priority), 0);
+                        _version++;
+                        return root.Element;
+                    }
+                }
+            }
+
+            return element;
+        }
+```
+
+```csharp:line-numbers=350 [原文]
         ///  Adds the specified element with associated priority to the <see cref="PriorityQueue{TElement, TPriority}"/>,
         ///  and immediately removes the minimal element, returning the result.
         /// </summary>
@@ -65,6 +110,8 @@ tags: [データ構造, アルゴリズム, API設計]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **優先度付きキューとヒープ**: `PriorityQueue` は優先度がいちばん小さい要素を先に取り出すキューです。内部は「親の優先度 ≤ 子の優先度」を保つヒープで、配列の先頭 `_nodes[0]` が常に最小です。
@@ -76,15 +123,24 @@ tags: [データ構造, アルゴリズム, API設計]
 
 ## 何をしているか
 
-### 1. キューが空なら、入れた値をそのまま返す（363, 387 行目）
+### 1. キューが空なら、入れた値をそのまま返す
 
 空のキューに入れてすぐ取り出せば、出てくるのは入れた値です。ヒープには何もしません。
 
-### 2. 新しい値が根以下なら、そのまま返す（369 行目の条件が偽の場合）
+### 2. 新しい値が根以下なら、そのまま返す（条件が偽の場合）
 
 新しい値の優先度が、今の最小（根）以下なら、追加したとしても次に出てくるのは新しい値自身です。なので **ヒープを一切触らずに** 新しい値を返します。
 
-### 3. 新しい値が根より大きければ、根と入れ替えて沈める（369〜374 行目）
+### 3. 新しい値が根より大きければ、根と入れ替えて沈める
+
+```csharp:line-numbers=369
+                    if (Comparer<TPriority>.Default.Compare(priority, root.Priority) > 0)
+                    {
+                        MoveDownDefaultComparer((element, priority), 0);
+                        _version++;
+                        return root.Element;
+                    }
+```
 
 この場合、出ていくのは今の根です。根の場所に新しい値を置いたつもりで `MoveDown` し、もとの根の要素を返します。
 
@@ -92,7 +148,7 @@ tags: [データ構造, アルゴリズム, API設計]
 
 ## ここがすごい
 
-- **操作を 1 回の沈め込みにまとめる**: `Enqueue` してから `Dequeue` すると、末尾に追加して浮かび上がらせ（MoveUp）、根を取り出して末尾の要素を沈める（MoveDown）、と 2 回木をたどります。この関数は最悪でも MoveDown 1 回です（357〜359 行目のコメント）。
+- **操作を 1 回の沈め込みにまとめる**: `Enqueue` してから `Dequeue` すると、末尾に追加して浮かび上がらせ（MoveUp）、根を取り出して末尾の要素を沈める（MoveDown）、と 2 回木をたどります。この関数は最悪でも MoveDown 1 回です（コメント）。
 - **何もしないで済む場合を最初に見抜く**: 新しい値が最小なら、ヒープに触れずに返します。「すでに k 件持っていて、新しい値が k 件のどれよりも小さい」ような場合、ほとんどの呼び出しがこの道で終わり、とても速くなります。
 - **要素数が変わらない**: 1 つ入れて 1 つ出すので、配列のサイズも `_size` も変わりません。配列を広げる処理や、末尾の要素を消す処理が要りません。
 - **Python の heapq.heappushpop と同じ考え方**: ヒープを使う多くのライブラリに、同じ目的の関数があります。よく使われる組み合わせ操作を専用の API にすると、使う側は意識せずに速さを得られます。

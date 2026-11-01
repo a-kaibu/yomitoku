@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/DateTime.cs
 lines: [1348, 1374]
 function: "DateTime.GetDate"
 difficulty: 3
+format: 2
 tags: [日時, 数値計算, アルゴリズム]
 ---
 
@@ -19,11 +20,43 @@ tags: [日時, 数値計算, アルゴリズム]
 `GetDate` は、`DateTime` が内部に持っている「西暦 1 年 1 月 1 日からの時間」から、**年・月・日** を求める関数です。
 うるう年や月ごとの日数の違いがあるので、素直に書くと「1 年ずつ引いていく」「月の日数表と比べる」といった処理になりがちですが、この関数は **ほぼ掛け算とシフトだけ** で 3 つを同時に出します。
 
-1352〜1353 行目のコメントにある通り、Cassio Neri と Lorenz Schneider による 2021 年の論文の手法が使われています。
+コメントにある通り、Cassio Neri と Lorenz Schneider による 2021 年の論文の手法が使われています。
 
 ## コード
 
-```csharp:line-numbers=1348
+::: code-group
+
+```csharp:line-numbers=1348 [日本語訳]
+        // Year・Month・Day プロパティと同じ結果だが、
+        // 1 つだけでなく年・月・日を一度に計算する。
+        // 3 つすべてが必要なとき、それぞれを計算し直さないために使う。
+        //
+        // 実装は次の論文に基づく: https://arxiv.org/pdf/2102.06959.pdf
+        //   Cassio Neri, Lorenz Schneider - Euclidean Affine Functions and Applications to Calendar Algorithms - 2021（論文題名）
+        internal void GetDate(out int year, out int month, out int day) => GetDate(_dateData, out year, out month, out day);
+        private static void GetDate(ulong dateData, out int year, out int month, out int day)
+        {
+            // y100 = 3/1/0000 からの 100 年単位の数
+            // r1 = 100 年周期の中での日数 × 4
+            (uint y100, uint r1) = Math.DivRem(((uint)((dateData & TicksMask) / TicksPer6Hours) | 3U) + 1224, DaysPer400Years);
+            ulong u2 = Math.BigMul(EafMultiplier, r1 | 3U);
+            uint daySinceMarch1 = (uint)u2 / EafDivider;
+            uint n3 = 2141 * daySinceMarch1 + 197913;
+            year = (int)(100 * y100 + (uint)(u2 >> 32));
+            // 月と日を計算する
+            month = (int)(n3 >> 16);
+            day = (ushort)n3 / 2141 + 1;
+
+            // 12 月 31 日からの繰り上がり
+            if (daySinceMarch1 >= March1BasedDayOfNewYear)
+            {
+                ++year;
+                month -= 12;
+            }
+        }
+```
+
+```csharp:line-numbers=1348 [原文]
         // Exactly the same as Year, Month, Day properties, except computing all of
         // year/month/day rather than just one of them. Used when all three
         // are needed rather than redoing the computations for each.
@@ -53,13 +86,16 @@ tags: [日時, 数値計算, アルゴリズム]
         }
 ```
 
-使われている定数は同じファイルで次のように定義されています（102〜106 行目など）。
+:::
 
-```csharp
-private const uint EafMultiplier = (uint)(((1UL << 32) + DaysPer4Years - 1) / DaysPer4Years);   // 2,939,745
-private const uint EafDivider = EafMultiplier * 4;                                              // 11,758,980
-private const ulong TicksPer6Hours = TimeSpan.TicksPerHour * 6;
-private const int March1BasedDayOfNewYear = 306;              // Days between March 1 and January 1
+使われている定数は同じファイルで次のように定義されています。
+
+```csharp:line-numbers=102
+        private const uint EafMultiplier = (uint)(((1UL << 32) + DaysPer4Years - 1) / DaysPer4Years);   // 2,939,745
+        private const uint EafDivider = EafMultiplier * 4;                                              // 11,758,980
+
+        private const ulong TicksPer6Hours = TimeSpan.TicksPerHour * 6;
+        private const int March1BasedDayOfNewYear = 306;              // Days between March 1 and January 1
 ```
 
 ## 前提知識
@@ -72,21 +108,40 @@ private const int March1BasedDayOfNewYear = 306;              // Days between Ma
 
 ## 何をしているか
 
-### 1. 3 月 1 日始まりの暦に置き換える（1359 行目）
+### 1. 3 月 1 日始まりの暦に置き換える
+
+```csharp:line-numbers=1359
+            (uint y100, uint r1) = Math.DivRem(((uint)((dateData & TicksMask) / TicksPer6Hours) | 3U) + 1224, DaysPer400Years);
+```
 
 うるう日（2 月 29 日）が「年の最後」に来るよう、**3 月 1 日を年の始まり** とみなします。そうすると月の日数は 31, 30, 31, 30, 31, 31, 30, 31, 30, 31, 31, (28 か 29) と規則的になり、うるう年の影響は最後の月だけに閉じ込められます。
 
 tick を 6 時間単位にすると「日数 × 4 + 時刻」になり、`| 3` で時刻の部分をそろえます。`+ 1224`（= 306 × 4）は、西暦 0 年 3 月 1 日から 1 年 1 月 1 日までの 306 日ぶんです。これを 400 年の日数（146097）で割ると、商が「100 年単位の数」、余りが「その 100 年の中での位置 × 4」になります。
 
-### 2. 100 年の中の年と日を 1 回の掛け算で（1360〜1363 行目）
+### 2. 100 年の中の年と日を 1 回の掛け算で
+
+```csharp:line-numbers=1360
+            ulong u2 = Math.BigMul(EafMultiplier, r1 | 3U);
+            uint daySinceMarch1 = (uint)u2 / EafDivider;
+            uint n3 = 2141 * daySinceMarch1 + 197913;
+            year = (int)(100 * y100 + (uint)(u2 >> 32));
+```
 
 4 年の日数（1461）の逆数を固定小数点で表した `EafMultiplier` を掛けると、64 ビットの結果の **上位 32 ビットに「何年目か」、下位 32 ビットに「その年の中の位置」** が入ります。下位を `EafDivider` で割ると、3 月 1 日から何日目か（`daySinceMarch1`）がわかります。
 
-### 3. 月と日を 1 つの式で（1362, 1365〜1366 行目）
+### 3. 月と日を 1 つの式で
 
 `n3 = 2141 × 日 + 197913` の上位 16 ビットが月、下位 16 ビットを 2141 で割ったものが日になります。3 月 1 日（日 = 0）なら `n3 = 197913`、`197913 >> 16 = 3`（3 月）、下位は 1305 で `1305 / 2141 = 0`、つまり 1 日です。
 
-### 4. 1 月と 2 月の補正（1369〜1373 行目）
+### 4. 1 月と 2 月の補正
+
+```csharp:line-numbers=1369
+            if (daySinceMarch1 >= March1BasedDayOfNewYear)
+            {
+                ++year;
+                month -= 12;
+            }
+```
 
 3 月始まりの暦では 1 月・2 月は「13 月・14 月」として出てくるので、306 日目（1 月 1 日）以降なら年を 1 つ進め、月から 12 を引きます。
 

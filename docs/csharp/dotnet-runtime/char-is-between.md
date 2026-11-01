@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Char.cs
 lines: [376, 387]
 function: "char.IsBetween"
 difficulty: 1
+format: 2
 tags: [イディオム, 最適化, 文字列処理]
 ---
 
@@ -23,7 +24,24 @@ tags: [イディオム, 最適化, 文字列処理]
 
 ## コード
 
-```csharp:line-numbers=376
+::: code-group
+
+```csharp:line-numbers=376 [日本語訳]
+        /// <summary>文字が指定した範囲（両端を含む）に入っているかを示す。</summary>
+        /// <param name="c">評価する文字。</param>
+        /// <param name="minInclusive">下限（含む）。</param>
+        /// <param name="maxInclusive">上限（含む）。</param>
+        /// <returns>c が範囲内なら true、そうでなければ false。</returns>
+        /// <remarks>
+        /// このメソッドは maxInclusive が minInclusive 以上かを検査しない。
+        /// maxInclusive が minInclusive より小さいと、
+        /// 動作は未定義になる。
+        /// </remarks>
+        public static bool IsBetween(char c, char minInclusive, char maxInclusive) =>
+            (uint)(c - minInclusive) <= (uint)(maxInclusive - minInclusive);
+```
+
+```csharp:line-numbers=376 [原文]
         /// <summary>Indicates whether a character is within the specified inclusive range.</summary>
         /// <param name="c">The character to evaluate.</param>
         /// <param name="minInclusive">The lower bound, inclusive.</param>
@@ -38,6 +56,8 @@ tags: [イディオム, 最適化, 文字列処理]
             (uint)(c - minInclusive) <= (uint)(maxInclusive - minInclusive);
 ```
 
+:::
+
 ## 前提知識
 
 - **`char`**: 16 ビットの文字型です。中身は数値なので、`c - min` のように引き算ができます。結果は `int`（32 ビット符号付き整数）になります。
@@ -47,11 +67,20 @@ tags: [イディオム, 最適化, 文字列処理]
 
 ## 何をしているか
 
+### 1. 具体的な値で追う
+
+```csharp:line-numbers=386
+        public static bool IsBetween(char c, char minInclusive, char maxInclusive) =>
+            (uint)(c - minInclusive) <= (uint)(maxInclusive - minInclusive);
+```
+
 `min = '0'`（48）、`max = '9'`（57）として、右辺の `(uint)(max - min)` は 9 です。
 
 - `c = '5'`（53）: `c - min = 5` → `5 <= 9` → **true**。
 - `c = 'x'`（120）: `c - min = 72` → `72 <= 9` → **false**（上限を超えている）。
 - `c = ' '`（空白、32）: `c - min = −16` → `(uint)` で 4294967280 → `<= 9` は **false**（下限を下回っている）。
+
+### 2. なぜ比較 1 回で済むのか
 
 つまり、
 
@@ -64,7 +93,7 @@ tags: [イディオム, 最適化, 文字列処理]
 
 - **比較を 1 回にする**: `c >= min && c <= max` は 2 回の比較と、場合によっては分岐（`&&` の短絡評価）が必要です。この書き方は「引き算 1 回 + 比較 1 回」で、分岐が生まれません。
 - **広く使われるイディオム**: .NET の標準ライブラリには、`(uint)index < (uint)length` で配列の添字が範囲内か確かめるなど、同じ考え方の書き方がたくさんあります。JIT コンパイラ自身も、`c >= 'a' && c <= 'z'` のような 2 回の比較を、この形に変換することがあります。
-- **ドキュメントで前提を明記**: 382〜384 行目のコメントの通り、`max < min` のときの動作は未定義としています。チェックを入れると遅くなるので、呼び出し側の責任にして、その代わりにきちんと書き残しています。
+- **ドキュメントで前提を明記**: コメントの通り、`max < min` のときの動作は未定義としています。チェックを入れると遅くなるので、呼び出し側の責任にして、その代わりにきちんと書き残しています。
 - **`char` から `int` への自動拡張を利用**: `c - minInclusive` は `int` で計算されるので、`char` の範囲（0〜65535）の引き算は必ず正しい結果になり、オーバーフローの心配がありません。
 
 ## まとめ

@@ -11,6 +11,7 @@ file: src/libraries/Common/src/System/Collections/HashHelpers.cs
 lines: [68, 106]
 function: "HashHelpers.GetPrime"
 difficulty: 2
+format: 2
 tags: [探索, ハッシュ, 最適化]
 ---
 
@@ -19,11 +20,55 @@ tags: [探索, ハッシュ, 最適化]
 `GetPrime(min)` は、**`min` 以上で最小の素数** を返す関数です。`Dictionary` や `HashSet` が内部配列の大きさを決めるときに使います。
 `GetPrime(10)` は `11`、`GetPrime(100)` は `107`（表にある素数のうち 100 以上で最小のもの）を返します。
 
-あらかじめ用意した素数の表（32〜39 行目の `Primes`）を引くのが基本ですが、**小さい値と大きい値で探し方を変えて** います。
+あらかじめ用意した素数の表（`Primes`）を引くのが基本ですが、**小さい値と大きい値で探し方を変えて** います。
 
 ## コード
 
-```csharp:line-numbers=68
+::: code-group
+
+```csharp:line-numbers=68 [日本語訳]
+        public static int GetPrime(int min)
+        {
+            if (min < 0)
+            {
+                throw new ArgumentException(SR.Arg_HTCapacityOverflow);
+            }
+
+            if (min <= MinPrime)
+            {
+                return MinPrime;
+            }
+
+            // 小さい容量では、短い線形探索のほうが速い。
+            const int LinearSearchCount = 16;
+
+            ReadOnlySpan<int> primes = Primes;
+            if (min <= primes[LinearSearchCount - 1])
+            {
+                for (int i = 1; i < LinearSearchCount; i++)
+                {
+                    if (primes[i] >= min)
+                    {
+                        return primes[i];
+                    }
+                }
+            }
+            else
+            {
+                int index = primes.Slice(LinearSearchCount).BinarySearch(min);
+                index = index < 0 ? ~index : index;
+                index += LinearSearchCount;
+                if ((uint)index < (uint)primes.Length)
+                {
+                    return primes[index];
+                }
+            }
+
+            return GetPrimeAtLeastCore(min);
+        }
+```
+
+```csharp:line-numbers=68 [原文]
         public static int GetPrime(int min)
         {
             if (min < 0)
@@ -65,6 +110,8 @@ tags: [探索, ハッシュ, 最適化]
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`throw new ArgumentException(...)`**: 例外（エラー）を投げて処理を中断します。`SR.Arg_HTCapacityOverflow` はエラーメッセージの文字列リソースです。
@@ -75,28 +122,73 @@ tags: [探索, ハッシュ, 最適化]
 
 ## 何をしているか
 
-### 1. 範囲外と小さい値（70〜78 行目）
+### 1. 範囲外と小さい値
+
+```csharp:line-numbers=70
+            if (min < 0)
+            {
+                throw new ArgumentException(SR.Arg_HTCapacityOverflow);
+            }
+
+            if (min <= MinPrime)
+            {
+                return MinPrime;
+            }
+```
 
 負の値はエラー、3 以下なら最小の素数 3 を返します。
 
-### 2. 表の先頭 16 個の範囲なら線形探索（81〜93 行目）
+### 2. 表の先頭 16 個の範囲なら線形探索
+
+```csharp:line-numbers=81
+            const int LinearSearchCount = 16;
+
+            ReadOnlySpan<int> primes = Primes;
+            if (min <= primes[LinearSearchCount - 1])
+            {
+                for (int i = 1; i < LinearSearchCount; i++)
+                {
+                    if (primes[i] >= min)
+                    {
+                        return primes[i];
+                    }
+                }
+            }
+```
 
 `primes[15]` は `239` です。`min` が 239 以下なら、表の頭から順に見て最初に `min` 以上になった素数を返します。
-`min = 10` なら `3, 7, 11` と見て `11` を返します（ループは `i = 1` から。`primes[0] = 3` は 75 行目で処理済みだから）。
+`min = 10` なら `3, 7, 11` と見て `11` を返します（ループは `i = 1` から。`primes[0] = 3` は直前の if で処理済みだから）。
 
-### 3. それより大きければ二分探索（94〜103 行目）
+### 3. それより大きければ二分探索
+
+```csharp:line-numbers=94
+            else
+            {
+                int index = primes.Slice(LinearSearchCount).BinarySearch(min);
+                index = index < 0 ? ~index : index;
+                index += LinearSearchCount;
+                if ((uint)index < (uint)primes.Length)
+                {
+                    return primes[index];
+                }
+            }
+```
 
 表の 16 番目以降を `Slice` で切り出して二分探索します。`min = 300` なら、ちょうど 300 はないので「293 と 353 の間」を示す負の数が返り、`~` で位置に戻すと 353 の位置になります。最後に切り出した分の 16 を足して元の表の添字に戻します。
 
-### 4. 表を超えたら計算で探す（105 行目）
+### 4. 表を超えたら計算で探す
+
+```csharp:line-numbers=105
+            return GetPrimeAtLeastCore(min);
+```
 
 表の最大値 `7199369` より大きい `min` は、`GetPrimeAtLeastCore` で 1 つずつ素数判定して探します。
 
 ## ここがすごい
 
-- **よく使う範囲を特別扱い**: 80 行目のコメントの通り、ハッシュ表の多くは小さいので、要素数 16 程度なら二分探索より単純なループのほうが速いという判断です。分岐予測が当たりやすく、メモリも連続して読めます。
-- **BinarySearch の「見つからなかったら ~位置」**: .NET の伝統的な API の約束をうまく使い、ちょうど一致する場合と挿入位置の場合を 1 行（97 行目）で同じに扱っています。
-- **表の作り方に意味がある**: 19〜31 行目のコメントによれば、表の素数はおおむね前の値の 1.2 倍ずつ大きくなるように並んでいます。容量を倍にしたいときは、2 倍した値で GetPrime を呼べば、その近くの素数が見つかります。
+- **よく使う範囲を特別扱い**: コメントの通り、ハッシュ表の多くは小さいので、要素数 16 程度なら二分探索より単純なループのほうが速いという判断です。分岐予測が当たりやすく、メモリも連続して読めます。
+- **BinarySearch の「見つからなかったら ~位置」**: .NET の伝統的な API の約束をうまく使い、ちょうど一致する場合と挿入位置の場合を 1 行で同じに扱っています。
+- **表の作り方に意味がある**: コメントによれば、表の素数はおおむね前の値の 1.2 倍ずつ大きくなるように並んでいます。容量を倍にしたいときは、2 倍した値で GetPrime を呼べば、その近くの素数が見つかります。
 - **表に頼りすぎない**: 表は 72 個で済ませ、それを超える巨大なサイズは計算で求めます。DLL のサイズとスピードのバランスをとっています。
 
 ## まとめ

@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/Queue.
 lines: [310, 331]
 function: "Queue<T>.SetCapacity"
 difficulty: 1
+format: 2
 tags: [データ構造, メモリ管理]
 ---
 
@@ -63,11 +64,26 @@ tags: [データ構造, メモリ管理]
 中身: [C, D, A, B]     取り出す順番は A, B, C, D
 ```
 
-### 1. 折り返していないとき（316〜319 行目）
+### 1. 折り返していないとき
+
+```csharp:line-numbers=316
+                if (_head < _tail)
+                {
+                    Array.Copy(_array, _head, newarray, 0, _size);
+                }
+```
 
 `_head < _tail` なら、要素は `_head` から一続きに並んでいるので、1 回のコピーで済みます。
 
-### 2. 折り返しているとき（320〜324 行目）
+### 2. 折り返しているとき
+
+```csharp:line-numbers=320
+                else
+                {
+                    Array.Copy(_array, _head, newarray, 0, _array.Length - _head);
+                    Array.Copy(_array, 0, newarray, _array.Length - _head, _tail);
+                }
+```
 
 `_head` 以降の部分（A, B）をまず新しい配列の先頭に写し、続けて配列の先頭から `_tail` までの部分（C, D）を写します。
 
@@ -75,9 +91,16 @@ tags: [データ構造, メモリ管理]
 新しい配列（長さ 8）: [A, B, C, D, _, _, _, _]
 ```
 
-### 3. 位置を更新（327〜330 行目）
+### 3. 位置を更新
 
-`_head` は 0 に、`_tail` は要素数（4）になります。ただし、新しい容量と要素数が同じ（満杯）なら、次に追加する位置は輪を一周した 0 です。329 行目はこの境界の場合を扱っています。
+```csharp:line-numbers=327
+            _array = newarray;
+            _head = 0;
+            _tail = (_size == capacity) ? 0 : _size;
+            _version++;
+```
+
+`_head` は 0 に、`_tail` は要素数（4）になります。ただし、新しい容量と要素数が同じ（満杯）なら、次に追加する位置は輪を一周した 0 です。最後の三項演算子はこの境界の場合を扱っています。
 
 ## ここがすごい
 

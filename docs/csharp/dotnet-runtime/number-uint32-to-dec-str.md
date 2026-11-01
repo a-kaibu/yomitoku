@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Number.Formatting.cs
 lines: [1977, 1996]
 function: "Number.UInt32ToDecStr(uint)"
 difficulty: 2
+format: 2
 tags: [キャッシュ, 文字列処理, メモリ管理]
 ---
 
@@ -22,7 +23,32 @@ tags: [キャッシュ, 文字列処理, メモリ管理]
 
 ## コード
 
-```csharp:line-numbers=1977
+::: code-group
+
+```csharp:line-numbers=1977 [日本語訳]
+        internal static string UInt32ToDecStr(uint value)
+        {
+            // 小さい数なら、遅延初期化されたキャッシュを参照する。
+            if (value < SmallNumberCacheLength)
+            {
+                return UInt32ToDecStrForKnownSmallNumber(value);
+            }
+
+            return UInt32ToDecStr_NoSmallNumberCheck(value);
+        }
+
+        internal static string UInt32ToDecStrForKnownSmallNumber(uint value)
+        {
+            Debug.Assert(value < SmallNumberCacheLength);
+            return SmallNumberCache.Value[value] ?? CreateAndCacheString(value);
+
+            [MethodImpl(MethodImplOptions.NoInlining)] // めったに使われないので、高速パスから外しておく。
+            static string CreateAndCacheString(uint value) =>
+                SmallNumberCache.Value[value] = UInt32ToDecStr_NoSmallNumberCheck(value);
+        }
+```
+
+```csharp:line-numbers=1977 [原文]
         internal static string UInt32ToDecStr(uint value)
         {
             // For small numbers, consult a lazily-populated cache.
@@ -45,13 +71,16 @@ tags: [キャッシュ, 文字列処理, メモリ管理]
         }
 ```
 
-キャッシュの配列と大きさは同じファイルの 258〜277 行目で定義されています（CoreCLR では 300、Mono では 10）。
+:::
 
-```csharp
-private static class SmallNumberCache
-{
-    internal static readonly string?[] Value = new string[SmallNumberCacheLength];
-}
+キャッシュの配列と大きさは同じファイルで定義されています（CoreCLR では 300、Mono では 10）。
+
+```csharp:line-numbers=273
+        private static class SmallNumberCache
+        {
+            /// <summary>Lazily-populated cache of strings for uint values in the range [0, <see cref="SmallNumberCacheLength"/>).</summary>
+            internal static readonly string?[] Value = new string[SmallNumberCacheLength];
+        }
 ```
 
 ## 前提知識
@@ -61,25 +90,40 @@ private static class SmallNumberCache
 - **`string?`**: `null` になりうる文字列、という型の注釈です。キャッシュの配列は最初すべて `null` です。
 - **`??`（null 合体演算子）**: `a ?? b` は、a が null でなければ a、null なら b を評価して返します。
 - **静的クラスの中の `static readonly` 配列**: `SmallNumberCache` クラスに初めて触れたときに 1 回だけ作られます（型の初期化）。数値を文字列にしないプログラムでは、配列すら作られません。
-- **ローカル関数と `[MethodImpl(MethodImplOptions.NoInlining)]`**: 1994 行目の `CreateAndCacheString` は関数の中の関数です。インライン化を禁止して、めったに通らない処理を本体から追い出しています。
+- **ローカル関数と `[MethodImpl(MethodImplOptions.NoInlining)]`**: `CreateAndCacheString` は関数の中の関数です。インライン化を禁止して、めったに通らない処理を本体から追い出しています。
 
 ## 何をしているか
 
-### 1. 小さい数ならキャッシュへ（1980〜1983 行目）
+### 1. 小さい数ならキャッシュへ
+
+```csharp:line-numbers=1980
+            if (value < SmallNumberCacheLength)
+            {
+                return UInt32ToDecStrForKnownSmallNumber(value);
+            }
+```
 
 `value = 200` なら 300 未満なので、`UInt32ToDecStrForKnownSmallNumber` に進みます。
 
-### 2. 覚えていれば返す、なければ作って覚える（1991 行目）
+### 2. 覚えていれば返す、なければ作って覚える
+
+```csharp:line-numbers=1991
+            return SmallNumberCache.Value[value] ?? CreateAndCacheString(value);
+```
 
 `SmallNumberCache.Value[200]` を見て、すでに `"200"` があればそれを返します。`null` なら `CreateAndCacheString` で文字列を作り、配列に入れてから返します。
 
-### 3. 大きい数はふつうに作る（1985 行目）
+### 3. 大きい数はふつうに作る
+
+```csharp:line-numbers=1985
+            return UInt32ToDecStr_NoSmallNumberCheck(value);
+```
 
 300 以上の数は毎回新しく作ります。
 
 ## ここがすごい
 
-- **よく使われる数に絞る**: 260〜265 行目のコメントによると、300 という大きさは HTTP のステータスコード（200 など）や、`byte`（0〜255）の `ToString()` をすべて含められるように選ばれています。全部キャッシュすると約 11.5KB、配列だけなら約 2.4KB と、メモリの見積もりまで書かれています。
+- **よく使われる数に絞る**: コメントによると、300 という大きさは HTTP のステータスコード（200 など）や、`byte`（0〜255）の `ToString()` をすべて含められるように選ばれています。全部キャッシュすると約 11.5KB、配列だけなら約 2.4KB と、メモリの見積もりまで書かれています。
 - **遅延して作る**: 300 個の文字列を最初に全部作るのではなく、実際に使われた数だけを作ります。使われない数のためにメモリを使いません。
 - **スレッドセーフでなくても問題ない**: 2 つのスレッドが同時に同じ数を初めて文字列にすると、両方が文字列を作り、どちらかが配列に残ります。でもどちらも同じ中身の不変な文字列なので、結果は正しいままです。ロックを使わずに済むのは、文字列が不変だからです。
 - **珍しい処理を外に出す**: 文字列を作ってキャッシュする処理は、各数につき 1 回しか起きないので `NoInlining` で本体から分けています。本体は「配列を引いて null でなければ返す」だけの小さなコードになります。

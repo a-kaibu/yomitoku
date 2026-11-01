@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Numerics/BitOperations.cs
 lines: [380, 394]
 function: "BitOperations.Log2SoftwareFallback(uint)"
 difficulty: 3
+format: 2
 tags: [ビット演算, アルゴリズム, ハック]
 ---
 
@@ -23,7 +24,27 @@ CPU に専用命令がないときの予備の実装で、ループも if も使
 
 ## コード
 
-```csharp:line-numbers=380
+::: code-group
+
+```csharp:line-numbers=380 [日本語訳]
+        private static int Log2SoftwareFallback(uint value)
+        {
+            // 大きすぎるので AggressiveInlining は付けない
+            // 約束は 0 → 0（log(0) は未定義）
+
+            // 末尾の 0 を 1 で埋める。例: 00010010 は 00011111 になる
+            value |= value >> 01;
+            value |= value >> 02;
+            value |= value >> 04;
+            value |= value >> 08;
+            value |= value >> 16;
+
+            // de Bruijn 数列、k=2, n=5（2^5=32）: 0b_0000_0111_1100_0100_1010_1100_1101_1101u
+            return Log2DeBruijn[(int)((value * 0x07C4ACDDu) >> 27)];
+        }
+```
+
+```csharp:line-numbers=380 [原文]
         private static int Log2SoftwareFallback(uint value)
         {
             // No AggressiveInlining due to large method size
@@ -41,16 +62,18 @@ CPU に専用命令がないときの予備の実装で、ループも if も使
         }
 ```
 
-`Log2DeBruijn` は同じファイルの 36〜42 行目で定義されている 32 要素の表です。
+:::
 
-```csharp
-private static ReadOnlySpan<byte> Log2DeBruijn => // 32
-[
-    00, 09, 01, 10, 13, 21, 02, 29,
-    11, 14, 16, 18, 22, 25, 03, 30,
-    08, 12, 20, 28, 15, 17, 24, 07,
-    19, 27, 23, 06, 26, 05, 04, 31
-];
+`Log2DeBruijn` は同じファイルで定義されている 32 要素の表です。
+
+```csharp:line-numbers=36
+        private static ReadOnlySpan<byte> Log2DeBruijn => // 32
+        [
+            00, 09, 01, 10, 13, 21, 02, 29,
+            11, 14, 16, 18, 22, 25, 03, 30,
+            08, 12, 20, 28, 15, 17, 24, 07,
+            19, 27, 23, 06, 26, 05, 04, 31
+        ];
 ```
 
 ## 前提知識
@@ -63,13 +86,25 @@ private static ReadOnlySpan<byte> Log2DeBruijn => // 32
 
 ## 何をしているか
 
-### 1. 一番上の 1 より下を全部 1 にする（386〜390 行目）
+### 1. 一番上の 1 より下を全部 1 にする
+
+```csharp:line-numbers=386
+            value |= value >> 01;
+            value |= value >> 02;
+            value |= value >> 04;
+            value |= value >> 08;
+            value |= value >> 16;
+```
 
 シフト量を 1, 2, 4, 8, 16 と倍にしながら OR を重ねると、一番上の 1 から下の桁がすべて 1 になります（コメントの例: `00010010` → `00011111`）。
 
 こうすると、入力が何であっても値は **`2^(k+1) - 1` の 32 通りのどれか** になります（k が求めたい答え）。`10` なら `1111`（= 15）です。
 
-### 2. de Bruijn 数を掛けて上位 5 ビットを見る（393 行目）
+### 2. de Bruijn 数を掛けて上位 5 ビットを見る
+
+```csharp:line-numbers=393
+            return Log2DeBruijn[(int)((value * 0x07C4ACDDu) >> 27)];
+```
 
 `0x07C4ACDD` は **de Bruijn 列**（どの 5 ビットの並びも 1 回ずつ現れるビット列）をもとに選ばれた定数です。
 `2^(k+1) - 1` を掛けるのは「定数を k+1 ビット左にずらしたもの − 定数」と同じなので、k ごとに **上位 5 ビットがすべて異なる値** になるように作られています。
@@ -78,7 +113,11 @@ private static ReadOnlySpan<byte> Log2DeBruijn => // 32
 
 `value = 10` の場合、塗りつぶし後は 15 です。`15 × 0x07C4ACDD` の下位 32 ビットを右に 27 ずらすと 14 になり、`Log2DeBruijn[14]` = 3。正しく `3` が得られます。
 
-### 3. 0 の扱い（383 行目）
+### 3. 0 の扱い
+
+```csharp:line-numbers=383
+            // 約束は 0 → 0（log(0) は未定義）
+```
 
 `value = 0` だと塗りつぶしても 0、掛けても 0、表の 0 番目は 0 なので結果は 0 です。数学的には log(0) は定義されませんが、コメントの通り「0 なら 0」という慣習に合わせています。
 
@@ -86,7 +125,7 @@ private static ReadOnlySpan<byte> Log2DeBruijn => // 32
 
 - **分岐ゼロ・ループゼロ**: 素直に書くと「1 ビットずつシフトして 0 になるまで数える」ループになり、値によって回数が変わります。この方法はどの入力でも同じ命令数で終わります。
 - **あふれを味方にする**: 掛け算の上位ビットが捨てられる性質を利用して、32 通りの入力を 32 通りの 5 ビットの値に **完全に重複なく** 写しています。いわば「完全ハッシュ関数」を掛け算 1 回で作っています。
-- **表を ReadOnlySpan にしてゼロアロケーション**: 25〜26 行目のコメントにある通り、配列リテラルを Span のプロパティにすると、文字列定数と同じように DLL のデータを直接参照できます。
+- **表を ReadOnlySpan にしてゼロアロケーション**: コメントにある通り、配列リテラルを Span のプロパティにすると、文字列定数と同じように DLL のデータを直接参照できます。
 - **予備の道としての位置づけ**: 同じファイルの `Log2` は、まず `LZCNT` などの CPU 命令を試し、使えないときだけこの関数を呼びます。コメントに「大きいのでインライン化しない」と理由まで書いてあります。
 
 ## まとめ

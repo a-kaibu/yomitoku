@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Numerics/BitOperations.cs
 lines: [172, 208]
 function: "BitOperations.LeadingZeroCount(uint)"
 difficulty: 2
+format: 2
 tags: [ビット演算, 最適化, 低レイヤ]
 ---
 
@@ -23,7 +24,49 @@ CPU ごとに使える命令が違うため、いくつもの道を用意して�
 
 ## コード
 
-```csharp:line-numbers=172
+::: code-group
+
+```csharp:line-numbers=172 [日本語訳]
+        [Intrinsic]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [CLSCompliant(false)]
+        public static int LeadingZeroCount(uint value)
+        {
+            if (Lzcnt.IsSupported)
+            {
+                // LZCNT の約束は 0 → 32
+                return (int)Lzcnt.LeadingZeroCount(value);
+            }
+
+            if (ArmBase.IsSupported)
+            {
+                return ArmBase.LeadingZeroCount(value);
+            }
+
+            if (WasmBase.IsSupported)
+            {
+                return WasmBase.LeadingZeroCount(value);
+            }
+
+            // フォールバックの約束は 0 → 31、BSR の約束は 0 → 未定義
+            if (value == 0)
+            {
+                return 32;
+            }
+
+            if (X86Base.IsSupported)
+            {
+                // LZCNT は上位（MSB）から数えた位置を返すが、BSR は下位（LSB）から数えた位置を返す。
+                // BSR の結果は必ず 0〜31 なので、31 ^ BSR は 31 - BSR と同じ。
+                // 定数からの引き算は MOV/SUB か NEG/ADD が必要だが、XOR なら 1 命令で済む。
+                return 31 ^ (int)X86Base.BitScanReverse(value);
+            }
+
+            return 31 ^ Log2SoftwareFallback(value);
+        }
+```
+
+```csharp:line-numbers=172 [原文]
         [Intrinsic]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [CLSCompliant(false)]
@@ -63,6 +106,8 @@ CPU ごとに使える命令が違うため、いくつもの道を用意して�
         }
 ```
 
+:::
+
 ## 前提知識
 
 - **`Lzcnt`、`ArmBase`、`WasmBase`、`X86Base`**: .NET が用意している CPU 命令の窓口クラスです。`IsSupported` が `true` のときだけ、その命令を呼べます。
@@ -72,15 +117,51 @@ CPU ごとに使える命令が違うため、いくつもの道を用意して�
 
 ## 何をしているか
 
-### 1. 先頭ゼロ数をそのまま数える命令（177〜191 行目）
+### 1. 先頭ゼロ数をそのまま数える命令
+
+```csharp:line-numbers=177
+            if (Lzcnt.IsSupported)
+            {
+                // LZCNT の約束は 0 → 32
+                return (int)Lzcnt.LeadingZeroCount(value);
+            }
+
+            if (ArmBase.IsSupported)
+            {
+                return ArmBase.LeadingZeroCount(value);
+            }
+
+            if (WasmBase.IsSupported)
+            {
+                return WasmBase.LeadingZeroCount(value);
+            }
+```
 
 x86 の `LZCNT`、Arm の `CLZ`、WebAssembly の `clz` は、どれも「0 なら 32」という約束でこの関数の仕様と一致するので、そのまま返します。
 
-### 2. 0 の特別扱い（193〜197 行目）
+### 2. 0 の特別扱い
+
+```csharp:line-numbers=193
+            // フォールバックの約束は 0 → 31、BSR の約束は 0 → 未定義
+            if (value == 0)
+            {
+                return 32;
+            }
+```
 
 ここから先の BSR とソフトウェア版は 0 を正しく扱えないので、先に `32` を返してしまいます。
 
-### 3. BSR の結果を裏返す（199〜205 行目）
+### 3. BSR の結果を裏返す
+
+```csharp:line-numbers=199
+            if (X86Base.IsSupported)
+            {
+                // LZCNT は上位（MSB）から数えた位置を返すが、BSR は下位（LSB）から数えた位置を返す。
+                // BSR の結果は必ず 0〜31 なので、31 ^ BSR は 31 - BSR と同じ。
+                // 定数からの引き算は MOV/SUB か NEG/ADD が必要だが、XOR なら 1 命令で済む。
+                return 31 ^ (int)X86Base.BitScanReverse(value);
+            }
+```
 
 BSR は一番上の 1 の位置 `p`（右から数えて 0〜31）を返します。先頭ゼロの数は `31 - p` です。
 
@@ -88,13 +169,17 @@ BSR は一番上の 1 の位置 `p`（右から数えて 0〜31）を返しま�
 
 ここで `31` は 2 進数で `11111` です。0〜31 の数 `p` に対して `11111 - p` は **各ビットを反転すること** と同じなので、`31 ^ p` と書いても結果は変わりません。`3 = 00011` → `31 ^ 3 = 11100 = 28` です。
 
-### 4. ソフトウェア版（207 行目）
+### 4. ソフトウェア版
+
+```csharp:line-numbers=207
+            return 31 ^ Log2SoftwareFallback(value);
+```
 
 `Log2SoftwareFallback`（一番上の 1 の位置を求める関数）の結果を、同じく `31 ^` で裏返します。
 
 ## ここがすごい
 
-- **1 命令の差にこだわる**: コメント（201〜203 行目）によると、x86 では「定数から引く」には `MOV` + `SUB` か `NEG` + `ADD` の 2 命令が必要ですが、XOR なら 1 命令で済みます。値の範囲が 0〜31 に限られることを利用した、数学的に安全な置き換えです。
+- **1 命令の差にこだわる**: コメントによると、x86 では「定数から引く」には `MOV` + `SUB` か `NEG` + `ADD` の 2 命令が必要ですが、XOR なら 1 命令で済みます。値の範囲が 0〜31 に限られることを利用した、数学的に安全な置き換えです。
 - **命令ごとの「0 の約束」の違いを吸収**: `LZCNT` は 0→32、BSR は 0→未定義、ソフトウェア版は 0→0。こうした違いを if 1 つでまとめ、呼び出す側からは常に同じ動きに見えるようにしています。
 - **`[Intrinsic]` で呼び出し自体が命令になる**: 実際には JIT がこの関数呼び出しを `LZCNT` などの命令に直接置き換えることが多く、ここに書かれた C# は「置き換えできないとき」の実装も兼ねています。
 

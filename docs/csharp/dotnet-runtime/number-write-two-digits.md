@@ -11,6 +11,7 @@ file: src/libraries/Common/src/System/Number.Formatting.Common.cs
 lines: [209, 251]
 function: "Number.WriteTwoDigits<TChar>(uint, Span<TChar>)"
 difficulty: 3
+format: 2
 tags: [文字列処理, 低レイヤ, ジェネリクス]
 ---
 
@@ -22,7 +23,55 @@ tags: [文字列処理, 低レイヤ, ジェネリクス]
 
 ## コード
 
-```csharp:line-numbers=209
+::: code-group
+
+```csharp:line-numbers=209 [日本語訳]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static ushort GetTwoDigitsBytes(uint value)
+        {
+            ushort pair = TwoDigitsBytesTable[(int)value];
+            if (!BitConverter.IsLittleEndian)
+            {
+                pair = (ushort)((pair << 8) | (pair >> 8));
+            }
+            return pair;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static uint GetTwoDigitsChars(uint value)
+        {
+            uint pair = TwoDigitsCharsTable[(int)value];
+            if (!BitConverter.IsLittleEndian)
+            {
+                pair = uint.RotateRight(pair, 16);
+            }
+            return pair;
+        }
+
+        /// [ 00 .. 99 ] の値を、事前に切り出した 2 要素の span の先頭に 1 回のストアで書き込む。
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void WriteTwoDigits<TChar>(uint value, Span<TChar> destination) where TChar : unmanaged, IUtfChar<TChar>
+        {
+            Debug.Assert(value <= 99);
+            Debug.Assert(destination.Length >= 2);
+            Debug.Assert(sizeof(TChar) is sizeof(char) or sizeof(byte));
+
+            if (sizeof(TChar) == sizeof(char))
+            {
+                // TwoDigitsCharsTable[v] = (char)('0'+v/10) | ((char)('0'+v%10) << 16) — 2 文字を 1 回の 4 バイトストアで書く。
+                uint pair = GetTwoDigitsChars(value);
+                MemoryMarshal.Write(MemoryMarshal.AsBytes(Unsafe.BitCast<Span<TChar>, Span<char>>(destination)), in pair);
+            }
+            else
+            {
+                // 2 バイトを 1 回の 2 バイトストアで書く。
+                ushort pair = GetTwoDigitsBytes(value);
+                MemoryMarshal.Write(Unsafe.BitCast<Span<TChar>, Span<byte>>(destination), in pair);
+            }
+        }
+```
+
+```csharp:line-numbers=209 [原文]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static ushort GetTwoDigitsBytes(uint value)
         {
@@ -68,7 +117,9 @@ tags: [文字列処理, 低レイヤ, ジェネリクス]
         }
 ```
 
-表の中身は 195〜207 行目にあり、194 行目のコメントの通り、`entry[v] = (char)('0' + v/10) | ((char)('0' + v%10) << 16)` という式で作られた 100 個の値です。
+:::
+
+表の中身は、コメントの通り `entry[v] = (char)('0' + v/10) | ((char)('0' + v%10) << 16)` という式で作られた 100 個の値です。
 
 ## 前提知識
 
@@ -81,14 +132,41 @@ tags: [文字列処理, 低レイヤ, ジェネリクス]
 
 ## 何をしているか
 
-### 1. 表を引く（221〜229 行目）
+### 1. 表を引く
 
-42 なら `TwoDigitsCharsTable[42]` = `0x00320034` を取り出します。表の作り方（194 行目）の通り、**下位 16 ビットが十の位**（0x34 = `'4'`）、**上位 16 ビットが一の位**（0x32 = `'2'`）です。
+```csharp:line-numbers=221
+        private static uint GetTwoDigitsChars(uint value)
+        {
+            uint pair = TwoDigitsCharsTable[(int)value];
+            if (!BitConverter.IsLittleEndian)
+            {
+                pair = uint.RotateRight(pair, 16);
+            }
+            return pair;
+        }
+```
+
+42 なら `TwoDigitsCharsTable[42]` = `0x00320034` を取り出します。表の作り方の通り、**下位 16 ビットが十の位**（0x34 = `'4'`）、**上位 16 ビットが一の位**（0x32 = `'2'`）です。
 
 リトルエンディアンの CPU では、32 ビット値をメモリに書くと下位 16 ビットが先（小さいアドレス）に置かれます。なので、そのまま書くだけで `'4'`、`'2'` の順に並び、`"42"` になります。
-ビッグエンディアンの CPU では上位 16 ビットが先になってしまうので、226 行目で 16 ビット回転して上下を入れ替えてから使います。UTF-8 用の 2 バイト版（210〜218 行目）も、同じ理由でバイトを入れ替えます。
+ビッグエンディアンの CPU では上位 16 ビットが先になってしまうので、`uint.RotateRight(pair, 16)` で 16 ビット回転して上下を入れ替えてから使います。UTF-8 用の 2 バイト版も、同じ理由でバイトを入れ替えます。
 
-### 2. 1 回で書き込む（239〜250 行目）
+### 2. 1 回で書き込む
+
+```csharp:line-numbers=239
+            if (sizeof(TChar) == sizeof(char))
+            {
+                // TwoDigitsCharsTable[v] = (char)('0'+v/10) | ((char)('0'+v%10) << 16) — 2 文字を 1 回の 4 バイトストアで書く。
+                uint pair = GetTwoDigitsChars(value);
+                MemoryMarshal.Write(MemoryMarshal.AsBytes(Unsafe.BitCast<Span<TChar>, Span<char>>(destination)), in pair);
+            }
+            else
+            {
+                // 2 バイトを 1 回の 2 バイトストアで書く。
+                ushort pair = GetTwoDigitsBytes(value);
+                MemoryMarshal.Write(Unsafe.BitCast<Span<TChar>, Span<byte>>(destination), in pair);
+            }
+```
 
 UTF-16 なら 4 バイトの `uint` を、UTF-8 なら 2 バイトの `ushort` を、`MemoryMarshal.Write` で 1 回で書きます。
 

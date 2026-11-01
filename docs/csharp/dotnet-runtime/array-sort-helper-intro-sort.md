@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Collections/Generic/ArrayS
 lines: [131, 177]
 function: "ArraySortHelper<T>.IntroSort"
 difficulty: 2
+format: 2
 tags: [ソート, アルゴリズム, 再帰]
 ---
 
@@ -25,7 +26,59 @@ tags: [ソート, アルゴリズム, 再帰]
 
 ## コード
 
-```csharp:line-numbers=131
+::: code-group
+
+```csharp:line-numbers=131 [日本語訳]
+        // IntroSort は再帰的なので、
+        // 自分自身にインライン展開されないようにする（現状ではメリットがないため）。
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void IntroSort(Span<T> keys, int depthLimit, Comparison<T> comparer)
+        {
+            Debug.Assert(!keys.IsEmpty);
+            Debug.Assert(depthLimit >= 0);
+            Debug.Assert(comparer != null);
+
+            int partitionSize = keys.Length;
+            while (partitionSize > 1)
+            {
+                if (partitionSize <= Array.IntrosortSizeThreshold)
+                {
+
+                    if (partitionSize == 2)
+                    {
+                        SwapIfGreater(keys, comparer, 0, 1);
+                        return;
+                    }
+
+                    if (partitionSize == 3)
+                    {
+                        SwapIfGreater(keys, comparer, 0, 1);
+                        SwapIfGreater(keys, comparer, 0, 2);
+                        SwapIfGreater(keys, comparer, 1, 2);
+                        return;
+                    }
+
+                    InsertionSort(keys.Slice(0, partitionSize), comparer);
+                    return;
+                }
+
+                if (depthLimit == 0)
+                {
+                    HeapSort(keys.Slice(0, partitionSize), comparer);
+                    return;
+                }
+                depthLimit--;
+
+                int p = PickPivotAndPartition(keys.Slice(0, partitionSize), comparer);
+
+                // 分割でピボットはすでに正しい位置にあるので、再び動かす必要はない。
+                IntroSort(keys[(p + 1)..partitionSize], depthLimit, comparer);
+                partitionSize = p;
+            }
+        }
+```
+
+```csharp:line-numbers=131 [原文]
         // IntroSort is recursive; block it from being inlined into itself as
         // this is currenly not profitable.
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -75,30 +128,72 @@ tags: [ソート, アルゴリズム, 再帰]
         }
 ```
 
-`Array.IntrosortSizeThreshold` は 16 です（Array.cs の 25 行目）。最初の呼び出しは 121〜129 行目の `IntrospectiveSort` で、`depthLimit` に `2 × (log₂(要素数) + 1)` を渡しています。
+:::
+
+`Array.IntrosortSizeThreshold` は 16 です。最初の呼び出しは `IntrospectiveSort` で、`depthLimit` に `2 × (log₂(要素数) + 1)` を渡しています。
 
 ## 前提知識
 
 - **`Span<T>`**: 配列の一部分を指す「窓」です。`keys.Slice(0, n)` や `keys[(p + 1)..n]` は、コピーせずに部分を切り出します。`a..b` は C# の範囲（Range）の書き方で、a 番目から b 番目の手前までです。
 - **`Comparison<T>`**: 2 つの値を受け取り、前者が小さければ負、等しければ 0、大きければ正の数を返す関数（デリゲート）です。並べ替えの順序を外から指定できます。
 - **ジェネリクス `<T>`**: 型を後から決められる仕組みです。`ArraySortHelper<int>` なら整数の配列、`ArraySortHelper<string>` なら文字列の配列を並べ替えます。
-- **`[MethodImpl(MethodImplOptions.NoInlining)]`**: 「この関数をインライン展開しないで」という指示です。131〜132 行目のコメントの通り、再帰関数を自分の中に展開しても得にならないためです。
+- **`[MethodImpl(MethodImplOptions.NoInlining)]`**: 「この関数をインライン展開しないで」という指示です。コメントの通り、再帰関数を自分の中に展開しても得にならないためです。
 - **クイックソート**: 基準の値（ピボット）を選び、それより小さいものを左、大きいものを右に分け（分割）、左右をそれぞれ同じように並べ替える方法です。
 
 ## 何をしているか
 
-### 1. 小さい区間は特別扱い（143〜162 行目）
+### 1. 小さい区間は特別扱い
+
+```csharp:line-numbers=143
+                if (partitionSize <= Array.IntrosortSizeThreshold)
+                {
+
+                    if (partitionSize == 2)
+                    {
+                        SwapIfGreater(keys, comparer, 0, 1);
+                        return;
+                    }
+
+                    if (partitionSize == 3)
+                    {
+                        SwapIfGreater(keys, comparer, 0, 1);
+                        SwapIfGreater(keys, comparer, 0, 2);
+                        SwapIfGreater(keys, comparer, 1, 2);
+                        return;
+                    }
+
+                    InsertionSort(keys.Slice(0, partitionSize), comparer);
+                    return;
+                }
+```
 
 要素が 2 個なら 1 回の比較で、3 個なら 3 回の比較で並べ終えます。4〜16 個なら挿入ソートです。挿入ソートは要素数の 2 乗に比例する手間がかかりますが、少ない要素では余計な処理がないので最速です。
 
-### 2. 深すぎたらヒープソート（164〜169 行目）
+### 2. 深すぎたらヒープソート
+
+```csharp:line-numbers=164
+                if (depthLimit == 0)
+                {
+                    HeapSort(keys.Slice(0, partitionSize), comparer);
+                    return;
+                }
+                depthLimit--;
+```
 
 クイックソートは、ピボットの選び方が運悪く毎回端の値になると、分割がほとんど進まず、手間が要素数の 2 乗に膨らみます。
 `depthLimit` は分割できる回数の上限で、使い切ったら残りをヒープソートに任せます。ヒープソートは常に n log n 程度の手間で終わるので、最悪の場合でも遅くなりません。
 
 要素数 1000 なら `log₂(1000) = 9` なので、`depthLimit = 2 × 10 = 20` です。
 
-### 3. 分割して、右だけ再帰、左はループで（171〜175 行目）
+### 3. 分割して、右だけ再帰、左はループで
+
+```csharp:line-numbers=171
+                int p = PickPivotAndPartition(keys.Slice(0, partitionSize), comparer);
+
+                // 分割でピボットはすでに正しい位置にあるので、再び動かす必要はない。
+                IntroSort(keys[(p + 1)..partitionSize], depthLimit, comparer);
+                partitionSize = p;
+```
 
 `PickPivotAndPartition` でピボットの位置 `p` を求めたら、**右側（`p + 1` 以降）だけを再帰呼び出し** で処理します。左側（`p` より前）は `partitionSize = p` として、`while` ループの次の周回で処理します。
 

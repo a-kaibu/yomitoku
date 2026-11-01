@@ -11,6 +11,7 @@ file: src/libraries/System.Private.CoreLib/src/System/Char.cs
 lines: [293, 300]
 function: "char.IsAsciiLetter"
 difficulty: 1
+format: 2
 tags: [文字列処理, ビット演算, イディオム]
 ---
 
@@ -21,7 +22,20 @@ tags: [文字列処理, ビット演算, イディオム]
 
 ## コード
 
-```csharp:line-numbers=293
+::: code-group
+
+```csharp:line-numbers=293 [日本語訳]
+        /// <summary>文字が ASCII 英字かどうかを示す。</summary>
+        /// <param name="c">評価する文字。</param>
+        /// <returns>c が ASCII 英字なら true、そうでなければ false。</returns>
+        /// <remarks>
+        /// 'A' から 'Z'、または 'a' から 'z' の範囲に入るかを判定する。
+        /// （両端を含む）。
+        /// </remarks>
+        public static bool IsAsciiLetter(char c) => (uint)((c | 0x20) - 'a') <= 'z' - 'a';
+```
+
+```csharp:line-numbers=293 [原文]
         /// <summary>Indicates whether a character is categorized as an ASCII letter.</summary>
         /// <param name="c">The character to evaluate.</param>
         /// <returns>true if <paramref name="c"/> is an ASCII letter; otherwise, false.</returns>
@@ -31,6 +45,8 @@ tags: [文字列処理, ビット演算, イディオム]
         /// </remarks>
         public static bool IsAsciiLetter(char c) => (uint)((c | 0x20) - 'a') <= 'z' - 'a';
 ```
+
+:::
 
 ## 前提知識
 
@@ -42,11 +58,19 @@ tags: [文字列処理, ビット演算, イディオム]
 
 ## 何をしているか
 
+### 1. 英字の場合
+
+```csharp:line-numbers=300
+        public static bool IsAsciiLetter(char c) => (uint)((c | 0x20) - 'a') <= 'z' - 'a';
+```
+
 `c = 'G'`（0x47）で追います。
 
 1. `c | 0x20` → 0x67 = `'g'`。大文字が小文字になりました。
 2. `- 'a'` → 0x67 − 0x61 = 6。`'a'` から何文字目かです。
 3. `(uint)6 <= 'z' - 'a'`（= 25）→ **true**。
+
+### 2. 英字でない場合
 
 英字でない文字も見てみます。
 
