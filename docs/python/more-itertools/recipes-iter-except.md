@@ -11,8 +11,10 @@ file: more_itertools/recipes.py
 lines: [543, 565]
 function: iter_except
 difficulty: 1
+format: 2
 tags: [イテレータ, エラー処理, イディオム]
 ---
+
 ## ひとことで
 
 `iter_except(function, exception)` は、**関数を何度も呼び、指定した例外が起きたら止まる** イテレータを作ります。
@@ -21,7 +23,35 @@ tags: [イテレータ, エラー処理, イディオム]
 
 ## コード
 
-```python:line-numbers=543
+::: code-group
+
+```python:line-numbers=543 [日本語訳]
+def iter_except(function, exception, first=None):
+    """例外が送出されるまで、関数の結果を繰り返し出す。
+
+    Converts a call-until-exception interface to an iterator interface.
+    Like ``iter(function, sentinel)``, but uses an exception instead of a sentinel
+    to end the loop.
+
+    Examples:
+        iter_except(functools.partial(heappop, h), IndexError)   # priority queue iterator
+        iter_except(d.popitem, KeyError)                         # non-blocking dict iterator
+        iter_except(d.popleft, IndexError)                       # non-blocking deque iterator
+        iter_except(q.get_nowait, Queue.Empty)                   # loop over a producer Queue
+        iter_except(s.pop, KeyError)                             # non-blocking set iterator
+
+    Multiple exceptions can be specified as a stopping condition, for example
+    ``(IndexError, TypeError)``.
+
+    """
+    with suppress(exception):
+        if first is not None:
+            yield first()
+        while True:
+            yield function()
+```
+
+```python:line-numbers=543 [原文]
 def iter_except(function, exception, first=None):
     """Yields results from a function repeatedly until an exception is raised.
 
@@ -47,6 +77,8 @@ def iter_except(function, exception, first=None):
             yield function()
 ```
 
+:::
+
 `suppress` は `contextlib.suppress` で、指定した例外を握りつぶす `with` 文を作ります。
 
 ## 前提知識
@@ -64,15 +96,29 @@ for x in iter_except(stack.pop, IndexError):
     print(x)   # 3, 2, 1
 ```
 
-### 1. 例外を握りつぶす範囲を作る（561 行目）
+### 1. 例外を握りつぶす範囲を作る
+
+```python:line-numbers=561
+    with suppress(exception):
+```
 
 `with suppress(IndexError):` の中で起きた `IndexError` は、ジェネレータの終わりとして扱われます。
 
-### 2. 最初に 1 回だけ呼ぶ関数（562〜563 行目）
+### 2. 最初に 1 回だけ呼ぶ関数
+
+```python:line-numbers=562
+        if first is not None:
+            yield first()
+```
 
 `first` を渡すと、最初に 1 回だけそれを呼んだ結果を出します。たとえばデータベースの接続を開いてから読み込む、といった使い方ができます。
 
-### 3. 呼び続ける（564〜565 行目）
+### 3. 呼び続ける
+
+```python:line-numbers=564
+        while True:
+            yield function()
+```
 
 `stack.pop()` を呼んで `3`、`2`、`1` を順に出します。4 回目の `pop()` で `IndexError` が起き、`suppress` によって `with` の外へ抜け、関数が終わります。ジェネレータが終わったので、`for` も終わります。
 
@@ -101,7 +147,7 @@ while True:
 
 ### 部品として組み合わせやすい
 
-戻り値はふつうのイテレータなので、`list(iter_except(...))` で全部取り出したり、`islice` で先頭だけ取ったりと、ほかのイテレータ用の道具とそのまま組み合わせられます。docstring（550〜555 行目）には、ヒープ、辞書、deque、キュー、集合での使用例が並んでいます。
+戻り値はふつうのイテレータなので、`list(iter_except(...))` で全部取り出したり、`islice` で先頭だけ取ったりと、ほかのイテレータ用の道具とそのまま組み合わせられます。docstring には、ヒープ、辞書、deque、キュー、集合での使用例が並んでいます。
 
 ## まとめ
 
