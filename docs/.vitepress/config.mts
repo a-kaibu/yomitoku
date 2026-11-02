@@ -61,11 +61,16 @@ function projectsOf(lang: string) {
 
 // サイドバー（「メニュー」）は使わない。言語一覧へは記事上部の言語バッジ、トップへはサイト名から戻る。
 
+// 検索エンジン向け: canonical・OGP・サイトマップで使う公開 URL
+const BASE = process.env.BASE ?? '/yokuyomu/'
+const SITE_URL = `https://a-kaibu.github.io${BASE}`
+const pageUrl = (route: string) => SITE_URL + route.replace(/^\//, '')
+
 export default defineConfig({
   lang: 'ja-JP',
   title: 'ヨクヨム',
   description: '有名 OSS の名作コードをひとつずつ、日本語でていねいに読み解くコードリーディングサイト',
-  base: process.env.BASE ?? '/yokuyomu/',
+  base: BASE,
   cleanUrls: true,
   lastUpdated: false,
   srcExclude,
@@ -76,7 +81,7 @@ export default defineConfig({
   // 1 万ページ超でも各 HTML が太らないよう、サイトメタデータを別チャンクに分離する
   metaChunk: true,
   head: [
-    ...(styleToClass ? [['link', { rel: 'stylesheet', href: `${process.env.BASE ?? '/yokuyomu/'}${shikiCss}` }] as [string, Record<string, string>]] : []),
+    ...(styleToClass ? [['link', { rel: 'stylesheet', href: `${BASE}${shikiCss}` }] as [string, Record<string, string>]] : []),
     ['meta', { name: 'theme-color', content: '#3c8772' }],
     ['link', { rel: 'icon', href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" }],
     // コードの折り返し設定をちらつきなく復元する
@@ -132,6 +137,39 @@ export default defineConfig({
     // トップのランダム記事用: 全記事の URL だけを並べたリスト（ハブのビルドが全言語の記事を知っている）
     if (SITE !== 'hub' && SITE) return
     fs.writeFileSync(path.join(siteConfig.outDir, 'random.json'), JSON.stringify(entries.map((e) => e.url)))
+    // サイトマップも全ページ分をハブで 1 つ書き出す
+    const routes = ['/', ...LANGUAGES.map((l) => `/${l.id}/`), ...entries.map((e) => e.url)]
+    fs.writeFileSync(
+      path.join(siteConfig.outDir, 'sitemap.xml'),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${routes.map((r) => `<url><loc>${pageUrl(r)}</loc></url>`).join('\n')}\n</urlset>\n`,
+    )
+  },
+  // canonical・OGP・Twitter カード、記事には構造化データ（TechArticle）
+  transformHead({ pageData, title, description }) {
+    if (pageData.isNotFound) return
+    const url = pageUrl(pageData.relativePath.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, ''))
+    const head: [string, Record<string, string>, string?][] = [
+      ['link', { rel: 'canonical', href: url }],
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { property: 'og:url', content: url }],
+      ['meta', { property: 'og:site_name', content: 'ヨクヨム' }],
+      ['meta', { name: 'twitter:card', content: 'summary' }],
+    ]
+    const fm = pageData.frontmatter
+    if (fm.function) {
+      head.push(['script', { type: 'application/ld+json' }, JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'TechArticle',
+        headline: fm.title,
+        description,
+        url,
+        inLanguage: 'ja',
+        about: fm.project,
+        isPartOf: { '@type': 'WebSite', name: 'ヨクヨム', url: SITE_URL },
+      })])
+    }
+    return head
   },
   transformPageData(pageData) {
     const rel = pageData.relativePath
@@ -160,6 +198,7 @@ export default defineConfig({
     // 記事ページ: 固定リンクと、同じプロジェクト内での前後リンク
     const entry = byPath.get(pageData.filePath) ?? byPath.get(rel)
     if (!entry) return
+    pageData.title = `${entry.fm.title}（${entry.fm.project} ${entry.fm.function}）`
     pageData.frontmatter.sourceUrl = sourceUrl(entry.fm)
     pageData.frontmatter.projectSlug = entry.projectSlug
     pageData.frontmatter.difficultyLabel = DIFFICULTIES[entry.fm.difficulty as 1 | 2 | 3]
@@ -172,7 +211,7 @@ export default defineConfig({
   themeConfig: {
     // 右上はテーマ切り替えだけにする（ナビ・検索・ハンバーガーは出さない）
     nav: [],
-    logoLink: { link: process.env.BASE ?? '/yokuyomu/', target: self },
+    logoLink: { link: BASE, target: self },
     outline: { label: '目次', level: [2, 3] },
     docFooter: { prev: '前の関数', next: '次の関数' },
     darkModeSwitchLabel: '外観',
