@@ -97,7 +97,7 @@ for (const l of LANGUAGES) {
 export default defineConfig({
   lang: 'ja-JP',
   title: 'ヨクヨム',
-  description: '有名 OSS のコードを関数ひとつずつ、日本語でていねいに読み解くコードリーディングサイト',
+  description: '有名 OSS の名作コードをひとつずつ、日本語でていねいに読み解くコードリーディングサイト',
   base: process.env.BASE ?? '/yokuyomu/',
   cleanUrls: true,
   lastUpdated: false,

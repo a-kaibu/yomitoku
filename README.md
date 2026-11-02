@@ -1,6 +1,6 @@
 # ヨクヨム
 
-有名 OSS のコードを **関数ひとつずつ**、その言語を知らない人にもわかる日本語で解説するコードリーディングサイトです。
+有名 OSS の名作コードを **ひとつずつ**、その言語を知らない人にもわかる日本語で解説するコードリーディングサイトです。
 
 - サイト: https://a-kaibu.github.io/yokuyomu/
 - 対応言語: C / C++ / Go / Rust / C# / TypeScript / Swift / Kotlin / Java / シェルスクリプト / Python / Ruby

@@ -1,11 +1,11 @@
 ---
 layout: home
 title: ヨクヨム
-titleTemplate: OSS のコードを関数ひとつずつ読み解く
+titleTemplate: 名作コードを、ひとつずつ。
 
 hero:
   name: ヨクヨム
-  text: 名作コードを、関数ひとつずつ。
+  text: 名作コードを、ひとつずつ。
   tagline: 有名 OSS の「よくできた」「ハックな」「天才的な」関数を、その言語を知らない人にもわかる日本語で解説します。
 ---
 
