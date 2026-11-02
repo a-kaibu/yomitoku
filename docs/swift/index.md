@@ -1,5 +1,5 @@
 ---
-title: Swift の関数
+title: Swift
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Swift の関数
+# Swift
 
 <EntryList />

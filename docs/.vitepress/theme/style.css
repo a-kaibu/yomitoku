@@ -48,9 +48,9 @@
 .badge--level[data-level='2'] { background: var(--vp-c-yellow-soft); color: var(--vp-c-yellow-1); }
 .badge--level[data-level='3'] { background: var(--vp-c-red-soft); color: var(--vp-c-red-1); }
 
-/* ---- 記事ヘッダの出典ボックス ---- */
-.entry-meta {
-  margin-bottom: 32px;
+/* ---- 記事ヘッダの出典ボックスと目次（同じカード） ---- */
+.entry-meta { margin-bottom: 32px; }
+.entry-meta, .yk-toc {
   padding: 16px 20px;
   border: 1px solid var(--vp-c-divider);
   border-radius: var(--yk-radius);
@@ -217,7 +217,7 @@
   .lang-card__name { font-size: 17px; }
   .lang-card__blurb { font-size: 12px; }
 
-  .entry-meta { padding: 14px; margin-left: -8px; margin-right: -8px; }
+  .entry-meta, .yk-toc { padding: 14px; margin-left: -8px; margin-right: -8px; }
   .entry-meta__table > div { grid-template-columns: 1fr; gap: 0; }
 
   .field { flex: 1 1 140px; }
@@ -310,18 +310,11 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
 .VPDocAsideOutline .outline-title { font-size: 15px; font-weight: 700; color: var(--vp-c-text-1); }
 /* スマホでは上部バーの目次ボタンをやめ、記事冒頭の開閉式の目次にする */
 .VPLocalNav { display: none !important; }
-.yk-toc {
-  margin: -12px 0 32px;
-  padding: 16px 20px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: var(--yk-radius);
-  background: var(--vp-c-bg-soft);
-  font-size: 16px;
-}
-.yk-toc summary { cursor: pointer; font-size: 17px; font-weight: 700; color: var(--vp-c-text-1); }
-.yk-toc ol { list-style: none; margin: 12px 0 0; padding: 0; }
-.yk-toc li { line-height: 1.6; padding: 5px 0; }
-.yk-toc li.lv3 { padding-left: 1.2em; font-size: 15px; }
+.yk-toc { margin-top: -12px; margin-bottom: 32px; }
+.yk-toc summary { cursor: pointer; font-weight: 700; color: var(--vp-c-text-1); }
+.yk-toc ol { list-style: none; margin: 8px 0 0; padding: 0; }
+.yk-toc li { line-height: 1.6; padding: 3px 0; }
+.yk-toc li.lv3 { padding-left: 1.2em; font-size: 13px; }
 .yk-toc a { color: var(--vp-c-text-2); text-decoration: none; }
 .yk-toc a:hover { color: var(--vp-c-brand-1); }
 

@@ -1,5 +1,5 @@
 ---
-title: Kotlin の関数
+title: Kotlin
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Kotlin の関数
+# Kotlin
 
 <EntryList />

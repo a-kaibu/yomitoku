@@ -1,5 +1,5 @@
 ---
-title: Python の関数
+title: Python
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Python の関数
+# Python
 
 <EntryList />

@@ -1,5 +1,5 @@
 ---
-title: Shell の関数
+title: Shell
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Shell の関数
+# Shell
 
 <EntryList />

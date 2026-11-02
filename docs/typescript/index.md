@@ -1,5 +1,5 @@
 ---
-title: TypeScript の関数
+title: TypeScript
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# TypeScript の関数
+# TypeScript
 
 <EntryList />

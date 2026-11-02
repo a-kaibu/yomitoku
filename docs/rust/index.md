@@ -1,5 +1,5 @@
 ---
-title: Rust の関数
+title: Rust
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Rust の関数
+# Rust
 
 <EntryList />

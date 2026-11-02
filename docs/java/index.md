@@ -1,5 +1,5 @@
 ---
-title: Java の関数
+title: Java
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Java の関数
+# Java
 
 <EntryList />

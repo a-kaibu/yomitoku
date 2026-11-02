@@ -1,5 +1,5 @@
 ---
-title: Ruby の関数
+title: Ruby
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Ruby の関数
+# Ruby
 
 <EntryList />

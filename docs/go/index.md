@@ -1,5 +1,5 @@
 ---
-title: Go の関数
+title: Go
 aside: false
 outline: false
 search: false
@@ -7,6 +7,6 @@ prev: false
 next: false
 ---
 
-# Go の関数
+# Go
 
 <EntryList />
