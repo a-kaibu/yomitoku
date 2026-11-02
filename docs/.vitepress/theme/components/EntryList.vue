@@ -6,8 +6,6 @@ import { DIFFICULTIES } from '../../shared.mjs'
 interface Item { u: string; t: string; d: string; f: string; p: string; n: string; lv: number; tg: string[] }
 interface Project { slug: string; name: string; count: number }
 
-const PAGE = 60
-
 const { frontmatter } = useData()
 const projects = computed<Project[]>(() => frontmatter.value.projects ?? [])
 // プロジェクトでグループ分けせず、関数名順の 1 つの一覧にする
@@ -19,7 +17,6 @@ const q = ref('')
 const level = ref<number | ''>('')
 const tag = ref('')
 const project = ref('')
-const shown = ref(PAGE)
 
 const allTags = computed(() => [...new Set(items.value.flatMap((i) => i.tg))].sort((a, b) => a.localeCompare(b, 'ja')))
 
@@ -34,7 +31,6 @@ const filtered = computed(() => {
     return words.every((w) => hay.includes(w))
   })
 })
-const visible = computed(() => filtered.value.slice(0, shown.value))
 
 const filtering = computed(() => q.value !== '' || level.value !== '' || tag.value !== '' || project.value !== '')
 function reset() { q.value = ''; level.value = ''; tag.value = ''; project.value = '' }
@@ -49,7 +45,6 @@ onMounted(() => {
   level.value = lv in DIFFICULTIES ? lv : ''
 })
 watch([q, level, tag, project], () => {
-  shown.value = PAGE
   const sp = new URLSearchParams()
   if (project.value) sp.set('project', project.value)
   if (tag.value) sp.set('tag', tag.value)
@@ -86,7 +81,7 @@ watch([q, level, tag, project], () => {
     <p v-else-if="!filtered.length" class="entry-list__empty">条件に合う記事がありません。</p>
 
     <ul class="entry-cards">
-      <li v-for="i in visible" :key="i.u" class="entry-card">
+      <li v-for="i in filtered" :key="i.u" class="entry-card">
         <a class="entry-card__link" :href="withBase(i.u)" :aria-label="i.t"></a>
         <span class="entry-card__head">
           <code class="entry-card__fn">{{ i.f }}</code>
@@ -100,8 +95,5 @@ watch([q, level, tag, project], () => {
         </span>
       </li>
     </ul>
-    <div v-if="filtered.length > shown" class="entry-list__more">
-      <button type="button" class="more-button" @click="shown += PAGE">もっと見る（残り {{ (filtered.length - shown).toLocaleString() }} 記事）</button>
-    </div>
   </div>
 </template>

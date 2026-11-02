@@ -209,16 +209,6 @@
 .chip--project.is-active { background: var(--vp-c-brand-1); color: #fff !important; }
 .chip--tag.is-active { background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) !important; }
 
-.entry-list__more { display: flex; justify-content: center; margin: 8px 0 24px; }
-.more-button {
-  padding: 8px 20px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 999px;
-  font-size: 14px;
-  color: var(--vp-c-text-1);
-  background: var(--vp-c-bg-soft);
-}
-.more-button:hover { border-color: var(--vp-c-brand-1); color: var(--vp-c-brand-1); }
 
 /* ---- レスポンシブ ---- */
 @media (max-width: 640px) {
