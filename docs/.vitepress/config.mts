@@ -127,18 +127,6 @@ export default defineConfig({
     },
   },
   buildEnd(siteConfig) {
-    // 旧 URL（/<言語>/<プロジェクト>/<slug>）から新 URL へのリダイレクトページ
-    const base = process.env.BASE ?? '/yokuyomu/'
-    for (const e of entries) {
-      const olds = new Set([e.slug])
-      if (e.slug.startsWith(`${e.projectSlug}-`)) olds.add(e.slug.slice(e.projectSlug.length + 1)) // 重複解消で改名した記事
-      for (const old of olds) {
-        const file = path.join(siteConfig.outDir, e.lang, e.projectSlug, `${old}.html`)
-        const to = `${base}${e.url.slice(1)}`
-        fs.mkdirSync(path.dirname(file), { recursive: true })
-        fs.writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>移動しました</title><link rel="canonical" href="${to}"><meta http-equiv="refresh" content="0; url=${to}"><script>location.replace(${JSON.stringify(to)}+location.hash)</script><a href="${to}">${to}</a>\n`)
-      }
-    }
     if (styleToClass) fs.writeFileSync(path.join(siteConfig.outDir, shikiCss), styleToClass.getCSS())
   },
   transformPageData(pageData) {
