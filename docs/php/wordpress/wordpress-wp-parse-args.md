@@ -1,6 +1,6 @@
 ---
-title: 既定値と受け取った値を、1 行でマージする
-description: WordPress の wp_parse_args は、オプションの配列や文字列を受け取り、既定値とマージして返します。オブジェクト、配列、クエリ文字列のどれでも同じように扱えるのが特徴です。
+title: "既定値と受け取った値を、1 行でマージする"
+description: "WordPress の wp_parse_args は、オプションの配列や文字列を受け取り、既定値とマージして返します。オブジェクト、配列、クエリ文字列のどれでも同じように扱えるのが特徴です。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

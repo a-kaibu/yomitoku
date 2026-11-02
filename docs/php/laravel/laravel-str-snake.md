@@ -1,6 +1,6 @@
 ---
-title: キャメルケースをスネークケースに変えて結果を覚えておく
-description: Laravel の Str::snake は、helloWorld を hello_world に変えます。一度計算した結果を静的な配列に覚えておく、キャッシュの書き方も見どころです。
+title: "キャメルケースをスネークケースに変えて結果を覚えておく"
+description: "Laravel の Str::snake は、helloWorld を hello_world に変えます。一度計算した結果を静的な配列に覚えておく、キャッシュの書き方も見どころです。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

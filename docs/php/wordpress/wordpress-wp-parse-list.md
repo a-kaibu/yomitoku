@@ -1,6 +1,6 @@
 ---
-title: カンマや空白で区切られた文字列を配列にほどく
-description: WordPress の wp_parse_list は、"a, b c" のようなカンマと空白で区切られた文字列を配列にします。配列が渡されたときは、中身が文字列や数値かだけを確かめます。
+title: "カンマや空白で区切られた文字列を配列にほどく"
+description: "WordPress の wp_parse_list は、\"a, b c\" のようなカンマと空白で区切られた文字列を配列にします。配列が渡されたときは、中身が文字列や数値かだけを確かめます。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

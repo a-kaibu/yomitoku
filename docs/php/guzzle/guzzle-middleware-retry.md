@@ -1,6 +1,6 @@
 ---
-title: 失敗した通信を、判定と待ち時間を決めて自動でやり直す
-description: Guzzle の Middleware::retry は、通信が失敗したときに、もう一度送るかを判定し、待ち時間を決めて再試行します。判定の関数を受け取る形で、やり直しの方針を利用者が決められます。
+title: "失敗した通信を、判定と待ち時間を決めて自動でやり直す"
+description: "Guzzle の Middleware::retry は、通信が失敗したときに、もう一度送るかを判定し、待ち時間を決めて再試行します。判定の関数を受け取る形で、やり直しの方針を利用者が決められます。"
 language: php
 project: Guzzle
 repo: https://github.com/guzzle/guzzle

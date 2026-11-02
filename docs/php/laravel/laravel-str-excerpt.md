@@ -1,6 +1,6 @@
 ---
-title: 検索語の前後だけを切り出して、文章の抜粋を作る
-description: Laravel の Str::excerpt は、長い本文から検索語の前後の部分だけを抜き出します。前後の文字数を指定でき、途中を省略したことを「...」で示します。
+title: "検索語の前後だけを切り出して、文章の抜粋を作る"
+description: "Laravel の Str::excerpt は、長い本文から検索語の前後の部分だけを抜き出します。前後の文字数を指定でき、途中を省略したことを「...」で示します。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

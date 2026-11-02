@@ -1,6 +1,6 @@
 ---
-title: 区切りの文字を取り除いて、単語の頭だけ大文字にする
-description: Laravel の Str::studly は、user_profile_id のような名前を UserProfileId に変えます。正規表現で単語を分け、結果を覚えておく工夫がある変換関数です。
+title: "区切りの文字を取り除いて、単語の頭だけ大文字にする"
+description: "Laravel の Str::studly は、user_profile_id のような名前を UserProfileId に変えます。正規表現で単語を分け、結果を覚えておく工夫がある変換関数です。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

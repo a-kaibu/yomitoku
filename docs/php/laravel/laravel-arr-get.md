@@ -1,6 +1,6 @@
 ---
-title: 「user.address.city」のようなキーで、深い値を取り出す
-description: Laravel の Arr::get は、ドットでつないだキーを使って、入れ子の配列の値を取り出します。キーそのものがある場合を先に確かめる、順序の工夫が見どころです。
+title: "「user.address.city」のようなキーで、深い値を取り出す"
+description: "Laravel の Arr::get は、ドットでつないだキーを使って、入れ子の配列の値を取り出します。キーそのものがある場合を先に確かめる、順序の工夫が見どころです。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

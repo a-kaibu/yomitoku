@@ -1,6 +1,6 @@
 ---
-title: メールのヘッダに載る Base64 を 76 文字ごとに折り返す
-description: Symfony の Base64Encoder::encodeString は、メールの本文や添付ファイルを Base64 にしたうえで、1 行 76 文字で折り返します。最初の行だけ長さを変えられるのが工夫です。
+title: "メールのヘッダに載る Base64 を 76 文字ごとに折り返す"
+description: "Symfony の Base64Encoder::encodeString は、メールの本文や添付ファイルを Base64 にしたうえで、1 行 76 文字で折り返します。最初の行だけ長さを変えられるのが工夫です。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

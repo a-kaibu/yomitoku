@@ -1,6 +1,6 @@
 ---
-title: 呼び出しの途中で、循環した依存をたどらないようにする
-description: Laravel のサービスコンテナの call は、クラスのメソッドを依存性の注入つきで呼び出します。呼び出し中のクラスをスタックに積んで、finally で必ず外す仕組みが見どころです。
+title: "呼び出しの途中で、循環した依存をたどらないようにする"
+description: "Laravel のサービスコンテナの call は、クラスのメソッドを依存性の注入つきで呼び出します。呼び出し中のクラスをスタックに積んで、finally で必ず外す仕組みが見どころです。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

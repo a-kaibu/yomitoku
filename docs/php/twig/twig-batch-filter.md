@@ -1,6 +1,6 @@
 ---
-title: 配列を n 個ずつのかたまりに分け、足りない分を埋める
-description: Twig の batch フィルターは、配列を指定した個数ごとに分けて、表のように並べられる形にします。最後のかたまりが足りないときは、指定した値で埋めます。
+title: "配列を n 個ずつのかたまりに分け、足りない分を埋める"
+description: "Twig の batch フィルターは、配列を指定した個数ごとに分けて、表のように並べられる形にします。最後のかたまりが足りないときは、指定した値で埋めます。"
 language: php
 project: Twig
 repo: https://github.com/twigphp/Twig

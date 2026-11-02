@@ -1,6 +1,6 @@
 ---
-title: YAML の \n などの書き方を、正しい文字に直す
-description: Symfony の YAML パーサーは、ダブルクォートの中の \n や \t を実際の改行やタブに直します。正規表現で見つけた記号ごとに、match 式で変換先を選んでいます。
+title: "YAML の \\n などの書き方を、正しい文字に直す"
+description: "Symfony の YAML パーサーは、ダブルクォートの中の \\n や \\t を実際の改行やタブに直します。正規表現で見つけた記号ごとに、match 式で変換先を選んでいます。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

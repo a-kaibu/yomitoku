@@ -1,6 +1,6 @@
 ---
-title: 記号を除いた安全なランダム文字列を、乱数バイトから作る
-description: Laravel の Str::random は、推測されにくいランダムな英数字の文字列を作ります。乱数のバイト列を Base64 にしてから、紛らわしい記号を捨てて必要な長さに切るのが工夫です。
+title: "記号を除いた安全なランダム文字列を、乱数バイトから作る"
+description: "Laravel の Str::random は、推測されにくいランダムな英数字の文字列を作ります。乱数のバイト列を Base64 にしてから、紛らわしい記号を捨てて必要な長さに切るのが工夫です。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

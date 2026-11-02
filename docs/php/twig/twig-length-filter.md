@@ -1,6 +1,6 @@
 ---
-title: 文字列も配列もオブジェクトも、同じ length で数える
-description: Twig の length フィルターは、文字列の文字数、配列の要素数、反復可能なオブジェクトの件数を、一つの関数で数えます。値の種類を順番に調べて、適した数え方を選びます。
+title: "文字列も配列もオブジェクトも、同じ length で数える"
+description: "Twig の length フィルターは、文字列の文字数、配列の要素数、反復可能なオブジェクトの件数を、一つの関数で数えます。値の種類を順番に調べて、適した数え方を選びます。"
 language: php
 project: Twig
 repo: https://github.com/twigphp/Twig

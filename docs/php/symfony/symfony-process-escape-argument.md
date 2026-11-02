@@ -1,6 +1,6 @@
 ---
-title: コマンドの引数を、OS ごとのルールで安全に囲む
-description: Symfony の Process::escapeArgument は、引数にスペースや記号が含まれても、シェルが正しく 1 つの値として読むように囲みます。Linux と Windows で書き方を分けているのが見どころです。
+title: "コマンドの引数を、OS ごとのルールで安全に囲む"
+description: "Symfony の Process::escapeArgument は、引数にスペースや記号が含まれても、シェルが正しく 1 つの値として読むように囲みます。Linux と Windows で書き方を分けているのが見どころです。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

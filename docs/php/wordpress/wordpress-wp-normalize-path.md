@@ -1,6 +1,6 @@
 ---
-title: Windows と Linux のパスの書き方を、スラッシュにそろえる
-description: WordPress の wp_normalize_path は、Windows の「\\」区切りのパスを「/」にそろえ、連続する区切りを 1 つにまとめます。結果を静的な配列に覚えておくキャッシュも使っています。
+title: "Windows と Linux のパスの書き方を、スラッシュにそろえる"
+description: "WordPress の wp_normalize_path は、Windows の「\\\\」区切りのパスを「/」にそろえ、連続する区切りを 1 つにまとめます。結果を静的な配列に覚えておくキャッシュも使っています。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

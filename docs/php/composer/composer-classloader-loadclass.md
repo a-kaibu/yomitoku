@@ -1,6 +1,6 @@
 ---
-title: クラス名からファイルを探して、安全に読み込む
-description: Composer の ClassLoader::loadClass は、クラス名に対応するファイルを探して読み込みます。ファイルを読む処理を、外の変数が見えない専用のクロージャに任せているのが工夫です。
+title: "クラス名からファイルを探して、安全に読み込む"
+description: "Composer の ClassLoader::loadClass は、クラス名に対応するファイルを探して読み込みます。ファイルを読む処理を、外の変数が見えない専用のクロージャに任せているのが工夫です。"
 language: php
 project: Composer
 repo: https://github.com/composer/composer

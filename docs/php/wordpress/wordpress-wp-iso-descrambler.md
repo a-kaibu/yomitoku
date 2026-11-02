@@ -1,6 +1,6 @@
 ---
-title: メールの件名に残る =?UTF-8?Q?...?= を日本語に戻す
-description: WordPress の wp_iso_descrambler は、メールのヘッダにある「=?...?Q?...?=」の形式の文字列を読み、元の文字に戻します。16 進数の「=XX」を、正規表現のコールバックで 1 つずつ変換します。
+title: "メールの件名に残る =?UTF-8?Q?...?= を日本語に戻す"
+description: "WordPress の wp_iso_descrambler は、メールのヘッダにある「=?...?Q?...?=」の形式の文字列を読み、元の文字に戻します。16 進数の「=XX」を、正規表現のコールバックで 1 つずつ変換します。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

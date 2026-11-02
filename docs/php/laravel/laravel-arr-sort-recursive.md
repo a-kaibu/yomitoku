@@ -1,6 +1,6 @@
 ---
-title: 入れ子の配列を、リストか連想配列かで並べ替える
-description: Laravel の Arr::sortRecursive は、入れ子になった配列のすべての階層を並べ替えます。配列がリストか連想配列かで、キーで並べるか値で並べるかを切り替えます。
+title: "入れ子の配列を、リストか連想配列かで並べ替える"
+description: "Laravel の Arr::sortRecursive は、入れ子になった配列のすべての階層を並べ替えます。配列がリストか連想配列かで、キーで並べるか値で並べるかを切り替えます。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

@@ -1,6 +1,6 @@
 ---
-title: 入れ子の配列を、深さを指定して平らにする
-description: Laravel の Arr::flatten は、入れ子の配列を指定した深さまで平らにします。深さを 1 減らしながら再帰し、深さ 1 の場合だけ特別な書き方にしているのが見どころです。
+title: "入れ子の配列を、深さを指定して平らにする"
+description: "Laravel の Arr::flatten は、入れ子の配列を指定した深さまで平らにします。深さを 1 減らしながら再帰し、深さ 1 の場合だけ特別な書き方にしているのが見どころです。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

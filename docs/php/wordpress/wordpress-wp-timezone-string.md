@@ -1,6 +1,6 @@
 ---
-title: 時差の数字を「+09:30」のような文字列に変える
-description: WordPress の wp_timezone_string は、タイムゾーン名がない場合に、GMT からの時差を +09:00 のような文字列にします。小数の時差（30 分単位）を分に直す計算が見どころです。
+title: "時差の数字を「+09:30」のような文字列に変える"
+description: "WordPress の wp_timezone_string は、タイムゾーン名がない場合に、GMT からの時差を +09:00 のような文字列にします。小数の時差（30 分単位）を分に直す計算が見どころです。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

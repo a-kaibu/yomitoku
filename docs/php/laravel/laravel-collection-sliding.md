@@ -1,6 +1,6 @@
 ---
-title: 窓をずらしながら、重なりのある部分列を作る
-description: Laravel の Collection::sliding は、データの上を窓（ウィンドウ）をずらしながら進むように、重なりのある小さな配列の並びを作ります。株価の移動平均のような計算に向いています。
+title: "窓をずらしながら、重なりのある部分列を作る"
+description: "Laravel の Collection::sliding は、データの上を窓（ウィンドウ）をずらしながら進むように、重なりのある小さな配列の並びを作ります。株価の移動平均のような計算に向いています。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

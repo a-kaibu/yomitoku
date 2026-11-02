@@ -1,6 +1,6 @@
 ---
-title: 時刻とランダムを組み合わせ、同じミリ秒でも順番が増える ULID
-description: Symfony の Ulid::generate は、時刻とランダムな値から、26 文字の ULID を作ります。同じミリ秒に複数作っても、ランダムな部分を 1 ずつ増やして、作った順に並ぶようにしています。
+title: "時刻とランダムを組み合わせ、同じミリ秒でも順番が増える ULID"
+description: "Symfony の Ulid::generate は、時刻とランダムな値から、26 文字の ULID を作ります。同じミリ秒に複数作っても、ランダムな部分を 1 ずつ増やして、作った順に並ぶようにしています。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

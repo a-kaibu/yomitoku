@@ -1,6 +1,6 @@
 ---
-title: 関数の中の変数で、呼ばれるたびに番号を増やす
-description: WordPress の wp_unique_id は、呼ばれるたびに 1 つずつ増える番号を文字列にして返します。関数の中の static 変数を使って、同じページの中で重ならない ID を作ります。
+title: "関数の中の変数で、呼ばれるたびに番号を増やす"
+description: "WordPress の wp_unique_id は、呼ばれるたびに 1 つずつ増える番号を文字列にして返します。関数の中の static 変数を使って、同じページの中で重ならない ID を作ります。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

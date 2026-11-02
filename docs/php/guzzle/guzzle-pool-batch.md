@@ -1,6 +1,6 @@
 ---
-title: 大量のリクエストを同時に送り、結果を順番どおりに並べる
-description: Guzzle の Pool::batch は、たくさんの HTTP リクエストを並行して送り、成功と失敗の結果を元の順番どおりに返します。送信の完了を待ってから、キーでソートして返します。
+title: "大量のリクエストを同時に送り、結果を順番どおりに並べる"
+description: "Guzzle の Pool::batch は、たくさんの HTTP リクエストを並行して送り、成功と失敗の結果を元の順番どおりに返します。送信の完了を待ってから、キーでソートして返します。"
 language: php
 project: Guzzle
 repo: https://github.com/guzzle/guzzle

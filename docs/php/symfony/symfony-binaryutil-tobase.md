@@ -1,6 +1,6 @@
 ---
-title: バイト列を、好きな文字の並びで表す数に変える
-description: Symfony の BinaryUtil::toBase は、バイト列を Base58 や Base32 のような別の基数の文字列に変えます。大きな数を割り算で桁に分けるとき、32 ビットずつまとめて計算しています。
+title: "バイト列を、好きな文字の並びで表す数に変える"
+description: "Symfony の BinaryUtil::toBase は、バイト列を Base58 や Base32 のような別の基数の文字列に変えます。大きな数を割り算で桁に分けるとき、32 ビットずつまとめて計算しています。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

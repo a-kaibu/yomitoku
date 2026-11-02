@@ -1,6 +1,6 @@
 ---
-title: タイトルを、URL に使える英数字の並びに変える
-description: Symfony の AsciiSlugger::slug は、「Héllo Wörld!」のような文字列を「Hello-World」のような URL 向けの形に変えます。アクセント記号、記号、言語ごとの読み替えを段階ごとに行います。
+title: "タイトルを、URL に使える英数字の並びに変える"
+description: "Symfony の AsciiSlugger::slug は、「Héllo Wörld!」のような文字列を「Hello-World」のような URL 向けの形に変えます。アクセント記号、記号、言語ごとの読み替えを段階ごとに行います。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

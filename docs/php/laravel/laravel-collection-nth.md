@@ -1,6 +1,6 @@
 ---
-title: n 個おきに要素を取り出すための、剰余の数え方
-description: Laravel の Collection::nth は、コレクションから「3 個おきに」のように間隔をあけて要素を取り出します。剰余 % を使って位置を判定する、簡潔な書き方です。
+title: "n 個おきに要素を取り出すための、剰余の数え方"
+description: "Laravel の Collection::nth は、コレクションから「3 個おきに」のように間隔をあけて要素を取り出します。剰余 % を使って位置を判定する、簡潔な書き方です。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

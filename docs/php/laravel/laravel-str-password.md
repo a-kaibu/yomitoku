@@ -1,6 +1,6 @@
 ---
-title: 文字の種類を必ず 1 つずつ入れて、ランダムなパスワードを作る
-description: Laravel の Str::password は、英字・数字・記号などを組み合わせた強いパスワードを作ります。選んだ文字の種類は、必ず最低 1 文字ずつ入るように工夫されています。
+title: "文字の種類を必ず 1 つずつ入れて、ランダムなパスワードを作る"
+description: "Laravel の Str::password は、英字・数字・記号などを組み合わせた強いパスワードを作ります。選んだ文字の種類は、必ず最低 1 文字ずつ入るように工夫されています。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

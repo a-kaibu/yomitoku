@@ -1,6 +1,6 @@
 ---
-title: 時刻を末尾に埋め込み、並べたときに順番がそろう UUID
-description: Ramsey UUID の CombGenerator::generate は、ランダムなバイトの後ろに現在時刻を付けた識別子を作ります。データベースの索引が散らばりにくくなるように、順番がおおむね時刻どおりになるのが工夫です。
+title: "時刻を末尾に埋め込み、並べたときに順番がそろう UUID"
+description: "Ramsey UUID の CombGenerator::generate は、ランダムなバイトの後ろに現在時刻を付けた識別子を作ります。データベースの索引が散らばりにくくなるように、順番がおおむね時刻どおりになるのが工夫です。"
 language: php
 project: Ramsey UUID
 repo: https://github.com/ramsey/uuid

@@ -1,6 +1,6 @@
 ---
-title: ダブルクォートの文字列を、「#{}」の埋め込みも含めて読む
-description: Twig の字句解析器（Lexer）の lexString は、テンプレートの "..." の中身を読みます。文字列の中に埋め込まれた式の開始と終了を見分ける、状態の切り替えが見どころです。
+title: "ダブルクォートの文字列を、「#{}」の埋め込みも含めて読む"
+description: "Twig の字句解析器（Lexer）の lexString は、テンプレートの \"...\" の中身を読みます。文字列の中に埋め込まれた式の開始と終了を見分ける、状態の切り替えが見どころです。"
 language: php
 project: Twig
 repo: https://github.com/twigphp/Twig

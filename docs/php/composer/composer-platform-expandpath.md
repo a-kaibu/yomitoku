@@ -1,6 +1,6 @@
 ---
-title: パスの先頭の ~ や環境変数を、実際の場所に置き換える
-description: Composer の Platform::expandPath は、設定ファイルに書かれた ~/cache や $HOME/bin のようなパスを、実際のパスに置き換えます。Windows では HOME を USERPROFILE の別名として扱います。
+title: "パスの先頭の ~ や環境変数を、実際の場所に置き換える"
+description: "Composer の Platform::expandPath は、設定ファイルに書かれた ~/cache や $HOME/bin のようなパスを、実際のパスに置き換えます。Windows では HOME を USERPROFILE の別名として扱います。"
 language: php
 project: Composer
 repo: https://github.com/composer/composer

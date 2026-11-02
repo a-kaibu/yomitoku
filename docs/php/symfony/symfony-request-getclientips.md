@@ -1,6 +1,6 @@
 ---
-title: 信頼できるプロキシからの転送だけを、接続元として読む
-description: Symfony の Request::getClientIps は、サーバーに接続してきた IP のほかに、X-Forwarded-For ヘッダーに書かれた元の IP を返します。ただし、信頼できるプロキシから来た場合だけ、そのヘッダーを読みます。
+title: "信頼できるプロキシからの転送だけを、接続元として読む"
+description: "Symfony の Request::getClientIps は、サーバーに接続してきた IP のほかに、X-Forwarded-For ヘッダーに書かれた元の IP を返します。ただし、信頼できるプロキシから来た場合だけ、そのヘッダーを読みます。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

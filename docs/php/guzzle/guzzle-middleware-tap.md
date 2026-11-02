@@ -1,6 +1,6 @@
 ---
-title: リクエストの前後に、処理をそっと挟む仕掛け
-description: Guzzle の Middleware::tap は、HTTP リクエストが送られる前と受け取った後に、好きな処理を挟めるミドルウェアを作ります。ログや計測を、本体のコードに触れずに足せるのが特徴です。
+title: "リクエストの前後に、処理をそっと挟む仕掛け"
+description: "Guzzle の Middleware::tap は、HTTP リクエストが送られる前と受け取った後に、好きな処理を挟めるミドルウェアを作ります。ログや計測を、本体のコードに触れずに足せるのが特徴です。"
 language: php
 project: Guzzle
 repo: https://github.com/guzzle/guzzle

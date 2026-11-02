@@ -1,6 +1,6 @@
 ---
-title: 処理の鎖を組み立てて、トランザクションの中で実行する
-description: Laravel の Pipeline::then は、登録された処理を入れ子のクロージャとして組み立ててから実行します。データベースのトランザクションで包む仕組みと、後始末の finally も一緒に扱います。
+title: "処理の鎖を組み立てて、トランザクションの中で実行する"
+description: "Laravel の Pipeline::then は、登録された処理を入れ子のクロージャとして組み立ててから実行します。データベースのトランザクションで包む仕組みと、後始末の finally も一緒に扱います。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

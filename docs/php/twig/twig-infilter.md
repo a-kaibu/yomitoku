@@ -1,6 +1,6 @@
 ---
-title: 「in」の判定を、文字列・配列・反復可能な値で使い分ける
-description: Twig の inFilter は、テンプレートの in 演算子の判定を行います。文字列の部分一致、配列の要素の一致、オブジェクトの同一性など、対象ごとに比べ方を変えています。
+title: "「in」の判定を、文字列・配列・反復可能な値で使い分ける"
+description: "Twig の inFilter は、テンプレートの in 演算子の判定を行います。文字列の部分一致、配列の要素の一致、オブジェクトの同一性など、対象ごとに比べ方を変えています。"
 language: php
 project: Twig
 repo: https://github.com/twigphp/Twig

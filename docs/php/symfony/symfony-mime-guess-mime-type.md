@@ -1,6 +1,6 @@
 ---
-title: 判定の方法を順番に試して、ファイルの種類を推測する
-description: Symfony の MimeTypes::guessMimeType は、ファイルの MIME タイプ（種類）を、いくつもの判定方法を順番に試して推測します。使えない方法は飛ばし、最初に答えが出たところで止まります。
+title: "判定の方法を順番に試して、ファイルの種類を推測する"
+description: "Symfony の MimeTypes::guessMimeType は、ファイルの MIME タイプ（種類）を、いくつもの判定方法を順番に試して推測します。使えない方法は飛ばし、最初に答えが出たところで止まります。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

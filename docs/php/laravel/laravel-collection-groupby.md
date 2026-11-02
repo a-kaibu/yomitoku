@@ -1,6 +1,6 @@
 ---
-title: 同じ値どうしを束ねて、入れ子のグループを作る
-description: Laravel の Collection::groupBy は、項目を指定したキーの値ごとに分けて、グループの連想配列を作ります。複数のキーを配列で渡すと、入れ子のグループにもできます。
+title: "同じ値どうしを束ねて、入れ子のグループを作る"
+description: "Laravel の Collection::groupBy は、項目を指定したキーの値ごとに分けて、グループの連想配列を作ります。複数のキーを配列で渡すと、入れ子のグループにもできます。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

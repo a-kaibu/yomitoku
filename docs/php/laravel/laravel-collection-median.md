@@ -1,6 +1,6 @@
 ---
-title: 偶数個のときは真ん中の 2 つの平均で、中央値を求める
-description: Laravel の Collection::median は、値の中央値を求めます。要素数が奇数か偶数かで計算を分け、偶数のときは真ん中の 2 つの平均を使います。
+title: "偶数個のときは真ん中の 2 つの平均で、中央値を求める"
+description: "Laravel の Collection::median は、値の中央値を求めます。要素数が奇数か偶数かで計算を分け、偶数のときは真ん中の 2 つの平均を使います。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

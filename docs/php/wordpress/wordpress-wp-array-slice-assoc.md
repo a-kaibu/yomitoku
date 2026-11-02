@@ -1,6 +1,6 @@
 ---
-title: 必要なキーだけを、キーの順番どおりに取り出す
-description: WordPress の wp_array_slice_assoc は、連想配列から指定したキーの値だけを取り出します。array_intersect_key では書けない「キーの順番」と「null の扱い」に注意した、小さな関数です。
+title: "必要なキーだけを、キーの順番どおりに取り出す"
+description: "WordPress の wp_array_slice_assoc は、連想配列から指定したキーの値だけを取り出します。array_intersect_key では書けない「キーの順番」と「null の扱い」に注意した、小さな関数です。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

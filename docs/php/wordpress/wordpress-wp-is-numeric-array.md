@@ -1,6 +1,6 @@
 ---
-title: キーがすべて数字かで、リストか辞書かを見分ける
-description: WordPress の wp_is_numeric_array は、配列のキーが文字列を一つも含まないかを調べます。JSON に変換するときにリストになるか、オブジェクトになるかを決める判定として使えます。
+title: "キーがすべて数字かで、リストか辞書かを見分ける"
+description: "WordPress の wp_is_numeric_array は、配列のキーが文字列を一つも含まないかを調べます。JSON に変換するときにリストになるか、オブジェクトになるかを決める判定として使えます。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

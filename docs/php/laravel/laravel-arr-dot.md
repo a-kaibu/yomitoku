@@ -1,6 +1,6 @@
 ---
-title: 入れ子の配列を「a.b.c」の一列にほどく再帰クロージャ
-description: Laravel の Arr::dot は、入れ子の連想配列を user.address.city のようなドット記法のキーをもつ 1 段の配列に変換します。再帰を自己参照するクロージャで書いている点がおもしろい関数です。
+title: "入れ子の配列を「a.b.c」の一列にほどく再帰クロージャ"
+description: "Laravel の Arr::dot は、入れ子の連想配列を user.address.city のようなドット記法のキーをもつ 1 段の配列に変換します。再帰を自己参照するクロージャで書いている点がおもしろい関数です。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

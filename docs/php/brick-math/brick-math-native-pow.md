@@ -1,6 +1,6 @@
 ---
-title: 何桁でも計算できる累乗を、2 乗を繰り返して求める
-description: brick/math の NativeCalculator::pow は、非常に大きな数の累乗を、2 乗と掛け算の再帰で求めます。指数を半分に減らしていく方法で、掛け算の回数を大きく減らしています。
+title: "何桁でも計算できる累乗を、2 乗を繰り返して求める"
+description: "brick/math の NativeCalculator::pow は、非常に大きな数の累乗を、2 乗と掛け算の再帰で求めます。指数を半分に減らしていく方法で、掛け算の回数を大きく減らしています。"
 language: php
 project: Brick Math
 repo: https://github.com/brick/math

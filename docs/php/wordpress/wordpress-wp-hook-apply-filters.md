@@ -1,6 +1,6 @@
 ---
-title: フィルターを優先度順に回し、入れ子の呼び出しにも耐える
-description: WordPress の WP_Hook::apply_filters は、登録されたフィルターを優先度の小さい順に実行し、値を次々に変えていきます。フィルターの中でさらに同じフィルターが呼ばれても壊れない仕組みが見どころです。
+title: "フィルターを優先度順に回し、入れ子の呼び出しにも耐える"
+description: "WordPress の WP_Hook::apply_filters は、登録されたフィルターを優先度の小さい順に実行し、値を次々に変えていきます。フィルターの中でさらに同じフィルターが呼ばれても壊れない仕組みが見どころです。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

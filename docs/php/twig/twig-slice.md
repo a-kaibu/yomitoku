@@ -1,6 +1,6 @@
 ---
-title: 文字列も配列も反復可能なものも、同じ slice で切り出す
-description: Twig の slice フィルターの実装は、文字列、配列、イテレータのそれぞれに合った方法で、一部分だけを取り出します。反復可能な値は、必要な範囲だけを読む LimitIterator を使います。
+title: "文字列も配列も反復可能なものも、同じ slice で切り出す"
+description: "Twig の slice フィルターの実装は、文字列、配列、イテレータのそれぞれに合った方法で、一部分だけを取り出します。反復可能な値は、必要な範囲だけを読む LimitIterator を使います。"
 language: php
 project: Twig
 repo: https://github.com/twigphp/Twig

@@ -1,6 +1,6 @@
 ---
-title: クラス名のファイルを、表・キャッシュ・探索の順で探す
-description: Composer の ClassLoader::findFile は、クラス名からファイルのパスを求めます。クラスマップ、APCu のキャッシュ、存在しなかったことの記録を組み合わせて、探索の回数を減らしています。
+title: "クラス名のファイルを、表・キャッシュ・探索の順で探す"
+description: "Composer の ClassLoader::findFile は、クラス名からファイルのパスを求めます。クラスマップ、APCu のキャッシュ、存在しなかったことの記録を組み合わせて、探索の回数を減らしています。"
 language: php
 project: Composer
 repo: https://github.com/composer/composer

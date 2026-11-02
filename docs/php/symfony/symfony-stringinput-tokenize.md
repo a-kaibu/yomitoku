@@ -1,6 +1,6 @@
 ---
-title: コマンドの文字列を、引用符とエスケープを考えて単語に分ける
-description: Symfony Console の StringInput::tokenize は、"hello world" --name='Ami' のようなコマンドの文字列を、引数の単語の配列に分けます。引用符とバックスラッシュを、1 文字ずつ正規表現で読み進めます。
+title: "コマンドの文字列を、引用符とエスケープを考えて単語に分ける"
+description: "Symfony Console の StringInput::tokenize は、\"hello world\" --name='Ami' のようなコマンドの文字列を、引数の単語の配列に分けます。引用符とバックスラッシュを、1 文字ずつ正規表現で読み進めます。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

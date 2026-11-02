@@ -1,6 +1,6 @@
 ---
-title: IPv6 のアドレスを 16 ビットずつ区切って、範囲を比べる
-description: Symfony の IpUtils::checkIp6 は、IPv6 アドレスが範囲に入るかを判定します。128 ビットを 16 ビットずつの 8 つの数として扱い、ネットマスクに応じた部分だけを比べます。
+title: "IPv6 のアドレスを 16 ビットずつ区切って、範囲を比べる"
+description: "Symfony の IpUtils::checkIp6 は、IPv6 アドレスが範囲に入るかを判定します。128 ビットを 16 ビットずつの 8 つの数として扱い、ネットマスクに応じた部分だけを比べます。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

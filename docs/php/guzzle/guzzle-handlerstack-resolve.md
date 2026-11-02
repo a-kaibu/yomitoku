@@ -1,6 +1,6 @@
 ---
-title: 玉ねぎの皮のように、ミドルウェアを内側から包んで組み立てる
-description: Guzzle の HandlerStack::resolve は、登録されたミドルウェアを逆順に包んでいき、1 つの通信関数を組み立てます。組み立て結果は覚えておき、2 回目からは再利用します。
+title: "玉ねぎの皮のように、ミドルウェアを内側から包んで組み立てる"
+description: "Guzzle の HandlerStack::resolve は、登録されたミドルウェアを逆順に包んでいき、1 つの通信関数を組み立てます。組み立て結果は覚えておき、2 回目からは再利用します。"
 language: php
 project: Guzzle
 repo: https://github.com/guzzle/guzzle

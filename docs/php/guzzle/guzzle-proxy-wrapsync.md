@@ -1,6 +1,6 @@
 ---
-title: 同期と非同期の通信を、オプションで振り分ける
-description: Guzzle の Proxy::wrapSync は、オプションに応じて、非同期の処理と同期の処理を切り替える関数を作ります。通信のやり方を、呼び出す側の一行で選べるようにしています。
+title: "同期と非同期の通信を、オプションで振り分ける"
+description: "Guzzle の Proxy::wrapSync は、オプションに応じて、非同期の処理と同期の処理を切り替える関数を作ります。通信のやり方を、呼び出す側の一行で選べるようにしています。"
 language: php
 project: Guzzle
 repo: https://github.com/guzzle/guzzle

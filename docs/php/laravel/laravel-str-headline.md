@@ -1,6 +1,6 @@
 ---
-title: userName のような名前を「User Name」の見出しに直す
-description: Laravel の Str::headline は、キャメルケースや区切り文字を含む名前を、単語ごとに頭を大文字にした見出しに変えます。区切りを一度 _ にそろえてから、単語を取り出すのが工夫です。
+title: "userName のような名前を「User Name」の見出しに直す"
+description: "Laravel の Str::headline は、キャメルケースや区切り文字を含む名前を、単語ごとに頭を大文字にした見出しに変えます。区切りを一度 _ にそろえてから、単語を取り出すのが工夫です。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

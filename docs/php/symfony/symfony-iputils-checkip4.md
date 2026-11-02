@@ -1,6 +1,6 @@
 ---
-title: IP アドレスが範囲に入るかを 2 進数の先頭比較で調べる
-description: Symfony の IpUtils::checkIp4 は、IPv4 アドレスが 192.168.1.0/24 のような範囲に入るかを判定します。32 桁の 2 進数にそろえて、先頭の桁だけを比べるのが工夫です。
+title: "IP アドレスが範囲に入るかを 2 進数の先頭比較で調べる"
+description: "Symfony の IpUtils::checkIp4 は、IPv4 アドレスが 192.168.1.0/24 のような範囲に入るかを判定します。32 桁の 2 進数にそろえて、先頭の桁だけを比べるのが工夫です。"
 language: php
 project: Symfony
 repo: https://github.com/symfony/symfony

@@ -1,6 +1,6 @@
 ---
-title: 文字列の false も、真偽値として正しく読み取る
-description: WordPress の wp_validate_boolean は、真偽値・文字列・数値を受け取り、true か false に直します。文字列の "false" を false として扱うのが、PHP の (bool) との違いです。
+title: "文字列の false も、真偽値として正しく読み取る"
+description: "WordPress の wp_validate_boolean は、真偽値・文字列・数値を受け取り、true か false に直します。文字列の \"false\" を false として扱うのが、PHP の (bool) との違いです。"
 language: php
 project: WordPress
 repo: https://github.com/WordPress/WordPress

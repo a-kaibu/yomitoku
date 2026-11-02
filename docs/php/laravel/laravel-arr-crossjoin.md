@@ -1,6 +1,6 @@
 ---
-title: 複数の配列から全部の組み合わせを作る直積の書き方
-description: Laravel の Arr::crossJoin は、いくつもの配列から「どれか 1 つずつ選んだ組み合わせ」をすべて作ります。結果を少しずつ広げていく素直な反復で、直積を表しています。
+title: "複数の配列から全部の組み合わせを作る直積の書き方"
+description: "Laravel の Arr::crossJoin は、いくつもの配列から「どれか 1 つずつ選んだ組み合わせ」をすべて作ります。結果を少しずつ広げていく素直な反復で、直積を表しています。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework

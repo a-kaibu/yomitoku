@@ -1,6 +1,6 @@
 ---
-title: 平方根の近似を、割り算の平均を繰り返して求める
-description: brick/math の NativeCalculator::sqrt は、大きな整数の平方根を、ニュートン法と呼ばれる方法で求めます。答えに近づくたびに値を平均し、変化がなくなったところで止まります。
+title: "平方根の近似を、割り算の平均を繰り返して求める"
+description: "brick/math の NativeCalculator::sqrt は、大きな整数の平方根を、ニュートン法と呼ばれる方法で求めます。答えに近づくたびに値を平均し、変化がなくなったところで止まります。"
 language: php
 project: Brick Math
 repo: https://github.com/brick/math

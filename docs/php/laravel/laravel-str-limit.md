@@ -1,6 +1,6 @@
 ---
-title: 表示幅を数えて、単語の途中で切らずに短くする
-description: Laravel の Str::limit は、長い文字列を指定した幅に収めて「...」を付けます。全角と半角の幅を数え、単語の区切りで切るかどうかも選べます。
+title: "表示幅を数えて、単語の途中で切らずに短くする"
+description: "Laravel の Str::limit は、長い文字列を指定した幅に収めて「...」を付けます。全角と半角の幅を数え、単語の区切りで切るかどうかも選べます。"
 language: php
 project: Laravel
 repo: https://github.com/laravel/framework
