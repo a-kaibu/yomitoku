@@ -16,9 +16,10 @@ const lines = computed(() => {
   <h1 class="entry-title">{{ fm.title }}</h1>
   <div class="entry-meta">
     <div class="entry-meta__badges">
-      <a v-if="lang" class="badge badge--lang" :style="{ '--c': lang.color }" :href="withBase(`/${lang.id}/`)">{{ lang.name }}</a>
+      <a v-if="lang" class="badge badge--lang" :style="{ '--c': lang.color, '--fg': lang.fg }" :href="withBase(`/${lang.id}/`)">{{ lang.name }}</a>
       <span class="badge badge--level" :data-level="fm.difficulty">{{ fm.difficultyLabel }}</span>
-      <span v-for="t in fm.tags ?? []" :key="t" class="badge badge--tag">#{{ t }}</span>
+      <a v-if="lang" class="chip chip--project" :href="withBase(`/${lang.id}/?project=${fm.projectSlug}`)">{{ fm.project }}</a>
+      <a v-for="t in fm.tags ?? []" :key="t" class="chip chip--tag" :href="withBase(`/${lang?.id}/?tag=${encodeURIComponent(t)}`)">#{{ t }}</a>
     </div>
     <dl class="entry-meta__table">
       <div><dt>プロジェクト</dt><dd><a :href="fm.repo" target="_blank" rel="noopener">{{ fm.project }}</a></dd></div>

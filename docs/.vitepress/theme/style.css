@@ -41,7 +41,7 @@
 .badge--lang {
   --c: var(--vp-c-brand-1);
   background: var(--c);
-  color: #fff !important;
+  color: var(--fg, #fff) !important;
   text-decoration: none !important;
 }
 .badge--level[data-level='1'] { background: var(--vp-c-green-soft); color: var(--vp-c-green-1); }
@@ -123,7 +123,8 @@
 }
 .lang-card__name { font-size: 20px; font-weight: 700; color: var(--vp-c-text-1); }
 .lang-card__blurb { font-size: 14px; color: var(--vp-c-text-2); line-height: 1.6; }
-.lang-card__count { margin-top: auto; font-size: 13px; color: var(--c); font-weight: 600; }
+.lang-card__count { margin-top: auto; font-size: 13px; color: var(--vp-c-text-2); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.lang-card__count::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
 
 /* ---- 言語ページの記事一覧 ---- */
 .entry-list__filters {
@@ -148,15 +149,6 @@
 .entry-list__empty { color: var(--vp-c-text-2); }
 .link-button { margin-left: 8px; color: var(--vp-c-brand-1); font-size: 14px; text-decoration: underline; }
 
-.entry-group h2 { display: flex; align-items: center; gap: 8px; }
-.entry-group__count {
-  font-size: 13px;
-  font-weight: 600;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--vp-c-default-soft);
-  color: var(--vp-c-text-2);
-}
 .vp-doc ul.entry-cards {
   list-style: none;
   padding: 0;
@@ -165,21 +157,22 @@
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
 }
-.vp-doc ul.entry-cards > li { margin: 0; }
-.vp-doc a.entry-card {
+.vp-doc ul.entry-cards > li.entry-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  height: 100%;
+  margin: 0;
   padding: 14px 16px;
   border: 1px solid var(--vp-c-divider);
   border-radius: var(--yk-radius);
   background: var(--vp-c-bg-soft);
   color: var(--vp-c-text-1);
-  text-decoration: none;
   transition: border-color 0.15s;
 }
-.vp-doc a.entry-card:hover { border-color: var(--vp-c-brand-1); }
+.vp-doc ul.entry-cards > li.entry-card:hover { border-color: var(--vp-c-brand-1); }
+/* カード全体をリンクにしつつ、チップは押せるようにする */
+.vp-doc a.entry-card__link { position: absolute; inset: 0; z-index: 1; border-radius: inherit; }
 .entry-card__head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .vp-doc .entry-card__fn {
   font-weight: 700;
@@ -190,7 +183,42 @@
 }
 .entry-card__title { font-weight: 600; line-height: 1.6; }
 .entry-card__desc { font-size: 13px; line-height: 1.7; color: var(--vp-c-text-2); }
-.entry-card__tags { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: auto; font-size: 12px; color: var(--vp-c-text-3); }
+.entry-card__chips { position: relative; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 4px; }
+
+/* プロジェクトとタグのチップ（プロジェクトは枠付きで別扱い） */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 22px;
+  white-space: nowrap;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+.chip--project {
+  border: 1px solid var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1) !important;
+  background: transparent;
+  font-weight: 600;
+}
+.chip--project::before { content: '📦'; margin-right: 4px; font-size: 11px; }
+.chip--tag { color: var(--vp-c-text-2) !important; background: var(--vp-c-default-soft); }
+.chip:hover { filter: brightness(0.95); }
+.chip--project.is-active { background: var(--vp-c-brand-1); color: #fff !important; }
+.chip--tag.is-active { background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) !important; }
+
+.entry-list__more { display: flex; justify-content: center; margin: 8px 0 24px; }
+.more-button {
+  padding: 8px 20px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 999px;
+  font-size: 14px;
+  color: var(--vp-c-text-1);
+  background: var(--vp-c-bg-soft);
+}
+.more-button:hover { border-color: var(--vp-c-brand-1); color: var(--vp-c-brand-1); }
 
 /* ---- レスポンシブ ---- */
 @media (max-width: 640px) {
@@ -277,3 +305,36 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
   text-align: right;
   color: var(--vp-code-line-number-color);
 }
+
+/* ---- 右上はテーマ切り替えだけ（ハンバーガー・…メニューは出さない） ---- */
+.VPNavBarHamburger,
+.VPNavBarExtra { display: none !important; }
+.VPNavBar .VPNavBarAppearance { display: flex !important; align-items: center; }
+.VPNavBar .VPNavBarAppearance::before { display: none !important; }
+
+/* ---- 目次 ---- */
+/* 広い画面（1280px〜）では本文の右に常に目次、それより狭いと記事冒頭に開閉式の目次 */
+@media (min-width: 1280px) {
+  .yk-toc { display: none; }
+}
+.VPDocAsideOutline .outline-title { font-size: 15px; font-weight: 700; color: var(--vp-c-text-1); }
+/* スマホでは上部バーの目次ボタンをやめ、記事冒頭の開閉式の目次にする */
+.VPLocalNav { display: none !important; }
+.yk-toc {
+  margin: -12px 0 32px;
+  padding: 12px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: var(--yk-radius);
+  background: var(--vp-c-bg-soft);
+  font-size: 14px;
+}
+.yk-toc summary { cursor: pointer; font-weight: 700; color: var(--vp-c-text-1); }
+.yk-toc ol { list-style: none; margin: 8px 0 0; padding: 0; }
+.yk-toc li { line-height: 1.6; padding: 3px 0; }
+.yk-toc li.lv3 { padding-left: 1.2em; font-size: 13px; }
+.yk-toc a { color: var(--vp-c-text-2); text-decoration: none; }
+.yk-toc a:hover { color: var(--vp-c-brand-1); }
+
+/* ---- 一覧の絞り込みは縦に並べる ---- */
+.entry-list__filters { flex-direction: column; }
+.entry-list__filters .field { width: 100%; flex: none; }

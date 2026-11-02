@@ -27,7 +27,7 @@ export function loadEntries(docsDir, langs = LANGUAGE_IDS) {
         const relativePath = `${lang}/${projectSlug}/${file}`
         const raw = fs.readFileSync(path.join(projectDir, file), 'utf8')
         const { data, content } = matter(raw)
-        entries.push({ lang, projectSlug, slug, relativePath, url: `/${lang}/${projectSlug}/${slug}`, fm: data, content })
+        entries.push({ lang, projectSlug, slug, relativePath, url: `/${lang}/${slug}`, fm: data, content })
       }
     }
   }

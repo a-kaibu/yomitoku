@@ -1,20 +1,21 @@
 // ヨクヨム: クライアントとビルドの両方で使う定数（Node 専用の import を書かないこと）。
 // 言語スレッドはこのファイルを編集しないでください。
 
-/** 対応言語。id はディレクトリ名（docs/<id>/）。fences はコードブロックに使える言語名。 */
+/** 対応言語。id はディレクトリ名（docs/<id>/）。fences はコードブロックに使える言語名。
+ *  color は GitHub の言語カラー（github-linguist）。fg はその上に載せる文字色。 */
 export const LANGUAGES = [
-  { id: 'c', name: 'C', fences: ['c'], color: '#5c6bc0', blurb: 'OS・組み込み・言語処理系の土台' },
-  { id: 'cpp', name: 'C++', fences: ['cpp'], color: '#00599c', blurb: 'ゼロコスト抽象化とテンプレート' },
-  { id: 'go', name: 'Go', fences: ['go'], color: '#00add8', blurb: 'シンプルさと並行処理' },
-  { id: 'rust', name: 'Rust', fences: ['rust'], color: '#ce422b', blurb: '所有権で安全と速さを両立' },
-  { id: 'csharp', name: 'C#', fences: ['csharp', 'cs'], color: '#68217a', blurb: '.NET と高性能なマネージドコード' },
-  { id: 'typescript', name: 'TypeScript', fences: ['ts', 'typescript', 'tsx'], color: '#3178c6', blurb: '型で JavaScript を設計する' },
-  { id: 'swift', name: 'Swift', fences: ['swift'], color: '#f05138', blurb: 'Apple プラットフォームと値型' },
-  { id: 'kotlin', name: 'Kotlin', fences: ['kotlin', 'kt'], color: '#7f52ff', blurb: '簡潔な JVM 言語とコルーチン' },
-  { id: 'java', name: 'Java', fences: ['java'], color: '#e76f00', blurb: '巨大システムを支える堅牢さ' },
-  { id: 'shell', name: 'シェルスクリプト', fences: ['sh', 'bash', 'shell', 'zsh'], color: '#4eaa25', blurb: 'コマンドをつなぐ小さな魔法' },
-  { id: 'python', name: 'Python', fences: ['python', 'py'], color: '#3776ab', blurb: '読みやすさと強力な標準ライブラリ' },
-  { id: 'ruby', name: 'Ruby', fences: ['ruby', 'rb'], color: '#cc342d', blurb: '楽しさとメタプログラミング' },
+  { id: 'c', name: 'C', fences: ['c'], color: '#555555', fg: '#ffffff', blurb: 'OS・組み込み・言語処理系の土台' },
+  { id: 'cpp', name: 'C++', fences: ['cpp'], color: '#f34b7d', fg: '#1b1b1f', blurb: 'ゼロコスト抽象化とテンプレート' },
+  { id: 'go', name: 'Go', fences: ['go'], color: '#00add8', fg: '#1b1b1f', blurb: 'シンプルさと並行処理' },
+  { id: 'rust', name: 'Rust', fences: ['rust'], color: '#dea584', fg: '#1b1b1f', blurb: '所有権で安全と速さを両立' },
+  { id: 'csharp', name: 'C#', fences: ['csharp', 'cs'], color: '#178600', fg: '#ffffff', blurb: '.NET と高性能なマネージドコード' },
+  { id: 'typescript', name: 'TypeScript', fences: ['ts', 'typescript', 'tsx'], color: '#3178c6', fg: '#1b1b1f', blurb: '型で JavaScript を設計する' },
+  { id: 'swift', name: 'Swift', fences: ['swift'], color: '#f05138', fg: '#1b1b1f', blurb: 'Apple プラットフォームと値型' },
+  { id: 'kotlin', name: 'Kotlin', fences: ['kotlin', 'kt'], color: '#a97bff', fg: '#1b1b1f', blurb: '簡潔な JVM 言語とコルーチン' },
+  { id: 'java', name: 'Java', fences: ['java'], color: '#b07219', fg: '#1b1b1f', blurb: '巨大システムを支える堅牢さ' },
+  { id: 'shell', name: 'Shell', fences: ['sh', 'bash', 'shell', 'zsh'], color: '#89e051', fg: '#1b1b1f', blurb: 'コマンドをつなぐ小さな魔法' },
+  { id: 'python', name: 'Python', fences: ['python', 'py'], color: '#3572a5', fg: '#ffffff', blurb: '読みやすさと強力な標準ライブラリ' },
+  { id: 'ruby', name: 'Ruby', fences: ['ruby', 'rb'], color: '#701516', fg: '#ffffff', blurb: '楽しさとメタプログラミング' },
 ]
 
 export const LANGUAGE_IDS = LANGUAGES.map((l) => l.id)

@@ -105,6 +105,7 @@ for (const lang of LANGUAGE_IDS) {
 // ---- 2. 各記事 ----------------------------------------------------------
 const entries = loadEntries(docsDir)
 const projectInfo = new Map() // `${lang}/${project}` -> { project, repo, file }
+const seenSlug = new Map()    // lang/slug -> file
 const seenSource = new Map()  // repo+file+function -> file
 const toVerify = []
 
@@ -121,6 +122,10 @@ for (const e of entries) {
     if (info.project !== fm.project) err(f, `project が同じディレクトリの ${info.file} と違います（"${info.project}" に統一）`)
     if (info.repo !== fm.repo) err(f, `repo が同じディレクトリの ${info.file} と違います（${info.repo} に統一）`)
   }
+  // URL は /<言語>/<slug> なので、slug は言語内（プロジェクトをまたいで）一意
+  const urlKey = `${e.lang}/${e.slug}`
+  if (seenSlug.has(urlKey) && scoped) err(f, `ファイル名（slug）"${e.slug}" が同じ言語の ${seenSlug.get(urlKey)} と重複しています。URL は /${e.lang}/<slug> になるので、言語内で一意にしてください（例: ${e.projectSlug}-${e.slug}.md）`)
+  if (!seenSlug.has(urlKey)) seenSlug.set(urlKey, f)
   const srcKey = `${fm.repo}|${fm.file}|${fm.function}`
   if (seenSource.has(srcKey) && scoped) err(f, `同じ関数の記事が既にあります: ${seenSource.get(srcKey)}`)
   seenSource.set(srcKey, f)

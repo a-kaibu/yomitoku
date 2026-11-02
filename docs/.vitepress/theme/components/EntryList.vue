@@ -1,24 +1,32 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useData, withBase } from 'vitepress'
 import { DIFFICULTIES } from '../../shared.mjs'
 
 interface Item { u: string; t: string; d: string; f: string; p: string; n: string; lv: number; tg: string[] }
 interface Project { slug: string; name: string; count: number }
 
+const PAGE = 60
+
 const { frontmatter } = useData()
-const items = computed<Item[]>(() => frontmatter.value.entries ?? [])
 const projects = computed<Project[]>(() => frontmatter.value.projects ?? [])
+// プロジェクトでグループ分けせず、関数名順の 1 つの一覧にする
+const items = computed<Item[]>(() =>
+  [...(frontmatter.value.entries ?? [])].sort((a: Item, b: Item) => String(a.f).localeCompare(String(b.f), 'ja', { sensitivity: 'base' })),
+)
 
 const q = ref('')
 const level = ref<number | ''>('')
 const tag = ref('')
+const project = ref('')
+const shown = ref(PAGE)
 
 const allTags = computed(() => [...new Set(items.value.flatMap((i) => i.tg))].sort((a, b) => a.localeCompare(b, 'ja')))
 
 const filtered = computed(() => {
   const words = q.value.toLowerCase().split(/\s+/).filter(Boolean)
   return items.value.filter((i) => {
+    if (project.value && i.p !== project.value) return false
     if (level.value !== '' && i.lv !== level.value) return false
     if (tag.value && !i.tg.includes(tag.value)) return false
     if (!words.length) return true
@@ -26,27 +34,47 @@ const filtered = computed(() => {
     return words.every((w) => hay.includes(w))
   })
 })
+const visible = computed(() => filtered.value.slice(0, shown.value))
 
-const groups = computed(() =>
-  projects.value
-    .map((p) => ({ ...p, items: filtered.value.filter((i) => i.p === p.slug) }))
-    .filter((g) => g.items.length),
-)
-const filtering = computed(() => q.value !== '' || level.value !== '' || tag.value !== '')
-function reset() { q.value = ''; level.value = ''; tag.value = '' }
+const filtering = computed(() => q.value !== '' || level.value !== '' || tag.value !== '' || project.value !== '')
+function reset() { q.value = ''; level.value = ''; tag.value = ''; project.value = '' }
+
+// 絞り込み条件は URL（?project=…&tag=…）にも反映し、サイドバーや記事ページのリンクから開けるようにする
+onMounted(() => {
+  const sp = new URLSearchParams(location.search)
+  project.value = sp.get('project') ?? ''
+  tag.value = sp.get('tag') ?? ''
+  q.value = sp.get('q') ?? ''
+  const lv = Number(sp.get('level'))
+  level.value = lv in DIFFICULTIES ? lv : ''
+})
+watch([q, level, tag, project], () => {
+  shown.value = PAGE
+  const sp = new URLSearchParams()
+  if (project.value) sp.set('project', project.value)
+  if (tag.value) sp.set('tag', tag.value)
+  if (level.value !== '') sp.set('level', String(level.value))
+  if (q.value) sp.set('q', q.value)
+  const qs = sp.toString()
+  history.replaceState(history.state, '', location.pathname + (qs ? `?${qs}` : ''))
+})
 </script>
 
 <template>
   <div class="entry-list">
     <div class="entry-list__filters" role="search">
       <input v-model="q" type="search" class="field field--grow" placeholder="キーワードで絞り込み" aria-label="キーワード" />
-      <select v-model="level" class="field" aria-label="難易度">
-        <option value="">難易度: すべて</option>
-        <option v-for="(label, lv) in DIFFICULTIES" :key="lv" :value="Number(lv)">{{ label }}</option>
+      <select v-model="project" class="field" aria-label="プロジェクト">
+        <option value="">プロジェクト: すべて</option>
+        <option v-for="p in projects" :key="p.slug" :value="p.slug">{{ p.name }}（{{ p.count }}）</option>
       </select>
       <select v-model="tag" class="field" aria-label="タグ">
         <option value="">タグ: すべて</option>
         <option v-for="t in allTags" :key="t" :value="t">#{{ t }}</option>
+      </select>
+      <select v-model="level" class="field" aria-label="難易度">
+        <option value="">難易度: すべて</option>
+        <option v-for="(label, lv) in DIFFICULTIES" :key="lv" :value="Number(lv)">{{ label }}</option>
       </select>
     </div>
     <p class="entry-list__summary">
@@ -55,26 +83,25 @@ function reset() { q.value = ''; level.value = ''; tag.value = '' }
     </p>
 
     <p v-if="!items.length" class="entry-list__empty">この言語の記事は準備中です。</p>
-    <p v-else-if="!groups.length" class="entry-list__empty">条件に合う記事がありません。</p>
+    <p v-else-if="!filtered.length" class="entry-list__empty">条件に合う記事がありません。</p>
 
-    <section v-for="g in groups" :key="g.slug" class="entry-group">
-      <h2 :id="`p-${g.slug}`" tabindex="-1">
-        {{ g.name }} <span class="entry-group__count">{{ g.items.length }}</span>
-        <a class="header-anchor" :href="`#p-${g.slug}`" aria-hidden="true"></a>
-      </h2>
-      <ul class="entry-cards">
-        <li v-for="i in g.items" :key="i.u">
-          <a class="entry-card" :href="withBase(i.u)">
-            <span class="entry-card__head">
-              <code class="entry-card__fn">{{ i.f }}</code>
-              <span class="badge badge--level" :data-level="i.lv">{{ DIFFICULTIES[i.lv] }}</span>
-            </span>
-            <span class="entry-card__title">{{ i.t }}</span>
-            <span class="entry-card__desc">{{ i.d }}</span>
-            <span class="entry-card__tags"><span v-for="t in i.tg" :key="t">#{{ t }}</span></span>
-          </a>
-        </li>
-      </ul>
-    </section>
+    <ul class="entry-cards">
+      <li v-for="i in visible" :key="i.u" class="entry-card">
+        <a class="entry-card__link" :href="withBase(i.u)" :aria-label="i.t"></a>
+        <span class="entry-card__head">
+          <code class="entry-card__fn">{{ i.f }}</code>
+          <span class="badge badge--level" :data-level="i.lv">{{ DIFFICULTIES[i.lv] }}</span>
+        </span>
+        <span class="entry-card__title">{{ i.t }}</span>
+        <span class="entry-card__desc">{{ i.d }}</span>
+        <span class="entry-card__chips">
+          <button type="button" class="chip chip--project" :class="{ 'is-active': project === i.p }" @click="project = project === i.p ? '' : i.p">{{ i.n }}</button>
+          <button v-for="t in i.tg" :key="t" type="button" class="chip chip--tag" :class="{ 'is-active': tag === t }" @click="tag = tag === t ? '' : t">#{{ t }}</button>
+        </span>
+      </li>
+    </ul>
+    <div v-if="filtered.length > shown" class="entry-list__more">
+      <button type="button" class="more-button" @click="shown += PAGE">もっと見る（残り {{ (filtered.length - shown).toLocaleString() }} 記事）</button>
+    </div>
   </div>
 </template>

@@ -4,6 +4,7 @@ import { useData } from 'vitepress'
 import EntryMeta from './components/EntryMeta.vue'
 import EntryLicense from './components/EntryLicense.vue'
 import NotFound from './components/NotFound.vue'
+import InlineToc from './components/InlineToc.vue'
 
 const { frontmatter } = useData()
 </script>
@@ -12,6 +13,7 @@ const { frontmatter } = useData()
   <DefaultTheme.Layout>
     <template #doc-before>
       <EntryMeta v-if="frontmatter.function" />
+      <InlineToc v-if="frontmatter.function" />
     </template>
     <template #not-found>
       <NotFound />

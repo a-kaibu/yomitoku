@@ -59,40 +59,7 @@ function projectsOf(lang: string) {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// ---- サイドバー -----------------------------------------------------------
-// ・言語トップ（/go/）では、その言語のプロジェクト一覧
-// ・記事ページ（/go/<project>/...）では、そのプロジェクトの関数一覧
-// VitePress は最も深く一致するキーのサイドバーを使う。サイドバーは各ページの HTML に描画されるので、
-// 全記事を 1 つのサイドバーに並べるとページが重くなる。プロジェクト単位に分けているのはそのため。
-const sidebar: DefaultTheme.SidebarMulti = {}
-for (const l of LANGUAGES) {
-  const projects = projectsOf(l.id)
-  const others = {
-    text: 'ほかの言語',
-    collapsed: true,
-    items: LANGUAGES.filter((o) => o.id !== l.id).map((o) => ({ text: o.name, link: `/${o.id}/`, target: self })),
-  }
-  sidebar[`/${l.id}/`] = [
-    { text: `${l.name} の記事一覧`, link: `/${l.id}/`, target: self },
-    {
-      text: 'プロジェクト',
-      collapsed: false,
-      items: projects.map((p) => ({ text: `${p.name}（${p.count}）`, link: `/${l.id}/#p-${p.slug}`, target: self })),
-    },
-    others,
-  ]
-  for (const p of projects) {
-    sidebar[`/${l.id}/${p.slug}/`] = [
-      { text: `← ${l.name} の記事一覧`, link: `/${l.id}/`, target: self },
-      {
-        text: `${p.name} の関数`,
-        collapsed: false,
-        items: (byProject.get(`${l.id}/${p.slug}`) ?? []).map((e) => ({ text: String(e.fm.function ?? e.slug), link: e.url })),
-      },
-      others,
-    ]
-  }
-}
+// サイドバー（「メニュー」）は使わない。言語一覧へは記事上部の言語バッジ、トップへはサイト名から戻る。
 
 export default defineConfig({
   lang: 'ja-JP',
@@ -102,6 +69,9 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: false,
   srcExclude,
+  // URL にプロジェクト名を入れない: docs/<言語>/<プロジェクト>/<slug>.md → /<言語>/<slug>
+  // （ファイルはプロジェクトごとのディレクトリに置いたまま。slug は言語内で一意にする）
+  rewrites: (id: string) => id.replace(/^([a-z]+)\/[a-z0-9-]+\/([a-z0-9-]+\.md)$/, '$1/$2'),
   outDir: SITE ? `.vitepress/dist-${SITE}` : '.vitepress/dist',
   // 1 万ページ超でも各 HTML が太らないよう、サイトメタデータを別チャンクに分離する
   metaChunk: true,
@@ -121,7 +91,7 @@ export default defineConfig({
     config(md) {
       // 記事ページでは、本文中の生 HTML（例: 地の文に書いた List<T>）をただの文字として扱い、
       // {{ }} も Vue に解釈させない（v-pre）。1 本の記事の書き方ミスで言語全体のビルドが落ちないようにする。
-      const isEntry = (env: any) => /^[a-z]+\/[a-z0-9-]+\/[a-z0-9-]+\.md$/.test(env?.relativePath ?? '')
+      const isEntry = (env: any) => /^[a-z]+\/(?:[a-z0-9-]+\/)?[a-z0-9-]+\.md$/.test(env?.relativePath ?? '') && !/\/index\.md$/.test(env?.relativePath ?? '')
       md.core.ruler.push('yk-escape-html', (state) => {
         if (!isEntry(state.env)) return
         const walk = (tokens: any[]) => {
@@ -157,6 +127,18 @@ export default defineConfig({
     },
   },
   buildEnd(siteConfig) {
+    // 旧 URL（/<言語>/<プロジェクト>/<slug>）から新 URL へのリダイレクトページ
+    const base = process.env.BASE ?? '/yokuyomu/'
+    for (const e of entries) {
+      const olds = new Set([e.slug])
+      if (e.slug.startsWith(`${e.projectSlug}-`)) olds.add(e.slug.slice(e.projectSlug.length + 1)) // 重複解消で改名した記事
+      for (const old of olds) {
+        const file = path.join(siteConfig.outDir, e.lang, e.projectSlug, `${old}.html`)
+        const to = `${base}${e.url.slice(1)}`
+        fs.mkdirSync(path.dirname(file), { recursive: true })
+        fs.writeFileSync(file, `<!doctype html><meta charset="utf-8"><title>移動しました</title><link rel="canonical" href="${to}"><meta http-equiv="refresh" content="0; url=${to}"><script>location.replace(${JSON.stringify(to)}+location.hash)</script><a href="${to}">${to}</a>\n`)
+      }
+    }
     if (styleToClass) fs.writeFileSync(path.join(siteConfig.outDir, shikiCss), styleToClass.getCSS())
   },
   transformPageData(pageData) {
@@ -184,9 +166,10 @@ export default defineConfig({
       return
     }
     // 記事ページ: 固定リンクと、同じプロジェクト内での前後リンク
-    const entry = byPath.get(rel)
+    const entry = byPath.get(pageData.filePath) ?? byPath.get(rel)
     if (!entry) return
     pageData.frontmatter.sourceUrl = sourceUrl(entry.fm)
+    pageData.frontmatter.projectSlug = entry.projectSlug
     pageData.frontmatter.difficultyLabel = DIFFICULTIES[entry.fm.difficulty as 1 | 2 | 3]
     const siblings = byProject.get(`${entry.lang}/${entry.projectSlug}`)!
     const i = siblings.indexOf(entry)
@@ -195,16 +178,10 @@ export default defineConfig({
     pageData.frontmatter.next ??= link(siblings[i + 1])
   },
   themeConfig: {
-    nav: [
-      { text: 'ホーム', link: '/', target: self },
-      {
-        text: '言語',
-        items: LANGUAGES.map((l) => ({ text: l.name, link: `/${l.id}/`, target: self, activeMatch: `^/${l.id}/` })),
-      },
-    ],
+    // 右上はテーマ切り替えだけにする（ナビ・検索・ハンバーガーは出さない）
+    nav: [],
     logoLink: { link: process.env.BASE ?? '/yokuyomu/', target: self },
-    sidebar,
-    outline: { label: 'このページの内容', level: [2, 3] },
+    outline: { label: '目次', level: [2, 3] },
     docFooter: { prev: '前の関数', next: '次の関数' },
     darkModeSwitchLabel: '外観',
     lightModeSwitchTitle: 'ライトモードに切り替え',
@@ -221,32 +198,6 @@ export default defineConfig({
     footer: {
       message: '解説文は CC BY 4.0、引用コードは各プロジェクトのライセンスに従います。',
       copyright: 'ヨクヨム',
-    },
-    // 検索は言語ごとのビルドに閉じる（＝その言語の中を検索する）。ハブには付けない。
-    search: SITE === 'hub' ? undefined : {
-      provider: 'local',
-      options: {
-        // 1 万記事分の全文インデックスは重すぎるので、タイトル・要約・関数名・タグだけを索引する
-        _render(src, env, md) {
-          const html = md.render(src, env)
-          const fm = env.frontmatter ?? {}
-          if (fm.search === false) return ''
-          if (!fm.function) return html
-          const words = [fm.project, fm.function, ...(fm.tags ?? [])].filter(Boolean).join(' / ')
-          return md.render(`# ${fm.title}\n\n${fm.description ?? ''}\n\n${words}`)
-        },
-        miniSearch: { searchOptions: { prefix: true, fuzzy: 0.2 } },
-        translations: {
-          button: { buttonText: '検索', buttonAriaLabel: '検索' },
-          modal: {
-            displayDetails: '詳細を表示',
-            resetButtonTitle: 'リセット',
-            backButtonTitle: '閉じる',
-            noResultsText: '見つかりませんでした',
-            footer: { selectText: '選択', navigateText: '移動', closeText: '閉じる' },
-          },
-        },
-      },
     },
   },
 })
