@@ -169,6 +169,7 @@
   background: var(--vp-c-bg-soft);
   color: var(--vp-c-text-1);
   transition: border-color 0.15s;
+  min-width: 0;
 }
 .vp-doc ul.entry-cards > li.entry-card:hover { border-color: var(--vp-c-brand-1); }
 /* カード全体をリンクにしつつ、チップは押せるようにする */
@@ -221,7 +222,7 @@
   .entry-meta__table > div { grid-template-columns: 1fr; gap: 0; }
 
   .field { flex: 1 1 140px; }
-  .vp-doc ul.entry-cards { grid-template-columns: 1fr; }
+  .vp-doc ul.entry-cards { grid-template-columns: minmax(0, 1fr); }
 
   /* スマホではコードを少し小さくして横スクロールを減らす（行番号も同じ大きさにそろえる） */
   .vp-doc div[class*='language-'] { --vp-code-font-size: 0.8em; --vp-code-line-height: 1.6; }
@@ -321,7 +322,7 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
 /* ---- 一覧の絞り込みは縦に並べる ---- */
 .entry-list__filters { flex-direction: column; }
 .entry-list__filters .field { width: 100%; flex: none; }
-.vp-doc ul.entry-cards.random-entry { grid-template-columns: 1fr; margin: 0 0 32px; }
+.vp-doc ul.entry-cards.random-entry { grid-template-columns: minmax(0, 1fr); margin: 0 0 32px; }
 .random-entry:not(.is-ready) { visibility: hidden; }
 /* 記事によって高さが変わらないよう行数を固定する（関数名 1 行・タイトル 2 行・説明 3 行） */
 .random-entry .entry-card__fn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
