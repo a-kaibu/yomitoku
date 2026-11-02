@@ -134,6 +134,9 @@ export default defineConfig({
     // トップページ: 言語ごとの記事数
     if (rel === 'index.md') {
       pageData.frontmatter.langCounts = Object.fromEntries(LANGUAGES.map((l) => [l.id, byLang.get(l.id)?.length ?? 0]))
+      // ランダム表示用: ビルドごとに 100 本を抜き出し、表示時にその中から 1 本選ぶ（全件は重いので載せない）
+      pageData.frontmatter.picks = [...entries].sort(() => Math.random() - 0.5).slice(0, 100)
+        .map((e) => ({ u: e.url, l: e.lang, f: e.fm.function, t: e.fm.title, d: e.fm.description }))
       return
     }
     // 言語トップ: 記事一覧データを埋め込む（その言語のページにだけ載る）

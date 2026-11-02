@@ -3,6 +3,7 @@ import type { Theme } from 'vitepress'
 import Layout from './Layout.vue'
 import LanguageGrid from './components/LanguageGrid.vue'
 import EntryList from './components/EntryList.vue'
+import RandomEntry from './components/RandomEntry.vue'
 import './style.css'
 
 export default {
@@ -11,6 +12,7 @@ export default {
   enhanceApp({ app }) {
     app.component('LanguageGrid', LanguageGrid)
     app.component('EntryList', EntryList)
+    app.component('RandomEntry', RandomEntry)
     if (typeof window !== 'undefined') {
       // コードブロックの「折り返し」ボタン（サイト全体で設定を共有し、次回も覚えておく）
       document.addEventListener('click', (e) => {

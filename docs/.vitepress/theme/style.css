@@ -321,3 +321,4 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
 /* ---- 一覧の絞り込みは縦に並べる ---- */
 .entry-list__filters { flex-direction: column; }
 .entry-list__filters .field { width: 100%; flex: none; }
+.vp-doc ul.entry-cards.random-entry { grid-template-columns: 1fr; margin: 0 0 32px; }
