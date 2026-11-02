@@ -78,6 +78,7 @@ export default defineConfig({
   head: [
     ...(styleToClass ? [['link', { rel: 'stylesheet', href: `${process.env.BASE ?? '/yokuyomu/'}${shikiCss}` }] as [string, Record<string, string>]] : []),
     ['meta', { name: 'theme-color', content: '#3c8772' }],
+    ['link', { rel: 'icon', href: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>" }],
     // コードの折り返し設定をちらつきなく復元する
     ['script', {}, "try{localStorage.getItem('yk-wrap')==='1'&&document.documentElement.classList.add('yk-wrap')}catch(e){}"],
     ['meta', { property: 'og:type', content: 'website' }],
