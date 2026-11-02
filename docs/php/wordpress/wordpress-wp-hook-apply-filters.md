@@ -39,7 +39,7 @@ tags: [設計パターン, イテレータ, API設計]
 			$priority = current( $this->iterations[ $nesting_level ] );
 
 			if ( false === $priority ) {
-								// 優先度が 1 つ以上でコールバックがあるはずなので、通常ここには来ない。
+				// 優先度が 1 つ以上でコールバックがあるはずなので、通常ここには来ない。
 				break;
 			}
 
@@ -50,7 +50,7 @@ tags: [設計パターン, イテレータ, API設計]
 					$args[0] = $value;
 				}
 
-								// 可能なら array_slice() を使わずに済ませる。
+				// 可能なら array_slice() を使わずに済ませる。
 				if ( 0 === $the_['accepted_args'] ) {
 					$value = call_user_func( $the_['function'] );
 				} elseif ( $the_['accepted_args'] >= $num_args ) {
@@ -152,7 +152,7 @@ tags: [設計パターン, イテレータ, API設計]
 			$priority = current( $this->iterations[ $nesting_level ] );
 
 			if ( false === $priority ) {
-								// 優先度が 1 つ以上でコールバックがあるはずなので、通常ここには来ない。
+				// 優先度が 1 つ以上でコールバックがあるはずなので、通常ここには来ない。
 				break;
 			}
 
@@ -163,7 +163,7 @@ tags: [設計パターン, イテレータ, API設計]
 					$args[0] = $value;
 				}
 
-								// 可能なら array_slice() を使わずに済ませる。
+				// 可能なら array_slice() を使わずに済ませる。
 				if ( 0 === $the_['accepted_args'] ) {
 					$value = call_user_func( $the_['function'] );
 				} elseif ( $the_['accepted_args'] >= $num_args ) {

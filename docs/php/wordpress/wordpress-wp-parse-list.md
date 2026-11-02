@@ -32,7 +32,7 @@ function wp_parse_list( $input_list ): array {
 		return is_array( $parsed_list ) ? $parsed_list : array();
 	}
 
-		// 配列の中身がすべてスカラー（文字列や数値など）かを確かめる。
+	// 配列の中身がすべてスカラー（文字列や数値など）かを確かめる。
 	$input_list = array_filter( $input_list, 'is_scalar' );
 
 	return $input_list;
@@ -92,7 +92,7 @@ function wp_parse_list( $input_list ): array {
 ::: code-group
 
 ```php:line-numbers=5109 [日本語訳]
-		// 配列の中身がすべてスカラー（文字列や数値など）かを確かめる。
+	// 配列の中身がすべてスカラー（文字列や数値など）かを確かめる。
 	$input_list = array_filter( $input_list, 'is_scalar' );
 
 	return $input_list;
