@@ -2,7 +2,7 @@
 
 有名 OSS の名作コードを **ひとつずつ**、その言語を知らない人にもわかる日本語で解説するコードリーディングサイトです。
 
-- サイト: https://a-kaibu.github.io/yokuyomu/
+- サイト: https://a-kaibu.github.io/yomitoku/
 - 対応言語: C / C++ / Go / Rust / C# / TypeScript / Swift / Kotlin / Java / Shell / Python / Ruby
 - 記事の書き方・フォーマット: [CONTRIBUTING.md](CONTRIBUTING.md)
 
@@ -10,7 +10,7 @@
 
 ```sh
 npm ci
-npm run dev        # http://localhost:5173/yokuyomu/
+npm run dev        # http://localhost:5173/yomitoku/
 npm run validate   # 記事フォーマットの検証
 npm run build      # 本番ビルド（ハブ + 言語ごとに分割ビルドして結合）
 npm run preview

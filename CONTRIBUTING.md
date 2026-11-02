@@ -198,7 +198,7 @@ npm ci
 npm run new -- rust tokio sync-mpsc-send     # ひな形を作る
 # ... 書く ...
 npm run validate -- --verify-source docs/rust # フォーマット + 引用コードの照合
-npm run dev                                   # 表示確認（http://localhost:5173/yokuyomu/rust/）
+npm run dev                                   # 表示確認（http://localhost:5173/yomitoku/rust/）
 ```
 
 - コミットは「プロジェクト単位」など適度なまとまりで。メッセージ例: `rust: tokio の関数を 12 本追加`

@@ -62,7 +62,7 @@ function projectsOf(lang: string) {
 // サイドバー（「メニュー」）は使わない。言語一覧へは記事上部の言語バッジ、トップへはサイト名から戻る。
 
 // 検索エンジン向け: canonical・OGP・サイトマップで使う公開 URL
-const BASE = process.env.BASE ?? '/yokuyomu/'
+const BASE = process.env.BASE ?? '/yomitoku/'
 const SITE_URL = `https://a-kaibu.github.io${BASE}`
 const pageUrl = (route: string) => SITE_URL + route.replace(/^\//, '')
 
