@@ -369,3 +369,12 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line {
   .VPDoc .content-container,
   .VPDoc.has-aside .content-container { max-width: 1000px !important; }
 }
+
+/* ---- トップのヒーロー: 幅がある画面では見出しと説明を改行させず、下の余白も詰める ---- */
+.VPHero .name, .VPHero .text, .VPHero .tagline { max-width: none !important; }
+.VPHero { padding-bottom: 32px !important; }
+/* PC はカードが横に広いので、ランダムカードの行数を減らす（タイトル 1 行・説明 2 行） */
+@media (min-width: 960px) {
+  .random-entry .entry-card__title { -webkit-line-clamp: 1; height: 1.6em; }
+  .random-entry .entry-card__desc { -webkit-line-clamp: 2; height: calc(1.7em * 2); }
+}

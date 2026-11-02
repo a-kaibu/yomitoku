@@ -5,10 +5,8 @@ titleTemplate: コードをヨミトク
 
 hero:
   text: コードをヨミトク
-  tagline: 有名 OSS の「よくできた」「ハックな」「天才的な」関数を、その言語を知らない人にもわかる日本語で解説します。
+  tagline: 有名OSSの「よくできた」コードをわかりやすく解説します
 ---
-
-<div id="languages" class="home-spacer"></div>
 
 <main>
 
@@ -17,7 +15,3 @@ hero:
 <LanguageGrid />
 
 </main>
-
-<style>
-.home-spacer { height: 32px; }
-</style>
