@@ -68,7 +68,7 @@ const pageUrl = (route: string) => SITE_URL + route.replace(/^\//, '')
 
 export default defineConfig({
   lang: 'ja-JP',
-  title: 'ヨクヨム',
+  title: 'ヨミトク',
   description: '有名 OSS の名作コードをひとつずつ、日本語でていねいに読み解くコードリーディングサイト',
   base: BASE,
   cleanUrls: true,
@@ -153,7 +153,7 @@ export default defineConfig({
       ['meta', { property: 'og:title', content: title }],
       ['meta', { property: 'og:description', content: description }],
       ['meta', { property: 'og:url', content: url }],
-      ['meta', { property: 'og:site_name', content: 'ヨクヨム' }],
+      ['meta', { property: 'og:site_name', content: 'ヨミトク' }],
       ['meta', { name: 'twitter:card', content: 'summary' }],
     ]
     const fm = pageData.frontmatter
@@ -166,7 +166,7 @@ export default defineConfig({
         url,
         inLanguage: 'ja',
         about: fm.project,
-        isPartOf: { '@type': 'WebSite', name: 'ヨクヨム', url: SITE_URL },
+        isPartOf: { '@type': 'WebSite', name: 'ヨミトク', url: SITE_URL },
       })])
     }
     return head
@@ -228,7 +228,7 @@ export default defineConfig({
     },
     footer: {
       message: '解説文は CC BY 4.0、引用コードは各プロジェクトのライセンスに従います。',
-      copyright: 'ヨクヨム',
+      copyright: 'ヨミトク',
     },
   },
 })
