@@ -10,7 +10,7 @@ commit: "71a1c3f09f1865472a11e22153376a0676db14e1"
 file: "core/src/main/scala/org/apache/spark/util/StatCounter.scala"
 lines: [43, 51]
 format: 2
-function: "StatCounter.merge"
+function: "StatCounter.merge(value)"
 difficulty: 3
 tags: [数値計算, アルゴリズム, 最適化]
 ---
