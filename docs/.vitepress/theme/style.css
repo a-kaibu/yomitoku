@@ -322,3 +322,14 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
 .entry-list__filters { flex-direction: column; }
 .entry-list__filters .field { width: 100%; flex: none; }
 .vp-doc ul.entry-cards.random-entry { grid-template-columns: 1fr; margin: 0 0 32px; }
+.random-entry:not(.is-ready) { visibility: hidden; }
+/* 記事によって高さが変わらないよう行数を固定する（関数名 1 行・タイトル 2 行・説明 3 行） */
+.random-entry .entry-card__fn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.random-entry .entry-card__title,
+.random-entry .entry-card__desc { display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.random-entry .entry-card__title { -webkit-line-clamp: 2; height: calc(1.6em * 2); }
+.random-entry .entry-card__desc { -webkit-line-clamp: 3; height: calc(1.7em * 3); }
+
+/* ---- 長い名前（folly::detail::ScopeGuardImpl::ScopeGuardImpl など）がはみ出さないよう折り返す ---- */
+.entry-title, .vp-doc h2, .vp-doc h3, .entry-card__title, .entry-card__desc, .vp-doc .entry-card__fn,
+.yk-toc a, .VPDocAsideOutline .outline-link, .VPDocFooter .title { overflow-wrap: anywhere; }

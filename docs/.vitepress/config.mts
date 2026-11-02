@@ -128,15 +128,15 @@ export default defineConfig({
   },
   buildEnd(siteConfig) {
     if (styleToClass) fs.writeFileSync(path.join(siteConfig.outDir, shikiCss), styleToClass.getCSS())
+    // トップのランダム記事用: 全記事の URL だけを並べたリスト（ハブのビルドが全言語の記事を知っている）
+    if (SITE !== 'hub' && SITE) return
+    fs.writeFileSync(path.join(siteConfig.outDir, 'random.json'), JSON.stringify(entries.map((e) => e.url)))
   },
   transformPageData(pageData) {
     const rel = pageData.relativePath
     // トップページ: 言語ごとの記事数
     if (rel === 'index.md') {
       pageData.frontmatter.langCounts = Object.fromEntries(LANGUAGES.map((l) => [l.id, byLang.get(l.id)?.length ?? 0]))
-      // ランダム表示用: ビルドごとに 100 本を抜き出し、表示時にその中から 1 本選ぶ（全件は重いので載せない）
-      pageData.frontmatter.picks = [...entries].sort(() => Math.random() - 0.5).slice(0, 100)
-        .map((e) => ({ u: e.url, l: e.lang, f: e.fm.function, t: e.fm.title, d: e.fm.description }))
       return
     }
     // 言語トップ: 記事一覧データを埋め込む（その言語のページにだけ載る）
