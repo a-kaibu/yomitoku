@@ -26,7 +26,7 @@ tags: [キャッシュ, ハッシュ, 標準ライブラリ, 最適化]
 ```php:line-numbers=442 [日本語訳]
     public function findFile($class)
     {
-                // クラスマップを先に確かめる。
+        // クラスマップを先に確かめる。
         if (isset($this->classMap[$class])) {
             return $this->classMap[$class];
         }
@@ -42,7 +42,7 @@ tags: [キャッシュ, ハッシュ, 標準ライブラリ, 最適化]
 
         $file = $this->findFileWithExtension($class, '.php');
 
-                // HHVM で動いているときは Hack のファイルも探す。
+        // HHVM で動いているときは Hack のファイルも探す。
         if (false === $file && defined('HHVM_VERSION')) {
             $file = $this->findFileWithExtension($class, '.hh');
         }
@@ -52,7 +52,7 @@ tags: [キャッシュ, ハッシュ, 標準ライブラリ, 最適化]
         }
 
         if (false === $file) {
-                        // このクラスは存在しないと覚えておく。
+            // このクラスは存在しないと覚えておく。
             $this->missingClasses[$class] = true;
         }
 
@@ -114,7 +114,7 @@ tags: [キャッシュ, ハッシュ, 標準ライブラリ, 最適化]
 ::: code-group
 
 ```php:line-numbers=444 [日本語訳]
-                // クラスマップを先に確かめる。
+        // クラスマップを先に確かめる。
         if (isset($this->classMap[$class])) {
             return $this->classMap[$class];
         }
@@ -161,7 +161,7 @@ APCu が使える設定（`apcuPrefix` がある）のときは、キャッシ�
 ```php:line-numbers=458 [日本語訳]
         $file = $this->findFileWithExtension($class, '.php');
 
-                // HHVM で動いているときは Hack のファイルも探す。
+        // HHVM で動いているときは Hack のファイルも探す。
         if (false === $file && defined('HHVM_VERSION')) {
             $file = $this->findFileWithExtension($class, '.hh');
         }
@@ -171,7 +171,7 @@ APCu が使える設定（`apcuPrefix` がある）のときは、キャッシ�
         }
 
         if (false === $file) {
-                        // このクラスは存在しないと覚えておく。
+            // このクラスは存在しないと覚えておく。
             $this->missingClasses[$class] = true;
         }
 ```
