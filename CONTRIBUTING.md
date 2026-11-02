@@ -35,6 +35,8 @@ docs/
 | Shell | `shell` | `sh`（`bash`, `shell`, `zsh`） |
 | Python | `python` | `python`（`py`） |
 | Ruby | `ruby` | `ruby`（`rb`） |
+| PHP | `php` | `php` |
+| Scala | `scala` | `scala` |
 
 ### 命名ルール
 

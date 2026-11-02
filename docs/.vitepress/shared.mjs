@@ -16,6 +16,8 @@ export const LANGUAGES = [
   { id: 'shell', name: 'Shell', fences: ['sh', 'bash', 'shell', 'zsh'], color: '#89e051', fg: '#1b1b1f', blurb: 'コマンドをつなぐ小さな魔法' },
   { id: 'python', name: 'Python', fences: ['python', 'py'], color: '#3572a5', fg: '#ffffff', blurb: '読みやすさと強力な標準ライブラリ' },
   { id: 'ruby', name: 'Ruby', fences: ['ruby', 'rb'], color: '#701516', fg: '#ffffff', blurb: '楽しさとメタプログラミング' },
+  { id: 'php', name: 'PHP', fences: ['php'], color: '#4f5d95', fg: '#ffffff', blurb: 'Web を動かしてきた実用の言語' },
+  { id: 'scala', name: 'Scala', fences: ['scala'], color: '#c22d40', fg: '#ffffff', blurb: '関数型とオブジェクト指向の融合' },
 ]
 
 export const LANGUAGE_IDS = LANGUAGES.map((l) => l.id)
