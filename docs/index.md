@@ -10,9 +10,13 @@ hero:
 
 <div id="languages" class="home-spacer"></div>
 
+<main>
+
 <RandomEntry />
 
 <LanguageGrid />
+
+</main>
 
 <style>
 .home-spacer { height: 32px; }

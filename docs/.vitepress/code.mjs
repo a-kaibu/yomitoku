@@ -27,7 +27,8 @@ export const COMMENT_SYNTAX = {
   java: C_LIKE,
   shell: { line: ['#'], block: [], quotes: ['"', "'"], hashNeedsSpace: true },
   python: { line: ['#'], block: [['"""', '"""'], ["'''", "'''"]], quotes: ['"', "'"] },
-  ruby: { line: ['#'], block: [['=begin', '=end']], quotes: ['"', "'"] },
+  // Ruby の `#{...}` は式展開（正規表現リテラルの中にも出てくる）なのでコメントにしない
+  ruby: { line: ['#'], block: [['=begin', '=end']], quotes: ['"', "'"], interp: true },
 }
 
 /**
@@ -64,7 +65,7 @@ export function splitComments(lines, lang) {
       const blk = syn.block.find(([open]) => rest.startsWith(open) && (open !== '=begin' || i === 0))
       if (blk) { comment += blk[0]; i += blk[0].length; inBlock = blk[1]; continue }
       const lc = syn.line.find((m) => rest.startsWith(m))
-      if (lc && (!syn.hashNeedsSpace || i === 0 || /\s/.test(line[i - 1]))) { comment += rest; break }
+      if (lc && !(syn.interp && rest[1] === '{') && (!syn.hashNeedsSpace || i === 0 || /\s/.test(line[i - 1]))) { comment += rest; break }
       if (syn.quotes.includes(rest[0])) quote = rest[0]
       code += rest[0]
       i++

@@ -91,7 +91,7 @@ export default defineConfig({
   ],
   markdown: {
     lineNumbers: false,
-    theme: { light: 'github-light', dark: 'github-dark' },
+    theme: { light: 'github-light-high-contrast', dark: 'github-dark-default' },
     codeTransformers: styleToClass ? [styleToClass] : [],
     codeCopyButtonTitle: 'コードをコピー',
     config(md) {
@@ -124,7 +124,7 @@ export default defineConfig({
         let html = fence(tokens, idx, options, env, self)
         html = html.replace(
           '<button title="コードをコピー" class="copy"></button>',
-          '$&<button type="button" class="yk-wrap-btn" title="折り返しを切り替え" aria-label="コードの折り返しを切り替え"></button>',
+          '$&<button type="button" class="yk-wrap-btn" title="折り返しを切り替え" aria-label="コードの折り返し" aria-pressed="false"></button>',
         )
         const start = token.info.match(/:line-numbers=(\d+)/)
         if (start) html = html.replace(/^<div class="language-/, `<div style="--yk-start:${Number(start[1]) - 1}" class="language-`)
@@ -212,6 +212,7 @@ export default defineConfig({
     // 右上はテーマ切り替えだけにする（ナビ・検索・ハンバーガーは出さない）
     nav: [],
     logoLink: { link: BASE, target: self },
+    skipToContentLabel: '本文へスキップ',
     outline: { label: '目次', level: [2, 3] },
     docFooter: { prev: '前の関数', next: '次の関数' },
     darkModeSwitchLabel: '外観',

@@ -1,10 +1,11 @@
 /* ヨミトク テーマ ------------------------------------------------------ */
 
 :root {
-  --vp-c-brand-1: #2f7d6a;
+  --vp-c-brand-1: #2a7060;
   --vp-c-brand-2: #3c8772;
   --vp-c-brand-3: #4a9a83;
   --vp-c-brand-soft: rgba(60, 135, 114, 0.14);
+  --vp-code-line-number-color: var(--vp-c-text-2);
   --vp-font-family-base: 'Inter', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic UI', Meiryo, sans-serif;
   --yk-radius: 12px;
 }
@@ -13,6 +14,7 @@
   --vp-c-brand-2: #4aab90;
   --vp-c-brand-3: #3c8772;
   --vp-c-brand-soft: rgba(95, 196, 168, 0.16);
+  --vp-code-line-number-color: var(--vp-c-text-2);
 }
 
 /* 日本語の本文は少しゆったり */
@@ -74,7 +76,7 @@
 .entry-meta__table dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .entry-meta__table a { color: var(--vp-c-brand-1); }
 .entry-meta__path code { word-break: break-all; }
-.muted { color: var(--vp-c-text-3); }
+.muted { color: var(--vp-c-text-2); }
 
 .entry-license {
   margin-top: 48px;
@@ -193,7 +195,7 @@
   padding: 0 8px;
   border-radius: 999px;
   font-size: 12px;
-  line-height: 22px;
+  line-height: 24px;
   white-space: nowrap;
   text-decoration: none !important;
   cursor: pointer;
@@ -207,8 +209,13 @@
 .chip--project::before { content: '📦'; margin-right: 4px; font-size: 11px; }
 .chip--tag { color: var(--vp-c-text-2) !important; background: var(--vp-c-default-soft); }
 .chip:hover { filter: brightness(0.95); }
-.chip--project.is-active { background: var(--vp-c-brand-1); color: #fff !important; }
-.chip--tag.is-active { background: var(--vp-c-brand-soft); color: var(--vp-c-brand-1) !important; }
+.chip.is-active { background: var(--vp-c-brand-1); color: var(--vp-c-bg) !important; border-color: var(--vp-c-brand-1); }
+button.chip { cursor: pointer; font: inherit; font-size: 12px; border: 1px solid transparent; }
+button.chip--project { border-color: var(--vp-c-brand-1); }
+.chip__count { margin-left: 4px; font-weight: 400; }
+/* 一覧の絞り込み: ラベルとチップを折り返して並べる */
+.filter-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 0; }
+.filter-group__label { width: 100%; font-size: 12px; font-weight: 600; color: var(--vp-c-text-2); }
 
 
 /* ---- レスポンシブ ---- */
@@ -334,3 +341,13 @@ html.yk-wrap .vp-doc div[class*='language-'].line-numbers-mode code .line::befor
 /* ---- 長い名前（folly::detail::ScopeGuardImpl::ScopeGuardImpl など）がはみ出さないよう折り返す ---- */
 .entry-title, .vp-doc h2, .vp-doc h3, .entry-card__title, .entry-card__desc, .vp-doc .entry-card__fn,
 .yk-toc a, .VPDocAsideOutline .outline-link, .VPDocFooter .title { overflow-wrap: anywhere; }
+
+/* ---- アクセシビリティ ---- */
+/* キーボード操作のときは、どの部品にフォーカスがあるか必ず見えるようにする */
+:focus-visible { outline: 2px solid var(--vp-c-brand-1); outline-offset: 2px; }
+/* 動きを減らす設定の人には、アニメーションとスムーズスクロールを止める */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+/* 日本語訳／原文のタブ（中身はラジオボタン）にもフォーカスを出す */
+.vp-code-group .tabs input:focus-visible + label { outline: 2px solid var(--vp-c-brand-1); outline-offset: -2px; border-radius: 4px; }

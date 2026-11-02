@@ -59,20 +59,21 @@ watch([q, level, tag, project], () => {
   <div class="entry-list">
     <div class="entry-list__filters" role="search">
       <input v-model="q" type="search" class="field field--grow" placeholder="キーワードで絞り込み" aria-label="キーワード" />
-      <select v-model="project" class="field" aria-label="プロジェクト">
-        <option value="">プロジェクト: すべて</option>
-        <option v-for="p in projects" :key="p.slug" :value="p.slug">{{ p.name }}（{{ p.count }}）</option>
-      </select>
-      <select v-model="tag" class="field" aria-label="タグ">
-        <option value="">タグ: すべて</option>
-        <option v-for="t in allTags" :key="t" :value="t">#{{ t }}</option>
-      </select>
-      <select v-model="level" class="field" aria-label="難易度">
-        <option value="">難易度: すべて</option>
-        <option v-for="(label, lv) in DIFFICULTIES" :key="lv" :value="Number(lv)">{{ label }}</option>
-      </select>
     </div>
-    <p class="entry-list__summary">
+    <!-- 絞り込みはチップを押して選ぶ。もう一度押すと解除 -->
+    <div class="filter-group" role="group" aria-labelledby="f-project">
+      <span id="f-project" class="filter-group__label">プロジェクト</span>
+      <button v-for="p in projects" :key="p.slug" type="button" class="chip chip--project" :class="{ 'is-active': project === p.slug }" :aria-pressed="project === p.slug" @click="project = project === p.slug ? '' : p.slug">{{ p.name }} <span class="chip__count">{{ p.count }}</span></button>
+    </div>
+    <div class="filter-group" role="group" aria-labelledby="f-level">
+      <span id="f-level" class="filter-group__label">難易度</span>
+      <button v-for="(label, lv) in DIFFICULTIES" :key="lv" type="button" class="chip chip--tag" :class="{ 'is-active': level === Number(lv) }" :aria-pressed="level === Number(lv)" @click="level = level === Number(lv) ? '' : Number(lv)">{{ label }}</button>
+    </div>
+    <div class="filter-group" role="group" aria-labelledby="f-tag">
+      <span id="f-tag" class="filter-group__label">タグ</span>
+      <button v-for="t in allTags" :key="t" type="button" class="chip chip--tag" :class="{ 'is-active': tag === t }" :aria-pressed="tag === t" @click="tag = tag === t ? '' : t">#{{ t }}</button>
+    </div>
+    <p class="entry-list__summary" aria-live="polite">
       {{ filtered.length.toLocaleString() }} / {{ items.length.toLocaleString() }} 記事
       <button v-if="filtering" class="link-button" @click="reset">条件をクリア</button>
     </p>
@@ -90,8 +91,8 @@ watch([q, level, tag, project], () => {
         <span class="entry-card__title">{{ i.t }}</span>
         <span class="entry-card__desc">{{ i.d }}</span>
         <span class="entry-card__chips">
-          <button type="button" class="chip chip--project" :class="{ 'is-active': project === i.p }" @click="project = project === i.p ? '' : i.p">{{ i.n }}</button>
-          <button v-for="t in i.tg" :key="t" type="button" class="chip chip--tag" :class="{ 'is-active': tag === t }" @click="tag = tag === t ? '' : t">#{{ t }}</button>
+          <button type="button" class="chip chip--project" :class="{ 'is-active': project === i.p }" :aria-pressed="project === i.p" @click="project = project === i.p ? '' : i.p">{{ i.n }}</button>
+          <button v-for="t in i.tg" :key="t" type="button" class="chip chip--tag" :class="{ 'is-active': tag === t }" :aria-pressed="tag === t" @click="tag = tag === t ? '' : t">#{{ t }}</button>
         </span>
       </li>
     </ul>
