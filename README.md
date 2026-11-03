@@ -3,7 +3,7 @@
 有名 OSS の名作コードを **ひとつずつ**、その言語を知らない人にもわかる日本語で解説するコードリーディングサイトです。
 
 - サイト: https://a-kaibu.github.io/yomitoku/
-- 対応言語: C / C++ / Go / Rust / C# / TypeScript / Swift / Kotlin / Java / Shell / Python / Ruby / PHP / Scala / Lua / Zig / Erlang / Haskell
+- 対応言語: C / C++ / Go / Rust / C# / TypeScript / Swift / Kotlin / Java / Shell / Python / Ruby / PHP / Scala / Lua / Zig / Erlang / Haskell / SQL / CSS / HCL
 - 記事の書き方・フォーマット: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 開発

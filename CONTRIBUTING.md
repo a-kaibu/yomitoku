@@ -41,6 +41,9 @@ docs/
 | Zig | `zig` | `zig` |
 | Erlang | `erlang` | `erlang`（`erl`） |
 | Haskell | `haskell` | `haskell`（`hs`） |
+| SQL | `sql` | `sql` |
+| CSS | `css` | `css` |
+| HCL | `hcl` | `hcl`（`tf`・`terraform`） |
 
 ### 命名ルール
 

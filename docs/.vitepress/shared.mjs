@@ -22,6 +22,9 @@ export const LANGUAGES = [
   { id: 'zig', name: 'Zig', fences: ['zig'], color: '#ec915c', fg: '#1b1b1f', blurb: '隠れた制御のない低レイヤ' },
   { id: 'erlang', name: 'Erlang', fences: ['erlang', 'erl'], color: '#b83998', fg: '#ffffff', blurb: '止まらないシステムと軽量プロセス' },
   { id: 'haskell', name: 'Haskell', fences: ['haskell', 'hs'], color: '#5e5086', fg: '#ffffff', blurb: '純粋関数型と強力な型' },
+  { id: 'sql', name: 'SQL', fences: ['sql'], color: '#e38d13', fg: '#1b1b1f', blurb: 'データを問い合わせる宣言的な言語' },
+  { id: 'css', name: 'CSS', fences: ['css'], color: '#563d7c', fg: '#ffffff', blurb: '見た目を決める小さなルールの集まり' },
+  { id: 'hcl', name: 'HCL', fences: ['hcl', 'tf', 'terraform'], color: '#844fba', fg: '#ffffff', blurb: 'インフラを宣言する設定言語' },
 ]
 
 export const LANGUAGE_IDS = LANGUAGES.map((l) => l.id)
@@ -39,6 +42,7 @@ export const TAGS = [
   'イディオム', '標準ライブラリ', '低レイヤ', 'システムコール', 'コンパイラ', 'インタプリタ',
   'テスト', 'ログ', '可読性', 'ハック', '移植性', 'ロック不要', '再帰', 'イテレータ',
   'クロージャ', 'リフレクション', '日時', '正規表現', 'CLI', '状態機械', 'GC',
+  'レイアウト', 'アニメーション', 'フォーム', 'レスポンシブ', '配色', '疑似要素', 'アクセシビリティ',
 ]
 
 /**
