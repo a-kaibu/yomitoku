@@ -1,6 +1,6 @@
 ---
 title: エラーの位置を「行と列」に直して伝える JSON の解析エラー
-description: JSON ライブラリ json.lua の decode_error。壊れた JSON の位置を「何文字目か」から「何行目の何列目か」に変換し、読む人が直せるメッセージにします。
+description: JSON ライブラリ json.lua の decode_error。壊れた JSON の位置を「何文字目か」から「行と列の組み」に変換し、読む人が直せるメッセージにします。
 language: lua
 project: json.lua
 repo: https://github.com/rxi/json.lua
@@ -47,7 +47,7 @@ end
 
 ### 1. 行と列を 1 から数え始める
 
-行も列も、人間が数えるときと同じく 1 から始めます。最初の文字は「1 行目の 1 列目」です。
+行も列も、人間が数えるときと同じく 1 から始めます。最初の文字は、行も列も「1」から始まる位置です。
 
 ```lua:line-numbers=176
   local line_count = 1
