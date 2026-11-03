@@ -35,7 +35,7 @@ variable "timeouts" {
 - `object({ 名前 = 型 })`: 名前と型の組み合わせを持つ、構造化された型です。
 - `optional(型)`: `object` の中の項目を省略可能にします。省略されると `null` が入ります。
 - `default = null`: 変数全体を指定しなければ `null` になるという既定値です。
-- `timeouts` は、後の `dynamic` ブロックで `null` かどうかを判定します（この項目の扱いは sg-dynamic-timeouts で見たとおりです）。
+- `timeouts` は、後の `dynamic` ブロックで `null` かどうかを判定します（この項目の扱いは sg-dynamic-timeouts の記事で見たとおりです）。
 
 ## 何をしているか
 ### 1. 型の中に項目を書く
