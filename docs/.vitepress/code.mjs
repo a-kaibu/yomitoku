@@ -36,6 +36,9 @@ export const COMMENT_SYNTAX = {
   erlang: { line: ['%'], block: [], quotes: ['"', "'"] },
   // Haskell の ' は識別子にも使う（x' など）ので文字列扱いしない
   haskell: { line: ['--'], block: [['{-', '-}']], quotes: ['"'] },
+  sql: { line: ['--'], block: [['/*', '*/']], quotes: ['"', "'"] },
+  css: { line: [], block: [['/*', '*/']], quotes: ['"', "'"] },
+  hcl: { line: ['#', '//'], block: [['/*', '*/']], quotes: ['"'] },
 }
 
 /**
