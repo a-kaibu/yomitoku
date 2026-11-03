@@ -8,7 +8,7 @@ license: "PostgreSQL"
 copyright: "Copyright (c) 1996-2026, PostgreSQL Global Development Group"
 commit: "4f31212020ea1c2aedb0494cb1fc329b5275c1cf"
 file: contrib/pg_buffercache/pg_buffercache--1.6--1.7.sql
-lines: [17, 25]
+lines: [17, 19]
 function: "pg_buffercache_os_pages"
 difficulty: 3
 tags: [設計パターン, 防御的プログラミング]
@@ -25,12 +25,6 @@ format: 2
 CREATE VIEW pg_buffercache_os_pages AS
     SELECT bufferid, os_page_num
     FROM pg_buffercache_os_pages(false);
-
--- Re-create view for OS page information, with NUMA.
-DROP VIEW pg_buffercache_numa;
-CREATE VIEW pg_buffercache_numa AS
-    SELECT bufferid, os_page_num, numa_node
-    FROM pg_buffercache_os_pages(true);
 ```
 
 ## 前提知識

@@ -8,7 +8,7 @@ license: "PostgreSQL"
 copyright: "Copyright (c) 1996-2026, PostgreSQL Global Development Group"
 commit: "4f31212020ea1c2aedb0494cb1fc329b5275c1cf"
 file: src/backend/catalog/system_views.sql
-lines: [1204, 1215]
+lines: [1204, 1213]
 function: "pg_stat_user_functions"
 difficulty: 2
 tags: [最適化, 防御的プログラミング]
@@ -32,8 +32,6 @@ CREATE VIEW pg_stat_user_functions AS
             pg_stat_get_function_self_time(P.oid) AS self_time,
             pg_stat_get_function_stat_reset_time(P.oid) AS stats_reset
     FROM pg_proc P LEFT JOIN pg_namespace N ON (N.oid = P.pronamespace)
-    WHERE P.prolang != 12  -- fast check to eliminate built-in functions
-          AND pg_stat_get_function_calls(P.oid) IS NOT NULL;
 ```
 
 ## 前提知識
@@ -67,9 +65,7 @@ CREATE VIEW pg_stat_user_functions AS
 
 `prolang` の値が `12` の関数は、組み込み（内部実装）の関数です。その行を先に除きます。
 
-```sql:line-numbers=1214
-    WHERE P.prolang != 12  -- fast check to eliminate built-in functions
-```
+ここで `P.prolang != 12` と書くと、数字 1 つの比較だけで組み込み関数を外せます。
 
 コメントにあるように、これは「速い確認」のための条件です。数字 1 つの比較なので、関数の数が多くても、後の条件より前に大きく絞れます。
 
