@@ -18,6 +18,10 @@ export const LANGUAGES = [
   { id: 'ruby', name: 'Ruby', fences: ['ruby', 'rb'], color: '#701516', fg: '#ffffff', blurb: '楽しさとメタプログラミング' },
   { id: 'php', name: 'PHP', fences: ['php'], color: '#4f5d95', fg: '#ffffff', blurb: 'Web を動かしてきた実用の言語' },
   { id: 'scala', name: 'Scala', fences: ['scala'], color: '#c22d40', fg: '#ffffff', blurb: '関数型とオブジェクト指向の融合' },
+  { id: 'lua', name: 'Lua', fences: ['lua'], color: '#000080', fg: '#ffffff', blurb: '組み込みに強い小さく速い言語' },
+  { id: 'zig', name: 'Zig', fences: ['zig'], color: '#ec915c', fg: '#1b1b1f', blurb: '隠れた制御のない低レイヤ' },
+  { id: 'erlang', name: 'Erlang', fences: ['erlang', 'erl'], color: '#b83998', fg: '#ffffff', blurb: '止まらないシステムと軽量プロセス' },
+  { id: 'haskell', name: 'Haskell', fences: ['haskell', 'hs'], color: '#5e5086', fg: '#ffffff', blurb: '純粋関数型と強力な型' },
 ]
 
 export const LANGUAGE_IDS = LANGUAGES.map((l) => l.id)

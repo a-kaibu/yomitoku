@@ -31,6 +31,11 @@ export const COMMENT_SYNTAX = {
   ruby: { line: ['#'], block: [['=begin', '=end']], quotes: ['"', "'"], hashNot: '{' },
   // PHP の `#[...]` はアトリビュート（コメントではない）
   php: { line: ['//', '#'], block: [['/*', '*/']], quotes: ['"', "'"], hashNot: '[' },
+  lua: { line: ['--'], block: [['--[[', ']]']], quotes: ['"', "'"] },
+  zig: { line: ['//'], block: [], quotes: ['"', "'"] },
+  erlang: { line: ['%'], block: [], quotes: ['"', "'"] },
+  // Haskell の ' は識別子にも使う（x' など）ので文字列扱いしない
+  haskell: { line: ['--'], block: [['{-', '-}']], quotes: ['"'] },
 }
 
 /**

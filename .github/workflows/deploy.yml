@@ -36,7 +36,7 @@ jobs:
       # 1 言語のビルドが落ちても、ほかの言語は公開する（失敗した言語はログで確認して直す）
       fail-fast: false
       matrix:
-        site: [hub, c, cpp, go, rust, csharp, typescript, swift, kotlin, java, shell, python, ruby, php, scala]
+        site: [hub, c, cpp, go, rust, csharp, typescript, swift, kotlin, java, shell, python, ruby, php, scala, lua, zig, erlang, haskell]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

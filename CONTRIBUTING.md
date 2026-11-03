@@ -37,6 +37,10 @@ docs/
 | Ruby | `ruby` | `ruby`（`rb`） |
 | PHP | `php` | `php` |
 | Scala | `scala` | `scala` |
+| Lua | `lua` | `lua` |
+| Zig | `zig` | `zig` |
+| Erlang | `erlang` | `erlang`（`erl`） |
+| Haskell | `haskell` | `haskell`（`hs`） |
 
 ### 命名ルール
 
