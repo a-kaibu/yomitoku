@@ -12,7 +12,7 @@ lines: [168, 172]
 function: "table"
 difficulty: 2
 format: 2
-tags: [移植性, レイアウト]
+tags: [移植性, 可読性]
 ---
 ## ひとことで
 
